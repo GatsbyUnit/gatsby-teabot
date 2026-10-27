@@ -163,9 +163,10 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
 
   if (prev && notion_changed && !cal_changed){
     if (!future || ctx.baseline) return res;
-    var done = act(ctx, row, 'update_calendar', actual + ' -> ' + expected, function(){ event.setTitle(expected); });
+    var title = keep_label(actual, expected, row.type);
+    var done = act(ctx, row, 'update_calendar', actual + ' -> ' + title, function(){ event.setTitle(title); });
     if (done){
-      res.actual_after = expected;
+      res.actual_after = title;
       res.mismatch = null;
       return res;  // the normal effect of editing Notion: nothing to report
     }

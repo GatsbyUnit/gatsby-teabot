@@ -96,6 +96,16 @@ function parse_title(title, type){
 }
 
 // events marked as cancelled by hand are left alone (no change, no email)
+// A label written by hand ("UPGRADE TALK: …", "ROTATION TALK: …") survives when the bot rewrites the names
+// of a talk's event (after a swap or an edit in Notion).
+function keep_label(current, expected, type){
+  if (!current || ['Research Talk', 'Tea Talk', 'Leaving Tea', 'External Seminar'].indexOf(type) < 0) return expected;
+  var label = String(current).trim().match(/^([^:]{1,40}?)\s*:/);
+  var own = String(expected).match(/^([^:]{1,40}?)\s*:/);
+  if (!label || !own || /^TEA$/i.test(label[1]) || is_cancelled_title(current)) return expected;
+  return label[1] + expected.slice(own[1].length);
+}
+
 function is_cancelled_title(title){
   return /\bcancel(?:l?ed)?\b|\bno\s+(?:tnjc|mljc|csnjc|talk|tea|journal club)\b/i.test(String(title));
 }

@@ -87,7 +87,7 @@ function apply_swap(row, duty, from_id, to_id, ctx){
 
   var event = row.gcal_id ? ctx.cal.getEventById(row.gcal_id) : null;
   if (event){
-    var title = format_title(row, ctx.people);
+    var title = keep_label(event.getTitle(), format_title(row, ctx.people), row.type);
     event.setTitle(title);
     save_state(row.gcal_id, {t: title, n: notion_fingerprint(row), d: row.start.getTime()});
   }
