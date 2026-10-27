@@ -43,6 +43,11 @@
   .hidden { display: none; }
   a { color: var(--accent); }
   footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table.rotas { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.rotas th, table.rotas td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+  table.rotas th:first-child, table.rotas td:first-child { text-align: left; }
+  table.rotas th { font-weight: 600; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -52,6 +57,7 @@
   var TOKEN = <?!= JSON.stringify(token) ?>;
   var CONFIRM = <?!= JSON.stringify(confirm) ?>;
   var SWAP = <?!= JSON.stringify(swap) ?>;
+  var LEAVE = <?!= JSON.stringify(leave) ?>;
   var EXEC_URL = <?!= JSON.stringify(exec_url) ?>;
   var app = document.getElementById('app');
 
@@ -166,6 +172,101 @@
     return card;
   }
 
+  // ---- leaving the tea system (link at the end of every bot email); always takes a click here ----
+  var LEAVE_TEXT = 'This is only about the Gatsby tea system: the rotas for research and tea talks, TNJC, MLJC, tea and coffee duty, and the tea bot\'s emails. Leaving does not take you off Gatsby\'s mailing lists, so group announcements still reach you.';
+  var LEAVE_AFTER = 'Afterwards you will not be scheduled again and the bot will not email you any more; your Notion entry stays, marked inactive. To come back, just ask the tea tsar.';
+
+  function renderLeave(){
+    app.innerHTML = '';
+    app.appendChild(el('h1', {text: 'Leave the Gatsby tea system?'}));
+    var msg = el('div', {class: 'msg'});
+    app.appendChild(msg);
+    call('api_leave_info', [TOKEN], function(info){
+      msg.className = 'msg'; msg.textContent = '';
+      var go = el('button', {class: 'danger', text: 'Yes, take me out of the tea system'});
+      var stay = el('a', {class: 'btn', href: (EXEC_URL || '') + '?t=' + TOKEN, text: 'No, back to my tea page'});
+      var card = el('div', {class: 'card'}, [
+        el('p', {}, ['You are ', el('strong', {text: info.name}), '.']),
+        el('p', {text: LEAVE_TEXT}),
+        el('p', {class: 'muted', text: LEAVE_AFTER})
+      ]);
+      if (info.slots.length){
+        card.appendChild(el('div', {class: 'warn', style: 'margin:10px 0'}, [
+          el('p', {style: 'margin:0 0 4px', text: 'You still have ' + (info.slots.length === 1 ? 'this slot' : 'these slots') + ':'}),
+          el('ul', {style: 'margin:0 0 6px;padding-left:18px'}, info.slots.map(function(x){ return el('li', {text: x}); })),
+          el('p', {style: 'margin:0', text: 'Leaving does not hand them over. Please swap them on your tea page first; otherwise the organiser has to find someone.'})
+        ]));
+      }
+      card.appendChild(el('div', {class: 'row', style: 'margin-top:12px'}, [go, stay]));
+      go.addEventListener('click', function(){
+        call('api_leave', [TOKEN], function(res){ card.innerHTML = ''; card.appendChild(el('p', {class: 'msg ok', text: res})); }, msg, go);
+      });
+      app.insertBefore(card, msg);
+    }, msg);
+  }
+
+  function renderLeaveLanding(){
+    var msg = el('div', {class: 'msg'});
+    var sel = el('select', {}, [el('option', {value: '', text: 'Loading names…'})]);
+    var btn = el('button', {class: 'primary', text: 'Email me a link to confirm'});
+    btn.disabled = true;
+    btn.addEventListener('click', function(){
+      if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please pick your name.'; return; }
+      call('api_request_leave_link', [sel.value], function(res){ ok(msg, res); }, msg, btn);
+    });
+    call('api_link_people', [], function(people){
+      sel.innerHTML = '';
+      sel.appendChild(el('option', {value: '', text: 'Pick your name…'}));
+      people.forEach(function(p){ sel.appendChild(el('option', {value: p.id, text: p.name})); });
+      msg.className = 'msg'; msg.textContent = '';
+      btn.disabled = false;
+    }, msg);
+    app.innerHTML = '';
+    app.appendChild(el('h1', {text: 'Leave the Gatsby tea system'}));
+    app.appendChild(el('div', {class: 'card'}, [
+      el('p', {text: LEAVE_TEXT}),
+      el('p', {class: 'muted', text: LEAVE_AFTER}),
+      el('p', {text: 'Pick your name, and we will email a confirmation link to the address you are registered with.'}),
+      el('label', {text: 'Your name'}), sel, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg
+    ]));
+  }
+
+  // ---- organisers: who is on which rota ----
+  function rotasCard(){
+    var msg = el('div', {class: 'msg'});
+    var show = el('button', {text: 'Who is on which rota'});
+    var box = el('div');
+    var card = el('div', {class: 'card'}, [
+      el('p', {class: 'muted', style: 'margin:0 0 8px', text: 'Everyone active, with the rotas they can be scheduled for. To change it, open their Notion page (click the name): the TNJC / CSNJC / MLJC / Coffee ticks, Position and the "Excluded from …" boxes.'}),
+      el('div', {class: 'row'}, [show]), msg, box
+    ]);
+    show.addEventListener('click', function(){
+      call('api_rotas', [TOKEN], function(r){
+        show.classList.add('hidden');
+        var filter = el('select', {style: 'width:auto'}, [el('option', {value: '', text: 'Everyone (' + r.people.length + ')'})].concat(r.columns.map(function(c){
+          return el('option', {value: c.key, text: c.label + ' (' + r.people.filter(function(p){ return p.on[c.key]; }).length + ')'});
+        })));
+        var table = el('div', {class: 'scroll'});
+        var draw = function(){
+          var head = el('tr', {}, [el('th', {text: 'Name'})].concat(r.columns.map(function(c){ return el('th', {text: c.label}); })).concat([el('th', {text: 'Upcoming'}), el('th', {text: 'Email'})]));
+          var rows = r.people.filter(function(p){ return !filter.value || p.on[filter.value]; }).map(function(p){
+            return el('tr', {}, [el('td', {}, [el('a', {href: 'https://www.notion.so/' + p.id, target: '_blank', text: p.name, title: p.position || ''})])]
+              .concat(r.columns.map(function(c){ return el('td', {text: p.on[c.key] ? '✓' : ''}); }))
+              .concat([el('td', {text: p.upcoming ? String(p.upcoming) : '', title: p.next ? 'Next: ' + p.next : ''}), el('td', {text: p.email ? '' : 'missing', class: p.email ? '' : 'muted'})]));
+          });
+          table.innerHTML = '';
+          table.appendChild(el('table', {class: 'rotas'}, [el('thead', {}, [head]), el('tbody', {}, rows)]));
+        };
+        filter.addEventListener('change', draw);
+        draw();
+        box.appendChild(el('div', {class: 'row', style: 'margin:8px 0'}, [filter]));
+        box.appendChild(table);
+        box.appendChild(el('p', {class: 'muted', style: 'margin:8px 0 0;font-size:13px', text: '"Upcoming" counts their slots from today (hover for the next one). "Email missing": no registered address, so no reminders; add it in column C of the identity sheet. ' + r.inactive + ' people are inactive and not shown.'}));
+      }, msg, show);
+    });
+    return card;
+  }
+
   // ---- personal page ----
   function load(){ call('api_state', [TOKEN], render); }
 
@@ -196,13 +297,15 @@
     if (s.organiser.length){
       app.appendChild(el('h2', {text: 'Organiser'}));
       s.organiser.forEach(function(o){ app.appendChild(organiserCard(o)); });
+      app.appendChild(rotasCard());
     }
 
     app.appendChild(el('h2', {text: 'Your email'}));
     app.appendChild(emailCard(s));
 
     app.appendChild(el('footer', {}, [
-      'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas on Notion'}), '. Keep this page\'s link to yourself: anyone with it can act as you here.'
+      'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas on Notion'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
+      el('button', {class: 'quiet', text: 'Leave the tea system…', onclick: renderLeave})
     ]));
   }
 
@@ -429,6 +532,8 @@
 
   if (SWAP) renderSwapAnswer();
   else if (CONFIRM) renderConfirm();
+  else if (LEAVE && TOKEN) renderLeave();
+  else if (LEAVE) renderLeaveLanding();
   else if (TOKEN) load();
   else renderLanding();
 </script>

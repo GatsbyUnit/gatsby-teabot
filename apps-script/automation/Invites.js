@@ -5,8 +5,9 @@
 // (CalendarApp never notifies them).
 //
 // Declining changes nothing in the rota: Outlook's out-of-office and deleting the invitation both decline
-// on their own. Whoever declines gets one email saying the slot is still theirs and how to swap (organiser
-// in cc when the slot is less than a week away). Cancelling stays on the tea page.
+// on their own, so it is often an accident. Whoever declines gets one friendly email saying the slot is still
+// theirs and how to swap if they really can't make it (organiser in cc when the slot is less than a week
+// away). Cancelling stays on the tea page.
 
 const INVITE_PREFIX = 'invite:';
 const INVITE_NUDGE_CC_DAYS = 7;
@@ -110,14 +111,14 @@ function nudge_decline(row, email, ctx){
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var soon = row.start.getTime() - Date.now() < INVITE_NUDGE_CC_DAYS * 864e5;
   var blocks = [
-    'You declined the calendar invitation for your ' + what + '. That does not take you off the rota: the slot is still yours.',
+    'Your calendar shows the invitation for your ' + what + ' as declined. That often happens by itself: an out-of-office reply, or deleting the invitation to tidy up. Either way, nothing has changed: the slot is still yours. If it was an accident, just accept the invitation again.',
     slot_table(row),
-    'If you can\'t make it, please swap: pick someone on your tea page, and the slot moves to them once they accept.',
-    {link: 'Open my tea page', url: tea_page_link_for(id, ctx)},
+    'If you really can\'t make it, please swap: pick someone on your tea page, and the slot moves to them once they accept. If you are away that day, adding it to your away dates there keeps you from being scheduled then in future.',
+    // the personal link only when nobody else gets this email
+    {link: soon ? 'Open the tea page' : 'Open my tea page', url: soon ? page_url(ctx.settings) : tea_page_link_for(id, ctx)},
     duty === 'presenter'
-      ? 'Only if really nobody can take over, use "Nobody can take over?" on your tea page. That cancels the talk, so it is the last resort.'
-      : 'If really nobody can take over, reply to this email and the organiser will sort it out.',
-    'Did your calendar decline it for you (out of office)? Then you are probably away that day: please swap, and add the dates to your away dates so you are not scheduled then again. Declined by mistake? Just accept the invitation again.'
+      ? 'Only if nobody at all can take over, there is "Nobody can take over?" on your tea page. That cancels the talk, so it is the last resort.'
+      : 'If nobody at all can take over, reply to this email and the organiser will sort it out.'
   ];
   send_mail(email, 'Your ' + what + ' on ' + fmt_day(row.start) + ' is still yours', blocks, ctx.constants,
             soon ? {reply_to: organiser, cc: organiser} : {reply_to: organiser});

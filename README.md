@@ -9,6 +9,7 @@ What to read where (each topic lives in one place only):
   title, set away dates or request Zoom.
 - **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
   yearly jobs, handing over.
+- **New organiser or tea tsar:** the handover guide at the end of the [handbook](docs/handbook.md#handing-over-a-guide-for-new-organisers-and-tea-tsars).
 - **Whoever maintains the code:** this file.
 - **Next steps:** [docs/next-steps.md](docs/next-steps.md): keeping this public repo clean, what else is public
   (personal data on the Notion site, tea-page links), and how one might move off Notion.

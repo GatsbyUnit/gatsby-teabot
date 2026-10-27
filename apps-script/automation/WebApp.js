@@ -279,6 +279,12 @@ function api_link_people(){
 }
 
 function api_request_link(person_id){
+  return send_personal_link(person_id, 'Your tea page', page_link_blocks);
+}
+
+// emails the chosen person (only ever to their registered address) a mail built around their personal link;
+// rate-limited, as anyone can ask
+function send_personal_link(person_id, subject, make_blocks){
   person_id = normalise_id(String(person_id || '').trim());
   if (!/^[0-9a-f]{32}$/.test(person_id)) throw new Error('Please pick your name.');
   var cache = CacheService.getScriptCache();
@@ -297,7 +303,7 @@ function api_request_link(person_id){
   }
   cache.put(key, String(count + 1), 6 * 3600);
   cache.put('linkreq:all', String(total + 1), 3600);
-  send_mail(row.email, 'Your tea page', page_link_blocks(personal_link(row.token, get_settings())), constants);
+  send_mail(row.email, subject, make_blocks(personal_link(row.token, get_settings())), constants);
   return 'Sent to ' + mask_email(row.email) + '. Check your inbox (and spam).';
 }
 

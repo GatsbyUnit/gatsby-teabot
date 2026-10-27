@@ -11,9 +11,10 @@
 
 function send_mail(to, subject, blocks, constants, options){
   options = options || {};
+  var leave = leave_url(to, options, constants);
   var footer = [
     {rule: true},
-    'Gatsby Tea Bot · [Gatsby Rotas on Notion](' + constants['notion_site_url'] + ')'
+    'Gatsby Tea Bot · [Gatsby Rotas on Notion](' + constants['notion_site_url'] + ')' + (leave ? ' · [Leave the tea system](' + leave + ')' : '')
   ];
   var all = blocks.concat(footer);
   var mail = {

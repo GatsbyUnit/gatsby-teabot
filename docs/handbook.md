@@ -18,6 +18,8 @@ repeating it. How the code is deployed is in the [README](../README.md).
 - **Cancelling a talk (a last resort; a swap is always better):** presenters who really can't find anyone can cancel on their tea page (a small "Nobody can take over?" below the buttons; it asks who they asked and offers the swap again). Organisers cancel by deleting the calendar event or renaming it to "… CANCELLED"; a deleted event is acted on once it is still gone an hour later. Either way the slot stays in Notion, titled "Cancelled", without its presenter, so they keep their turn and are scheduled again soon; tea duty stays; the presenter and tea person get one email with the organiser in cc; there is no group reminder. Writing "Cancelled" in Notion yourself only makes the bot leave the slot alone; then take the presenter off and rename the event yourself.
 - **Cancelling a just tea:** delete or rename its calendar event the same way. The tea person is taken off (keeping their turn) and gets one email with the organiser in cc. Other tea-only slots (leaving tea, external seminars, coffee) are not cancelled this way; a deleted event is only reported.
 - **Calendar invitations:** for the rotas in `INVITE_TYPES` (Automation tab), the presenter and the tea person are guests of their slot's event, so it shows up in their own calendar. The bot keeps the guest list in step: after a swap or cancellation Google sends the old person a cancellation and the new one an invitation; guests you add by hand are left alone. **Declining changes nothing in the rota** (Outlook's out-of-office and deleting the invitation decline on their own): whoever declines gets one email that the slot is still theirs and how to swap, with the organiser in cc if the slot is less than a week away. Anyone who can see the gatsby.tea calendar's event details can see the guests' registered emails.
+- **Someone leaves the tea system:** every bot email ends with "Leave the tea system", which opens a page explaining that this is only about the tea system (not Gatsby's mailing lists) and asks them to confirm. Leaving marks them inactive in Notion, clears their registered email and tea-page code, drops their swap requests, and tells the organisers about any upcoming slots they still hold (else the tea tsar). To undo: tick Active on their Notion page and put their email back in column C of the identity sheet.
+- **Who is on which rota:** on your tea page, Organiser section, "Who is on which rota": everyone active with the rotas they can be scheduled for (the same rules as scheduling and the swap list), their upcoming slots and whether an email is registered.
 - **Zoom requests** from the tea page go to the unit admin in row 28 of the constants sheet, with the requester as reply-to.
 - **Pause the bot:** set `DRY_RUN` to `TRUE` in the Automation tab. Nothing else is needed.
 - **Something odd:** the bot emails the rota organiser (or the tea tsar, if it can't tell who a name refers to). Errors in the bot itself go to the TNJC organiser with the tea tsar in cc. Everything it does is in the "Gatsby Tea Automation log" sheet in gatsby.teabot's Drive, with open calendar/Notion differences on its Mismatches tab.
@@ -35,8 +37,43 @@ reminds you on Mondays when a rota's schedule is about to run out. In the Organi
 - **October:** add new students to the gatsby-tnjc Google Group (Group → People → Add members; direct adding only works for Gmail addresses), and untick TNJC/CSNJC in Notion for people who left. The bot reminds the TNJC organiser on 1 Oct.
 - **Third term:** add the first years as presenters (tick TNJC / CSNJC on their Notion page). Reminder on 22 Apr.
 
-## Handing over
-- Change the organiser emails in the constants sheet (first tab, column B).
-- Access: gatsby.teabot / gatsby.tea logins and 2FA via the tea tsar.
+## Handing over: a guide for new organisers and tea tsars
+The bot looks up who organises what by email, so most of a handover is changing one cell and checking that the
+new person can see their tools. Work through it together with the person you take over from.
+
+**1. Make the bot know you (outgoing and incoming together)**
+1. In the constants sheet, first tab, column B, replace the outgoing address with yours: row 2 = tea tsar (also
+   gets the research / tea talk, just tea, leaving tea and external seminar mail), 3 = MLJC, 4 = TNJC (also gets
+   the bot's error emails), 5 = coffee. This decides who gets reminders, digests and cancellations, and who sees
+   the Organiser section on the tea page.
+2. Use the same address in the identity sheet (column C, your row): the tea page shows organiser tools only when
+   your registered email matches column B. Then get your link from the tea page (pick your name).
+3. Open your tea page and check that the Organiser section shows your rota, and "Who is on which rota" opens.
+4. Update the Contact box on the Gatsby Rotas page in Notion (names only; people message organisers on Slack).
+
+**2. Access you need**
+- **Notion:** edit access to Gatsby Rotas (Schedule and People databases), from the outgoing person or the tea tsar.
+- **The bot accounts:** the tea tsar holds the gatsby.tea (calendar) and gatsby.teabot (scripts, Drive, sheets)
+  logins and their 2FA. Organisers rarely need them; the tea tsar does.
+- **Mailing lists:** TNJC: owner of the gatsby-tnjc Google Group. The unit-wide list and access to the calendar
+  for members are run by the unit's admin, not the bot.
+- **Code (only whoever maintains the bot):** the GatsbyUnit GitHub organisation, and the steps in the README.
+
+**3. Learn the routine (first weeks)**
+- Read Everyday and Scheduling above; for members' questions, point them to the Notion guides.
+- Look at the Automation tab of the constants sheet (switches, with explanations) and the Automation reminders
+  tab (dated reminders; change the rota column if duties move between organisers).
+- Skim the "Gatsby Tea Automation log" sheet now and then; its Mismatches tab lists open calendar / Notion
+  differences.
+- Your first scheduling round: Plan these dates, check in Notion, Finalise (see Scheduling).
+
+**4. Before the outgoing person leaves**
+- Hand over open items: tentative slots not yet finalised, anything on the Mismatches tab, unanswered emails.
+- If they leave Gatsby altogether, they can use "Leave the tea system" on their tea page (or untick Active on
+  their Notion page) once their slots are handed over.
+- New tea tsar: change the bot accounts' passwords and 2FA, and rotate the Notion token if the outgoing tsar had
+  it (constants sheet, first tab; see docs/next-steps.md).
+
+**Good to know**
 - The tea page does not open in a browser that is signed into gatsby.teabot as a secondary account (Google redirect bug); use a private window or a browser profile without the bot account.
 - **The bot's Drive:** everything at the top level of My Drive is live, plus the `away_dates` folder (everyone's away-date sheets and their template) and `people_files` (people lists the Cron Jobs still write in the old cluster format). Everything else, from the scripts, forms and notebooks the bot replaced to the files of the systems before them, is in the folder "Gatsby tea – archive (superseded 2026-10-27)". "Shared with me" holds other people's files; leave them be. The Apps Script dashboard (script.google.com) lists every project regardless of folder: the starred ones (Automation, Page, Cron Jobs) are live, the archive helper only ran the clean-up, and everything named "[archived] …" belongs to the archive. Projects marked "empty, can be deleted" hold nothing but the default `myFunction`.

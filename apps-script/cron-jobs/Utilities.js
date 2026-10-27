@@ -112,7 +112,8 @@ function send_email(email, title, body, constants, replyto_email){
   const notion_site_url =  constants['notion_site_url'];  
   const today = new Date();
   var page = tea_page_url();
-  var footer = '--------\nGatsby Tea Bot @ ' + today.getFullYear() + '\n' + notion_site_url + '\n\nMake me smarter at scheduling by keeping your away dates up to date' + (page ? ' on your tea page (' + page + ') or' : '') + ' in your away-date sheet (linked from your profile on ' + notion_site_url + ').';
+  var footer = '--------\nGatsby Tea Bot @ ' + today.getFullYear() + '\n' + notion_site_url + '\n\nMake me smarter at scheduling by keeping your away dates up to date' + (page ? ' on your tea page (' + page + ') or' : '') + ' in your away-date sheet (linked from your profile on ' + notion_site_url + ').' +
+    (page ? '\n\nLeave the tea system (rotas and these emails; not Gatsby\'s mailing lists): ' + page + '?leave=1' : '');
   body = body + '\n\n\n' + footer;
   
   if ( replyto_email == null ){
