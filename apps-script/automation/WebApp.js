@@ -435,10 +435,12 @@ function chunk_text(s){
   return out;
 }
 
+// The address is also written out in full: UCL's (Microsoft) mail filter distrusts links that hide behind a button.
 function page_link_blocks(url){
   return [
-    'Here is your personal page for the Gatsby tea system. You can swap your slots, add your talk title and set your away dates there.',
+    'You asked for your link on the Gatsby tea page. It opens your personal page, where you can swap your slots, add your talk title and set your away dates.',
     {link: 'Open my tea page', url: url},
-    'Bookmark it. Keep it to yourself: anyone with this link can act as you in the tea system.'
+    'Or copy this address into your browser: ' + url,
+    'Bookmark it and keep it to yourself: anyone with it can act as you in the tea system. If you did not ask for it, you can ignore this email.'
   ];
 }
