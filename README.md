@@ -15,30 +15,7 @@ What to read where (each topic lives in one place only):
 
 ## The setup at a glance
 
-```mermaid
-flowchart TB
-  people(["Unit members and organisers"])
-  github["GitHub<br/>code, tests, docs"]
-
-  subgraph bot["Apps Script projects, running as gatsby.teabot"]
-    page["Gatsby Tea Page<br/>everyone's personal tea page"]
-    auto["Gatsby Tea Automation<br/>hourly sync, scheduling, emails"]
-    cron["Gatsby Tea Cron Jobs<br/>talk reminders by email"]
-  end
-
-  notion[("Notion<br/>Schedule and People<br/>(source of truth)")]
-  cal[("gatsby.tea calendar<br/>kept in step with Notion")]
-  sheets[("Google Sheets<br/>settings, emails, away dates")]
-
-  people -->|"swap, titles, away dates, Zoom, scheduling"| page
-  people -.->|hand edits| cal
-  github -->|deploy.py| bot
-  page -->|uses as library| auto
-  auto <-->|every hour| notion
-  auto <-->|events| cal
-  auto <--> sheets
-  cron -->|reads| notion
-```
+<p align="center"><img src="docs/setup.svg" width="820" alt="Unit members and organisers use the tea page, which uses Gatsby Tea Automation as a library. The automation syncs with Notion every hour, keeps the gatsby.tea calendar in step and uses Google Sheets; the Cron Jobs read Notion and send reminders. Hand edits to the calendar are copied back to Notion. GitHub deploys the Apps Script projects."></p>
 
 Notion decides who does what and when; the calendar is a copy that the bot keeps in step, and hand edits to it are
 copied back. The [handbook](docs/handbook.md) explains each part.
