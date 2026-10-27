@@ -4,7 +4,7 @@
 //   (nothing)        lists the registered people by name and emails the chosen one their personal link
 //
 // SECURITY: a web page can call every top-level function of this project through google.script.run, so this
-// project must contain only doGet and these thin wrappers. All logic lives in "Gatsby Tea Automation", used
+// project must contain only doGet, doPost and these thin wrappers. All logic lives in "Gatsby Tea Automation", used
 // as the library TeaBot; each api_* function there checks the visitor's token.
 
 function doGet(e){
@@ -12,17 +12,35 @@ function doGet(e){
   var t = HtmlService.createTemplateFromFile('Page');
   t.token = /^[0-9a-f]{40}$/.test(p.t || '') ? p.t : '';
   t.confirm = /^[0-9a-f]{32}$/.test(p.confirm || '') ? p.confirm : '';
+  var settings = {};
+  try { settings = TeaBot.get_settings(); } catch (err) { console.log('settings: ' + err); }
+  t.exec_url = settings.PAGE_URL || '';
   var out = t.evaluate()
     .setTitle('Gatsby tea')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   // the tab icon lives in the private constants sheet (setting FAVICON_URL); a bad value never breaks the page
   try {
-    var icon = TeaBot.get_settings().FAVICON_URL;
-    if (icon) out.setFaviconUrl(icon);
+    if (settings.FAVICON_URL) out.setFaviconUrl(settings.FAVICON_URL);
   } catch (err) {
     console.log('favicon: ' + err);
   }
   return out;
+}
+
+// The page calls the api_* functions below with an anonymous POST rather than google.script.run, which fails
+// with "Sorry, unable to open the file at this time" for people signed in to several Google accounts.
+// Only the api_* functions of this project can be called; each one checks the visitor's token.
+function doPost(e){
+  var out;
+  try {
+    var req = JSON.parse(e.postData.contents);
+    var fn = /^api_\w+$/.test(req.fn) ? globalThis[req.fn] : null;
+    if (typeof fn !== 'function') throw new Error('Unknown call.');
+    out = {ok: true, result: fn.apply(null, req.args || [])};
+  } catch (err) {
+    out = {ok: false, error: String(err && err.message ? err.message : err)};
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function api_state(token){ return TeaBot.api_state(token); }

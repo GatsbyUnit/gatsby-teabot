@@ -51,6 +51,7 @@
 <script>
   var TOKEN = <?!= JSON.stringify(token) ?>;
   var CONFIRM = <?!= JSON.stringify(confirm) ?>;
+  var EXEC_URL = <?!= JSON.stringify(exec_url) ?>;
   var app = document.getElementById('app');
 
   function el(tag, attrs, children){
@@ -64,18 +65,31 @@
     (children || []).forEach(function(c){ if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
     return e;
   }
+  // Calls go to the web app as an anonymous POST (doPost): google.script.run breaks for people signed in to
+  // several Google accounts. It is only the fallback for calls that just read, so nothing can happen twice.
+  var READ_ONLY = ['api_state', 'api_link_people'];
   function call(fn, args, done, msgEl, button){
     if (button) button.disabled = true;
     if (msgEl){ msgEl.className = 'msg muted'; msgEl.textContent = 'Working…'; }
-    var runner = google.script.run
-      .withSuccessHandler(function(res){ if (button) button.disabled = false; done(res); })
-      .withFailureHandler(function(err){
-        if (button) button.disabled = false;
-        var text = (err && err.message ? err.message : String(err)).replace(/^Exception: /, '').replace(/^Error: /, '');
-        if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = text; }
-        else { app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: text})); }
+    var finish = function(res){ if (button) button.disabled = false; done(res); };
+    var fail = function(text){
+      if (button) button.disabled = false;
+      text = String(text || 'Something went wrong.').replace(/^Exception: /, '').replace(/^Error: /, '');
+      if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = text; }
+      else { app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: text})); }
+    };
+    var classic = function(){
+      var runner = google.script.run.withSuccessHandler(finish).withFailureHandler(function(err){ fail(err && err.message ? err.message : err); });
+      runner[fn].apply(runner, args);
+    };
+    if (!EXEC_URL || !window.fetch) return classic();
+    fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: fn, args: args}), credentials: 'omit', redirect: 'follow'})
+      .then(function(r){ return r.json(); })
+      .then(function(res){ if (res.ok) finish(res.result); else fail(res.error); })
+      .catch(function(){
+        if (READ_ONLY.indexOf(fn) >= 0) classic();
+        else fail('Could not reach the tea bot. Please reload the page and check whether your change went through before trying again.');
       });
-    runner[fn].apply(runner, args);
   }
   function ok(msgEl, text){ msgEl.className = 'msg ok'; msgEl.textContent = text; }
 

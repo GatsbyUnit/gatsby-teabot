@@ -188,10 +188,10 @@ results.join('\\n');
 // contain doGet, token-checked api_* wrappers and authorize
 const pageSrc = fs.readdirSync(path.join(__dirname, '..', 'apps-script', 'page')).filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'page', f), 'utf8')).join('\n');
 const pageFns = [...pageSrc.matchAll(/^\s*function\s+(\w+)/gm)].map(m => m[1]);
-const extra = pageFns.filter(n => !(n === 'doGet' || n === 'authorize' || /^api_/.test(n)));
+const extra = pageFns.filter(n => !(n === 'doGet' || n === 'doPost' || n === 'authorize' || /^api_/.test(n)));
 const autoApis = [...src.matchAll(/^function (api_\w+)\(/gm)].map(m => m[1]);
 const missing = autoApis.filter(n => pageFns.indexOf(n) < 0);
-console.log((extra.length || missing.length ? 'FAIL' : 'ok  ') + ' page project exposes only doGet, api_* and authorize' + (extra.length ? ' (extra: ' + extra + ')' : '') + (missing.length ? ' (missing wrappers: ' + missing + ')' : ''));
+console.log((extra.length || missing.length ? 'FAIL' : 'ok  ') + ' page project exposes only doGet, doPost, api_* and authorize' + (extra.length ? ' (extra: ' + extra + ')' : '') + (missing.length ? ' (missing wrappers: ' + missing + ')' : ''));
 if (extra.length || missing.length) process.exitCode = 1;
 const ctx = vm.createContext({console, Buffer, assert, require_crypto: require('crypto'), Intl});
 const out = vm.runInContext(stubs + src + tests, ctx);
