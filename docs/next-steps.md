@@ -31,9 +31,13 @@ What keeps this repo safe to be public:
 - **The gatsby.tea calendar is not public** (its public feed returns 404); people see it because it is shared with
   them. Event descriptions contain the internal Zoom link, and with calendar invitations on (`INVITE_TYPES`) the
   guests' registered emails, so keep it that way.
+- **The tea page's address is public** (gatsbyunit.github.io/gatsby-teabot, a static page in this repo). Without
+  a code in the link it only offers to email your link to your registered address. The general link adds the unit
+  key `PAGE_KEY` (Automation tab), which shows the names to pick from and allows leaving by name; if it spreads
+  beyond the Unit, put a new value there (the calendar events follow within the hour).
 - **Personal tea-page links work like passwords.** Whoever has one can swap that person's slots or change their
   registered email. They are only ever sent to the person themselves (single-person reminders, the "send me my
-  link" email); calendar events carry the general page link. If one leaks, clear that person's cell in column D
+  link" email); calendar events carry the general page link with the unit key. If one leaks, clear that person's cell in column D
   of the identity sheet: the old link stops working at once, and the daily maintenance run issues a new code.
 
 ## Moving off Notion
@@ -50,6 +54,30 @@ whoever later decides to make the system Google-only.
 
 It is not worth it for tidiness alone. The data layer of both Apps Script projects has to be rewritten, and the
 fairness history must survive the move intact.
+
+### Recommended path: move the editing first (agreed 2026-10-27, not started)
+Rather than moving the data first, move what organisers still edit in Notion by hand onto the tea page, while
+Notion stays the store. Once nobody edits Notion directly, switching the store to a Sheet changes nothing anyone
+sees.
+1. **Editors on the tea page, still backed by Notion**, for organisers (their rota) and the tea tsar (all):
+   - Slots: presenter and tea person (dropdowns offering only people eligible for that rota), guest speaker,
+     tentative, add, delete. The calendar updates at once, and invalid entries are refused rather than caught by
+     the hourly sync afterwards.
+   - People: rota ticks, Active, exclusions, position (the "Who is on which rota" table made editable).
+   - Rota rules.
+   Every edit goes into the automation log, so an undo button can build on it. If two people edit the same row,
+   the second save is refused when the row changed since it was loaded. Rough effort: slot editor about a day,
+   people editor half a day, rules small.
+2. **Sign in with Google**, so organisers needn't keep a personal link. The page gets a Google ID token (Google
+   Identity Services; an OAuth client under gatsby.teabot allowing the github.io origin; scopes openid and email
+   only, so no app verification), the bot verifies it and opens that person's page. Most registered addresses are
+   @ucl.ac.uk (Microsoft), so add a one-time "Link my Google account" on the personal page (an extra
+   identity-sheet column). About half a day, plus a quarter of an hour in Cloud Console.
+3. **Then the store switch** described below (Target, Migration plan).
+
+Not carried over from Notion: free-form views and filters, comments, page history, live co-editing. The member
+guides stay on Notion (they need no API) or move to Google Docs shown on github.io; rebuilding Notion's page
+editor is not worth it.
 
 ### What Notion holds today
 | Notion | Used for | Constants sheet |
