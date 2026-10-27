@@ -16,36 +16,28 @@ What to read where (each topic lives in one place only):
 ## The setup at a glance
 
 ```mermaid
-flowchart LR
-  members(["Unit members"])
-  organisers(["Organisers"])
-
-  subgraph apps["Google Apps Script, running as gatsby.teabot"]
-    page["Gatsby Tea Page<br/>personal tea page (web app)"]
-    auto["Gatsby Tea Automation<br/>hourly sync, scheduling, emails"]
-    cron["Gatsby Tea Cron Jobs<br/>talk reminders, people sync"]
-  end
-
-  subgraph sheets["Google Sheets"]
-    consts["constants sheet<br/>settings, Notion token"]
-    ident["identity sheet<br/>emails, page links"]
-    away["away-date sheets<br/>one per person"]
-  end
-
-  notion[("Notion: Schedule, People<br/>source of truth")]
-  cal[("gatsby.tea calendar")]
+flowchart TB
+  people(["Unit members and organisers"])
   github["GitHub<br/>code, tests, docs"]
 
-  members -->|swap, title, away dates, Zoom| page
-  organisers -->|create, fill, finalise slots| page
+  subgraph bot["Apps Script projects, running as gatsby.teabot"]
+    page["Gatsby Tea Page<br/>everyone's personal tea page"]
+    auto["Gatsby Tea Automation<br/>hourly sync, scheduling, emails"]
+    cron["Gatsby Tea Cron Jobs<br/>talk reminders by email"]
+  end
+
+  notion[("Notion<br/>Schedule and People<br/>(source of truth)")]
+  cal[("gatsby.tea calendar<br/>kept in step with Notion")]
+  sheets[("Google Sheets<br/>settings, emails, away dates")]
+
+  people -->|"swap, titles, away dates, Zoom, scheduling"| page
+  people -.->|hand edits| cal
+  github -->|deploy.py| bot
   page -->|uses as library| auto
   auto <-->|every hour| notion
-  auto <-->|writes events, reads hand edits| cal
-  members -.->|edit events by hand| cal
-  auto --- sheets
+  auto <-->|events| cal
+  auto <--> sheets
   cron -->|reads| notion
-  cron -->|reminder emails| members
-  github -->|deploy.py| apps
 ```
 
 Notion decides who does what and when; the calendar is a copy that the bot keeps in step, and hand edits to it are
