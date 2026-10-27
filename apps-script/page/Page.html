@@ -234,7 +234,7 @@
   // ---- organisers: who is on which rota ----
   function rotasCard(){
     var msg = el('div', {class: 'msg'});
-    var show = el('button', {text: 'Who is on which rota'});
+    var show = el('button', {text: 'Show the table'});
     var box = el('div');
     var card = el('div', {class: 'card'}, [
       el('p', {class: 'muted', style: 'margin:0 0 8px', text: 'Everyone active, with the rotas they can be scheduled for. To change it, open their Notion page (click the name): the TNJC / CSNJC / MLJC / Coffee ticks, Position and the "Excluded from …" boxes.'}),
@@ -297,6 +297,7 @@
     if (s.organiser.length){
       app.appendChild(el('h2', {text: 'Organiser'}));
       s.organiser.forEach(function(o){ app.appendChild(organiserCard(o)); });
+      app.appendChild(el('h2', {text: 'Who is on which rota'}));
       app.appendChild(rotasCard());
     }
 
