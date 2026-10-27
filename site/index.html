@@ -506,6 +506,7 @@
 
   // ---- no personal code and no unit key: only the address, which is public ----
   function renderNoKey(){
+    app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Gatsby tea'}));
     app.appendChild(el('p', {text: 'Please open the tea page from the link in a gatsby.tea calendar event or in one of the tea bot\'s emails.'}));
   }
