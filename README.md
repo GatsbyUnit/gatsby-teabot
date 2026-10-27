@@ -57,5 +57,6 @@ Secrets never go in this repo. The sheets and scripts it names are owned by the 
 link, so their IDs here give nobody access.
 
 ## Credits
-The scheduling algorithm and the original Cron Jobs are by Kevin
-([KevHH/gatsby_tea_scheduling](https://github.com/KevHH/gatsby_tea_scheduling)) and earlier tea tsars.
+The scheduling algorithm is a port of Kevin's
+[KevHH/gatsby_tea_scheduling](https://github.com/KevHH/gatsby_tea_scheduling). The Cron Jobs and the scripts the
+bot replaced come from earlier tea tsars.
