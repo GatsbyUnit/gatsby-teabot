@@ -191,14 +191,25 @@
   function showSwap(panel, d, people, msg){
     panel.innerHTML = '';
     panel.classList.remove('hidden');
-    var sel = el('select', {}, [el('option', {value: '', text: 'Choose who takes it over…'})].concat(people.map(function(p){ return el('option', {value: p.id, text: p.name}); })));
+    // people who normally do this duty first, then everyone else (a visitor may still step in)
+    var usual = d.usual || [];
+    var option = function(p){ return el('option', {value: p.id, text: p.name}); };
+    var first = people.filter(function(p){ return usual.indexOf(p.id) >= 0; });
+    var rest = people.filter(function(p){ return usual.indexOf(p.id) < 0; });
+    var sel = el('select', {}, [el('option', {value: '', text: 'Choose who takes it over…'})].concat(first.length && rest.length
+      ? [el('optgroup', {label: 'On this rota'}, first.map(option)), el('optgroup', {label: 'Everyone else'}, rest.map(option))]
+      : people.map(option)));
     var btn = el('button', {class: 'primary', text: 'Swap'});
+    // turns are counted per rota: someone outside it can step in, but the slot then counts for nobody
+    var note = el('p', {class: 'muted hidden', style: 'margin:6px 0 0;font-size:13px', text: 'Not on this rota: they can still take it, but it won\'t count as anyone\'s turn. You keep yours, so you\'ll be scheduled again soon.'});
+    sel.addEventListener('change', function(){ note.classList.toggle('hidden', !(first.length && sel.value && usual.indexOf(sel.value) < 0)); });
     btn.addEventListener('click', function(){
       if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please choose a person.'; return; }
       call('api_swap', [TOKEN, d.row_id, d.duty, sel.value], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, btn);
     });
     panel.appendChild(el('p', {class: 'muted', text: 'Agree it with the other person first. You will both get an email.'}));
     panel.appendChild(sel);
+    panel.appendChild(note);
     panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
   }
 
@@ -339,26 +350,31 @@
     var to = el('input', {type: 'date', value: o.to});
     var tfrom = el('input', {type: 'date', value: o.tea_from});
     var tto = el('input', {type: 'date', value: o.tea_to});
-    var create = el('button', {text: '1. Create empty slots'});
-    create.addEventListener('click', function(){
+    var showResult = function(res){
+      msg.className = 'msg ok'; msg.innerHTML = '';
+      var head = (res.created !== undefined ? 'Created ' + res.created + ' slot' + (res.created === 1 ? '' : 's') + (res.existing ? ' (' + res.existing + ' already existed)' : '') + '. ' : '') +
+        'Filled ' + res.filled.length + '. Check them in Notion: delete any you do not need (closures, retreat, deadlines) and change anyone you like, then finalise.';
+      msg.appendChild(el('div', {text: head}));
+      if (res.holidays && res.holidays.length) msg.appendChild(el('div', {class: 'muted', text: 'Skipped bank holidays: ' + res.holidays.join(', ')}));
+      var list = el('ul', {style: 'margin:6px 0 0;padding-left:18px'});
+      res.filled.concat(res.unfilled).forEach(function(l){ list.appendChild(el('li', {text: l})); });
+      msg.appendChild(list);
+      res.warnings.forEach(function(w){ msg.appendChild(el('div', {class: 'muted', text: w})); });
+    };
+    var plan = el('button', {class: 'primary', text: 'Plan these dates'});
+    plan.addEventListener('click', function(){
       var ranges = talks ? {research_from: from.value, research_to: to.value, tea_from: tfrom.value, tea_to: tto.value} : {from: from.value, to: to.value};
-      call('api_create_slots', [TOKEN, o.rota, ranges], function(res){ ok(msg, res); setTimeout(load, 2500); }, msg, create);
+      call('api_plan_slots', [TOKEN, o.rota, ranges], function(res){ showResult(res); setTimeout(function(){ call('api_state', [TOKEN], function(){}); }, 0); }, msg, plan);
+      msg.textContent = 'Creating the slots, reading everyone\'s away dates and filling them. This can take a minute or two…';
     });
-    var fill = el('button', {text: '2. Fill ' + o.empty + ' empty slot' + (o.empty === 1 ? '' : 's') + ' with people'});
-    if (!o.empty) fill.disabled = true;
+    var fill = el('button', {text: 'Fill ' + o.empty + ' empty slot' + (o.empty === 1 ? '' : 's') + ' again'});
+    if (!o.empty) fill.classList.add('hidden');
     fill.addEventListener('click', function(){
-      call('api_fill_slots', [TOKEN, o.rota], function(res){
-        msg.className = 'msg ok'; msg.innerHTML = '';
-        msg.appendChild(el('div', {text: 'Filled ' + res.filled.length + ' slots. Check them in Notion and change anyone you like, then finalise.'}));
-        var list = el('ul', {style: 'margin:6px 0 0;padding-left:18px'});
-        res.filled.concat(res.unfilled).forEach(function(l){ list.appendChild(el('li', {text: l})); });
-        msg.appendChild(list);
-        res.warnings.forEach(function(w){ msg.appendChild(el('div', {class: 'muted', text: w})); });
-      }, msg, fill);
+      call('api_fill_slots', [TOKEN, o.rota], showResult, msg, fill);
       msg.textContent = 'Reading everyone\'s away dates and filling the slots. This can take a minute or two…';
     });
     var box = el('input', {type: 'checkbox', style: 'width:auto'});
-    var fin = el('button', {class: 'primary', text: '3. Finalise ' + o.tentative + ' tentative slot' + (o.tentative === 1 ? '' : 's')});
+    var fin = el('button', {text: 'Finalise ' + o.tentative + ' tentative slot' + (o.tentative === 1 ? '' : 's')});
     if (!o.tentative) fin.disabled = true;
     fin.addEventListener('click', function(){
       call('api_finalise', [TOKEN, o.rota, box.checked], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, fin);
@@ -369,9 +385,9 @@
       : [el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'From'}), from]), el('div', {}, [el('label', {text: 'To'}), to])])];
     return el('div', {class: 'card'}, [
       el('div', {class: 'when', text: o.label}),
-      el('p', {class: 'muted', style: 'margin:4px 0 0', text: 'Plan the next slots: create them, delete the ones you do not need in Notion, fill them with people (fairly, respecting away dates), check, then finalise.'})
+      el('p', {class: 'muted', style: 'margin:4px 0 0', text: 'Plan creates the slots for these dates (bank holidays are skipped) and fills them fairly, respecting away dates. They stay tentative: check them in Notion, then finalise to put them on the calendar.'})
     ].concat(dates).concat([
-      el('div', {class: 'row', style: 'margin-top:10px'}, [create, fill]),
+      el('div', {class: 'row', style: 'margin-top:10px'}, [plan, fill]),
       el('label', {style: 'display:flex;gap:8px;align-items:center;color:inherit;font-size:14px;margin-top:12px'}, [box, 'When finalising, email the group that the schedule was updated']),
       el('div', {class: 'row', style: 'margin-top:8px'}, [fin]),
       msg

@@ -84,6 +84,7 @@ function api_state(token){
         can_title: duty === 'presenter' && !is_tentative(row),
         can_zoom: duty === 'presenter' && !is_tentative(row),
         cancelled: is_cancelled_title(row.title),
+        usual: Object.keys(ctx.people).filter(function(id){ return id !== me.id && can_do_duty(ctx.people[id], row, duty); }),
         can_cancel: duty === 'presenter' && can_cancel(row, ctx)
       });
     };
@@ -280,16 +281,20 @@ function api_finalise(token, rota, email_group){
   }
 }
 
-function api_create_slots(token, rota, ranges){
+// One step for organisers: create the slots for the dates (bank holidays skipped, existing slots kept) and
+// fill every empty one fairly. They stay tentative until the organiser has checked them and finalises.
+function api_plan_slots(token, rota, ranges){
   var ctx = page_context(token);
   if (!SLOT_PLANS[rota] || !is_organiser(ctx, rota)) throw new Error('Only the organiser of this rota can do that.');
   var lock = LockService.getScriptLock();
   lock.waitLock(60 * 1000);
   try {
-    var r = create_slots(rota, ranges || {}, ctx);
-    var msg = r.created.length ? 'Created ' + r.created.length + ' tentative slots. Delete the ones you do not need in Notion (holidays, closures, deadlines), then fill them.' : 'No new slots were needed.';
-    if (r.skipped.length) msg += ' (' + r.skipped.length + ' already existed and were left alone.)';
-    return msg;
+    var made = create_slots(rota, ranges || {}, ctx);
+    var res = fill_slots(rota, ctx);
+    res.created = made.created.length;
+    res.existing = made.skipped.length;
+    res.holidays = made.holidays || [];
+    return res;
   } finally {
     lock.releaseLock();
   }

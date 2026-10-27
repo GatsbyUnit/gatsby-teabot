@@ -147,11 +147,13 @@ function create_slots(rota, ranges, ctx){
     load_rows(type, add_days(first, -1), add_days(last, 6), ctx).forEach(function(r){ existing[type + '|' + fmt_iso_date(r.start)] = true; });
   });
   var coffee = rota === 'Coffee Cleaning' ? coffee_templates(first, ctx) : null;
+  var holidays = rota === 'Coffee Cleaning' ? {} : bank_holidays();
 
-  var created = [], skipped = [];
+  var created = [], skipped = [], holiday_skipped = [];
   wanted.forEach(function(w, i){
     var key = w.plan.type + '|' + w.date;
     if (existing[key]){ skipped.push(w.date + ' ' + w.plan.type); return; }
+    if (holidays[w.date]){ holiday_skipped.push(w.date + ' (' + holidays[w.date] + ')'); return; }
     var props = {
       'Type': {select: {name: w.plan.type}},
       'Title': {title: [{text: {content: TENTATIVE_TAGS[rota]}}]}
@@ -172,8 +174,8 @@ function create_slots(rota, ranges, ctx){
     notion_request('post', 'pages', {parent: {database_id: ctx.constants['notion_talk_db_id']}, properties: props}, ctx.constants);
     created.push(w.date + ' ' + w.plan.type);
   });
-  log_row(ctx, 'schedule', rota, null, 'created slots', created.length + ' created' + (skipped.length ? ', ' + skipped.length + ' already existed' : ''));
-  return {created: created, skipped: skipped};
+  log_row(ctx, 'schedule', rota, null, 'created slots', created.length + ' created' + (skipped.length ? ', ' + skipped.length + ' already existed' : '') + (holiday_skipped.length ? ', bank holidays skipped: ' + holiday_skipped.join(', ') : ''));
+  return {created: created, skipped: skipped, holidays: holiday_skipped};
 }
 
 // Water-filter weeks continue the 4-week cycle from the last filter week in Notion; descriptions are
@@ -248,6 +250,37 @@ function sched_talk(row){
   var t = {id: row.id, date: fmt_iso_date(row.start), type: row.type, presenter: row.presenter_ids.slice(), tea: row.tea_ids.slice()};
   if (row.type === 'Coffee Cleaning' && row.end) t.date_end = fmt_iso_date(row.end);
   return t;
+}
+
+// Who normally does this kind of duty (the scheduler's rules, per slot); the swap list shows them first.
+function can_do_duty(p, row, duty){
+  if (!p.active || !p.name) return false;
+  if (row.type === 'TNJC') return row.csnjc ? p.csnjc : p.tnjc;
+  if (row.type === 'MLJC') return p.mljc;
+  if (row.type === 'Coffee Cleaning') return p.coffee;
+  if (p.position === 'Included only for JCs / coffee') return false;
+  if (duty === 'tea') return !p.tea_excluded;
+  if (row.type === 'Research Talk') return !p.rt_excluded;
+  if (row.type === 'Tea Talk') return !p.tt_excluded;
+  return true;
+}
+
+// England and Wales bank holidays (gov.uk), as {yyyy-MM-dd: name}; talks and journal clubs skip them
+function bank_holidays(){
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('bank_holidays');
+  if (cached) return JSON.parse(cached);
+  var out = {};
+  try {
+    var res = UrlFetchApp.fetch('https://www.gov.uk/bank-holidays.json', {muteHttpExceptions: true});
+    if (res.getResponseCode() === 200){
+      JSON.parse(res.getContentText())['england-and-wales'].events.forEach(function(e){ out[e.date] = e.title; });
+      cache.put('bank_holidays', JSON.stringify(out), 6 * 3600);
+    }
+  } catch (err) {
+    Logger.log('bank holidays: ' + err);
+  }
+  return out;
 }
 
 function eligible_people(rota, ctx){

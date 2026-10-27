@@ -54,7 +54,7 @@ function api_confirm_email(code){ return TeaBot.api_confirm_email(code); }
 function api_link_people(){ return TeaBot.api_link_people(); }
 function api_request_link(person_id){ return TeaBot.api_request_link(person_id); }
 function api_finalise(token, rota, email_group){ return TeaBot.api_finalise(token, rota, email_group); }
-function api_create_slots(token, rota, ranges){ return TeaBot.api_create_slots(token, rota, ranges); }
+function api_plan_slots(token, rota, ranges){ return TeaBot.api_plan_slots(token, rota, ranges); }
 function api_fill_slots(token, rota){ return TeaBot.api_fill_slots(token, rota); }
 function api_request_zoom(token, row_id, reason){ return TeaBot.api_request_zoom(token, row_id, reason); }
 function api_set_away_calendar(token, calendar_id){ return TeaBot.api_set_away_calendar(token, calendar_id); }

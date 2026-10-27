@@ -22,12 +22,12 @@ repeating it. How the code is deployed is in the [README](../README.md).
 
 ## Scheduling
 When: as promised to members in the Notion guides (Gatsby Tea System, TNJC Guide, MLJC Guide). The bot also
-reminds you on Mondays when a rota's schedule is about to run out. All steps are in the Organiser section of your
-tea page:
-1. **Create empty slots** for the date range (same days, times, CSNJC rule and coffee water-filter weeks as the old notebooks; existing slots are not duplicated).
-2. In Notion, delete slots that are not needed (bank holidays, UCL closures, retreat, conference deadlines such as COSYNE). Pre-assign anyone you like; filled slots are left alone.
-3. **Fill** the empty slots: Kevin's fairness algorithm with everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
-4. Check in Notion, then **Finalise** (puts them on the calendar; optionally emails the group the usual "schedule updated" email).
+reminds you on Mondays when a rota's schedule is about to run out. In the Organiser section of your tea page:
+1. **Plan these dates:** creates the slots (same days, times, CSNJC rule and coffee water-filter weeks as the old notebooks; England and Wales bank holidays are skipped; existing slots are kept) and fills them with Kevin's fairness algorithm and everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
+2. **Check in Notion:** delete slots that are not needed (UCL closures, retreat, conference deadlines such as COSYNE) and change anyone you like. "Fill … empty slots again" refills any slot you cleared.
+3. **Finalise:** puts them on the calendar; optionally emails the group the usual "schedule updated" email.
+
+**Who counts for whom:** turns are counted per rota from Notion. The swap list shows the people on that rota first (TNJC / CSNJC / MLJC / Coffee ticks, the "Excluded from …" boxes, "Included only for JCs / coffee"), then everyone else. Whoever is recorded as doing a duty has had their turn; if someone outside the rota steps in, the slot counts for nobody and the person who handed it over keeps their turn.
 
 ## Once a year
 - **October:** add new students to the gatsby-tnjc Google Group (Group → People → Add members; direct adding only works for Gmail addresses), and untick TNJC/CSNJC in Notion for people who left. The bot reminds the TNJC organiser on 1 Oct.
