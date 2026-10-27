@@ -10,7 +10,7 @@ What to read where (each topic lives in one place only):
 - **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
   yearly jobs, handing over.
 - **Whoever maintains the code:** this file.
-- **Next steps:** [docs/next-steps.md](docs/next-steps.md): before the repo goes public, what is already public
+- **Next steps:** [docs/next-steps.md](docs/next-steps.md): keeping this public repo clean, what else is public
   (personal data on the Notion site, tea-page links), and how one might move off Notion.
 
 ## Layout
@@ -57,7 +57,7 @@ Useful from the Apps Script editor:
 Secrets never go in this repo. The sheets and scripts it names are owned by the bot account and not shared by
 link, so their IDs here give nobody access.
 
-## Credits
-The scheduling algorithm is a port of Kevin's
+## Credits and licence
+MIT licence (see `LICENSE`). The scheduling algorithm is a port of Kevin's
 [KevHH/gatsby_tea_scheduling](https://github.com/KevHH/gatsby_tea_scheduling). The Cron Jobs and the scripts the
 bot replaced come from earlier tea tsars.

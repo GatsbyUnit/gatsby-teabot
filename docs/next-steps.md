@@ -3,14 +3,13 @@
 Written 2026-10-27, when the bot went live: what to watch before the repo goes public, what is already
 public, and how one might move off Notion one day.
 
-## Before the repo goes public
-Status: private. The history of the first repo contains real member emails and names (from the early tests),
-and GitHub keeps serving old commits after a force-push: the repo's Activity page links them. So the org repo
-was renamed to `gatsby-teabot-old`, and the code moves to a fresh `GatsbyUnit/gatsby-teabot` that only ever had
-clean commits. Once the new one works, delete `gatsby-teabot-old` (Settings → Delete), then change the new
-one's visibility.
+## Keeping the public repo clean
+The repo is public since 2026-10-27 and starts from a fresh history. The first repo's history contains real
+member emails and names (from the early tests), and GitHub keeps serving old commits even after a force-push, so
+it was renamed to `gatsby-teabot-old` and archived as a private repo. Delete it when nobody needs it any more
+(its Settings → Delete); never push its history, or the local tag `pre-public-history`, to the public repo.
 
-Checked in the current tree, and worth keeping that way:
+What keeps this repo safe to be public:
 - **No secrets.** The Notion token lives only in the constants sheet; the deploy credentials are the bot's clasp
   login in `~/.clasprc.json`, never in the repo. `backups/` (live edits saved by `deploy.py`, raw copies of old
   scripts, which can contain the old token) is git-ignored.
@@ -19,7 +18,7 @@ Checked in the current tree, and worth keeping that way:
   constants sheet (Notion token) or the identity sheet (everyone's email and tea-page code) by link.
 - **No member names or emails.** The only addresses are the bot accounts (gatsby.tea, gatsby.teabot); tests use
   made-up people. Don't paste real names, emails or log excerpts into code, tests, issues or commit messages.
-- **Licence:** none yet. Kevin is fine with his algorithm being published; pick one (e.g. MIT) when going public.
+- **Licence:** MIT (`LICENSE`); the scheduling algorithm is published with Kevin's agreement.
 
 ## What is already public, or close to it
 - **The Notion Rotas pages are published** on gcnu.notion.site. Anyone with the link can read them without a
