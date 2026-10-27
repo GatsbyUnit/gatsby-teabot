@@ -17,6 +17,11 @@
       "name": "Gatsby Tea Cron Jobs",
       "dir": "apps-script/cron-jobs",
       "script_id": "1ez23ZLLkE7dObLy61WZvqqB3-ePBcvLHQfOLx2W_3Z2ifoK065Svo_kl"
+    },
+    {
+      "name": "Gatsby Tea archive helper",
+      "dir": "apps-script/archive-helper",
+      "script_id": "10aMbykJ7G9zUKjZ0C0JLuLFr_QMFZ2DFE2OZoDdR200CZo11-cLPqmJY"
     }
   ]
 }

@@ -35,4 +35,4 @@ tea page:
 - Change the organiser emails in the constants sheet (first tab, column B).
 - Access: gatsby.teabot / gatsby.tea logins and 2FA via the tea tsar.
 - The tea page does not open in a browser that is signed into gatsby.teabot as a secondary account (Google redirect bug); use a private window or a browser profile without the bot account.
-- The old Google Forms, Colab notebooks and finalizing scripts (superseded on 2026-10-27) are in the bot's Drive folder "Gatsby tea – archive (superseded 2026-10-27)".
+- **The bot's Drive:** everything at the top level of My Drive is live, plus the `away_dates` folder (everyone's away-date sheets and their template) and `people_files` (people lists the Cron Jobs still write in the old cluster format). Everything else, from the scripts, forms and notebooks the bot replaced to the files of the systems before them, is in the folder "Gatsby tea – archive (superseded 2026-10-27)". "Shared with me" holds other people's files; leave them be.

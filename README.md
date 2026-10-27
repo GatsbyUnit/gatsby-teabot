@@ -21,14 +21,14 @@ What to read where (each topic lives in one place only):
   function of its own project; a test makes sure it exposes nothing else.
 - `apps-script/cron-jobs/`: the older "Gatsby Tea Cron Jobs" (talk reminders, people sync, away-date sheets,
   adding newcomers to rotas), now under version control.
-- `apps-script/archive-helper/`: one-off script that moved the superseded scripts, forms and notebooks into the
-  archive folder. Not deployed.
+- `apps-script/archive-helper/`: one-off functions that moved everything superseded into the archive folder in
+  the bot's Drive. It is the only project with access to all of the bot's Drive, so the live ones don't need it.
 - `deploy/`: `deploy.py` and `projects.json`.
 - `tests/`: `node tests/run.js`, and `python3 tests/crosscheck_scheduler.py`, which runs the scheduler port
   against Kevin's original `script.py` on random inputs.
 
 ## Deploying
-GitHub is the single source of truth for the three projects in `deploy/projects.json`. Every deployed file
+GitHub is the single source of truth for the four projects in `deploy/projects.json`. Every deployed file
 starts with a header naming the commit and saying not to edit it in the Apps Script editor.
 
     python3 deploy/deploy.py --check   # is anything live different from GitHub?
