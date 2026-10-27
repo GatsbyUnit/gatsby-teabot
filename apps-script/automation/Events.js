@@ -95,6 +95,7 @@ function apply_swap(row, duty, from_id, to_id, ctx){
     var title = keep_label(event.getTitle(), format_title(row, ctx.people), row.type);
     event.setTitle(title);
     save_state(row.gcal_id, {t: title, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
+    try { sync_invites(row, ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }   // else the hourly sync does it
   }
   var from_name = names_of([from_id], ctx.people)[0];
   var to_name = names_of([to_id], ctx.people)[0];
@@ -117,18 +118,26 @@ function swap_done_blocks(row, what, from_name, to_name){
 }
 
 // Cancelling a talk, a last resort: swapping is always better. The slot stays in Notion, titled "Cancelled",
-// without its presenter, so they keep their turn and are scheduled again soon; tea duty stays. how.source is
-// 'page' (the presenter on their tea page, with how.by and how.reason), 'deleted' or 'renamed' (by hand in
-// the calendar). One email to the presenter and the tea people, with the organiser in cc.
+// without its presenter, so they keep their turn and are scheduled again soon; tea duty stays. A just tea
+// (cancelled in the calendar only) loses its tea people instead, who keep their turn. how.source is 'page'
+// (the presenter on their tea page, with how.by and how.reason), 'deleted' or 'renamed' (by hand in the
+// calendar). One email to the presenter and the tea people, with the organiser in cc.
 function cancel_slot(row, ctx, how){
-  var bumped = row.presenter_ids.slice();
-  var was = row.guest || names_of(bumped, ctx.people).join(', ');
-  var props = {'Title': {title: [{text: {content: CANCELLED_TITLE}}]}, 'Presenter': {relation: []}};
-  if (ctx.has_guest_prop && row.guest) props[GUEST_PROP] = {rich_text: []};
+  var just_tea = row.type === 'Just Tea';
+  var thing = just_tea ? 'just tea' : 'talk';
+  var bumped = (just_tea ? row.tea_ids : row.presenter_ids).slice();
+  var was = (just_tea ? '' : row.guest) || names_of(bumped, ctx.people).join(', ');
+  var props = {'Title': {title: [{text: {content: CANCELLED_TITLE}}]}};
+  props[just_tea ? 'Tea' : 'Presenter'] = {relation: []};
+  if (!just_tea && ctx.has_guest_prop && row.guest) props[GUEST_PROP] = {rich_text: []};
   notion_patch_page(row.id, props, ctx.constants);
   row.title = CANCELLED_TITLE;
-  row.presenter_ids = [];
-  row.guest = '';
+  if (just_tea){
+    row.tea_ids = [];
+  } else {
+    row.presenter_ids = [];
+    row.guest = '';
+  }
 
   var event = how.source === 'deleted' || !row.gcal_id ? null : ctx.cal.getEventById(row.gcal_id);
   if (event){
@@ -137,21 +146,23 @@ function cancel_slot(row, ctx, how){
     event.setDescription(event_description(row, ctx));
     if (ctx.settings.links_in_events) ensure_links(event, row, ctx);
     save_state(row.gcal_id, {t: title, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
+    try { uninvite(row, bumped, ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
   }
   var why = how.source === 'page' ? how.by + ': ' + how.reason : (how.source === 'deleted' ? 'event deleted in the calendar' : 'event renamed in the calendar');
   log_row(ctx, how.source === 'page' ? 'page' : 'sync', row.type, row.start, 'cancelled', why + (was ? ' (was: ' + was + ')' : ''));
 
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var to = emails_of(bumped.concat(row.tea_ids), ctx.people);
-  var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + ', ' + row.type], ['Presenter', was || '–']];
+  var role = just_tea ? 'tea person' : 'presenter';
+  var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + ', ' + row.type], [just_tea ? 'Tea' : 'Presenter', was || '–']];
   if (how.source === 'page') table.push(['Reason', how.reason]);
   var blocks = [
     how.source === 'page' ? how.by + ' has cancelled this talk.'
-      : 'This talk was ' + (how.source === 'deleted' ? 'deleted from' : 'marked as cancelled in') + ' the calendar, so the bot has recorded it as cancelled.',
+      : 'This ' + thing + ' was ' + (how.source === 'deleted' ? 'deleted from' : 'marked as cancelled in') + ' the calendar, so the bot has recorded it as cancelled.',
     {table: table}
   ];
-  if (bumped.length) blocks.push('The presenter is no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
+  if (bumped.length) blocks.push('The ' + role + ' is no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
   if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
-  blocks.push('Organiser: the calendar shows the talk as cancelled; please let the group know if needed. To undo, put the presenter back in Notion, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
+  blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + role + ' back in Notion, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
   send_mail(to.length ? to.join(',') : organiser, 'Cancelled: ' + row.type + ' on ' + fmt_day(row.start), blocks, ctx.constants, to.length ? {reply_to: organiser, cc: organiser} : {});
 }

@@ -7,12 +7,13 @@
 //                                   are recorded in Notion; an unknown presenter in a journal club is a
 //                                   guest speaker; anything unclear goes to the tea tsar
 //   - both changed and disagree  -> ask the organiser
-// A talk whose event is deleted, or renamed to "… CANCELLED", by hand is recorded as cancelled (see
-// cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup can't cancel a talk.
+// A talk or just tea whose event is deleted, or renamed to "… CANCELLED", by hand is recorded as cancelled
+// (see cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup can't cancel it.
 // Slots titled "Cancelled" in Notion are left alone.
 // A talk title or description edited in Notion rewrites the event description (future slots, and only
 // when the Notion text changed since last time, so text typed into the calendar is otherwise left alone).
 // Confirmed future slots without an event get one (same title / description as the finalizing scripts).
+// For the rotas in INVITE_TYPES the people on duty are the event's guests (see Invites.js).
 // The first run for a rota only takes stock: nothing is changed and nobody is emailed; what it found
 // is in the log. Rotas outside LIVE_TYPES (or everything while DRY_RUN is on) are only reported.
 
@@ -79,6 +80,7 @@ function sync_all(ctx){
   var mismatches = [];
   var links = 0;
   ctx.deleted_events = recently_deleted_events(ctx);
+  ctx.attendees = !ctx.settings.dry_run && ctx.settings.invite_types.length ? load_attendees(ctx) : null;
   ctx.settings.sync_types.forEach(function(type){
     ctx.baseline = !props.getProperty(BASELINE_PREFIX + type);
     ctx.no_event = JSON.parse(props.getProperty(NO_EVENT_PREFIX + type) || '[]');
@@ -105,6 +107,7 @@ function sync_all(ctx){
   report_findings(findings, ctx);
   if (findings.length > 0 || links > 0) log_row(ctx, 'sync', '', null, 'run', findings.length + ' findings, ' + mismatches.length + ' open mismatches, ' + links + ' event descriptions with new or updated links');
   prune_state(add_days(from, -30));
+  prune_invite_state(today);
 }
 
 function sync_row(row, ctx, today){
@@ -126,14 +129,14 @@ function sync_row(row, ctx, today){
   var event = ctx.cal.getEventById(row.gcal_id);
   if (!event || (ctx.deleted_events || {})[event_key(row.gcal_id)]){
     var known = load_state(row.gcal_id);
-    if (future && known && !ctx.baseline && PRESENTER_TYPES.indexOf(row.type) >= 0){
+    if (future && known && !ctx.baseline && CALENDAR_CANCEL_TYPES.indexOf(row.type) >= 0){
       if (!known.gone){
         known.gone = Date.now();  // look again next hour before acting
         save_state(row.gcal_id, known);
         return out;
       }
       if (!act(ctx, row, 'cancel_from_calendar', 'event deleted', function(){ cancel_slot(row, ctx, {source: 'deleted'}); })){
-        out.finding = finding(row, 'deleted_event', 'The calendar event was deleted, so the bot would record this talk as cancelled.', false);
+        out.finding = finding(row, 'deleted_event', 'The calendar event was deleted, so the bot would record this slot as cancelled.', false);
       }
       return out;
     }
@@ -148,9 +151,9 @@ function sync_row(row, ctx, today){
   var parsed = parse_title(actual, row.type);
 
   if (is_cancelled_title(actual) && future && prev && prev.t !== actual && !ctx.baseline &&
-      PRESENTER_TYPES.indexOf(row.type) >= 0 && (row.presenter_ids.length || row.guest)){
+      CALENDAR_CANCEL_TYPES.indexOf(row.type) >= 0 && (row.type === 'Just Tea' ? row.tea_ids.length : row.presenter_ids.length || row.guest)){
     if (!act(ctx, row, 'cancel_from_calendar', actual, function(){ cancel_slot(row, ctx, {source: 'renamed'}); })){
-      out.finding = finding(row, 'renamed_cancelled', 'The event was renamed to "' + actual + '", so the bot would record this talk as cancelled.', false);
+      out.finding = finding(row, 'renamed_cancelled', 'The event was renamed to "' + actual + '", so the bot would record this slot as cancelled.', false);
       save_state(row.gcal_id, Object.assign({}, prev, {t: actual}));
     }
     return out;
@@ -172,6 +175,11 @@ function sync_row(row, ctx, today){
   }
   if (future && ctx.settings.links_in_events){
     out.links_updated = ensure_links(event, row, ctx);
+  }
+  var guests = future && ctx.attendees && invites_on(ctx, row.type) ? ctx.attendees[event_key(row.gcal_id)] : null;
+  if (guests){
+    try { out.invites = sync_invites(row, ctx, guests); }
+    catch (err) { log_row(ctx, 'sync', row.type, row.start, 'invitations failed', String(err)); }
   }
   if (!prev || prev.t !== actual || prev.n !== fingerprint || prev.x !== text || prev.gone) save_state(row.gcal_id, {t: actual, n: fingerprint, d: row.start.getTime(), x: text});
   return out;

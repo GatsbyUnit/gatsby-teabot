@@ -6,6 +6,8 @@ const ALL_TYPES = ['TNJC', 'MLJC', 'Coffee Cleaning', 'Research Talk', 'Tea Talk
 const PRESENTER_TYPES = ['Research Talk', 'Tea Talk', 'MLJC', 'TNJC'];
 const TEA_TYPES = ['Research Talk', 'Tea Talk', 'Just Tea', 'External Seminar', 'Leaving Tea', 'Coffee Cleaning'];
 const GUEST_TYPES = ['TNJC', 'MLJC'];
+// slots an organiser can cancel by deleting or renaming the calendar event
+const CALENDAR_CANCEL_TYPES = PRESENTER_TYPES.concat(['Just Tea']);
 
 // which Notion relations a slot's calendar title shows
 function roles_for_type(type){

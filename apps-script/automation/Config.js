@@ -25,6 +25,7 @@ const SETTINGS = [
   ['SCHEDULE_WARNING_DAYS', '21', 'Send that reminder when the schedule ends within this many days.'],
   ['LOOKBACK_DAYS', '60', 'How far back hand edits of past calendar events are copied into Notion (keeps the rota fair).'],
   ['SWAP_HORIZON_DAYS', '120', 'How far ahead the swap form lists slots.'],
+  ['INVITE_TYPES', '', 'Rotas whose people on duty get a calendar invitation for their slot (comma-separated, e.g. TNJC, MLJC; live rotas only). Declining does not take anyone off the rota: the bot emails them how to swap instead.'],
   ['LINKS_IN_EVENTS', 'TRUE', 'Add "swap your slot" and "edit title" links to upcoming calendar events.'],
   ['GO_LIVE_ON', '', 'Optional date (YYYY-MM-DD). While DRY_RUN is TRUE, the bot switches itself live on this date and emails the organiser. Clear it to cancel.'],
   ['HANDBOOK_URL', '', 'Link to the organiser handbook, included in reminder emails.'],
@@ -76,6 +77,7 @@ function get_settings(){
   s.sync_types = split_list(s.SYNC_TYPES);
   s.live_types = split_list(s.LIVE_TYPES);
   s.reminder_types = split_list(s.REMINDER_TYPES);
+  s.invite_types = split_list(s.INVITE_TYPES);
   s.lookback_days = parseInt(s.LOOKBACK_DAYS, 10);
   s.swap_horizon_days = parseInt(s.SWAP_HORIZON_DAYS, 10);
   s.schedule_warning_days = parseInt(s.SCHEDULE_WARNING_DAYS, 10);

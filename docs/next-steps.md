@@ -22,13 +22,15 @@ What keeps this repo safe to be public:
 
 ## What is already public, or close to it
 - **The Notion Rotas pages are published** on gcnu.notion.site. Anyone with the link can read them without a
-  Gatsby or Notion login, including the organisers' email addresses and the internal Zoom link (checked
-  anonymously on 2026-10-27). The "Please do not share this page with anyone outside Gatsby" line is the only
-  protection. For the tea tsar to decide: unpublish and invite members to the Notion workspace instead (everyone
-  then needs a Notion account), or stay published but move the Zoom link, and perhaps the emails, off the page.
+  Gatsby or Notion login, including the internal Zoom link (checked anonymously on 2026-10-27). The organisers'
+  email addresses were taken off on 2026-10-27 (names only; people message them on Slack); keep it that way. The
+  "Please do not share this page with anyone outside Gatsby" line is the only protection. For the tea tsar to
+  decide: unpublish and invite members to the Notion workspace instead (everyone then needs a Notion account), or
+  stay published but move the Zoom link off the page.
   Either way, check that search-engine indexing is off in the site settings.
 - **The gatsby.tea calendar is not public** (its public feed returns 404); people see it because it is shared with
-  them. Event descriptions contain the internal Zoom link, so keep it that way.
+  them. Event descriptions contain the internal Zoom link, and with calendar invitations on (`INVITE_TYPES`) the
+  guests' registered emails, so keep it that way.
 - **Personal tea-page links work like passwords.** Whoever has one can swap that person's slots or change their
   registered email. They are only ever sent to the person themselves (single-person reminders, the "send me my
   link" email); calendar events carry the general page link. If one leaks, clear that person's cell in column D
