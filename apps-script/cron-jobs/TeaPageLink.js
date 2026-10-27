@@ -1,12 +1,23 @@
 // Added 2026-10 (github.com/GatsbyUnit/gatsby-teabot): a line with the personal tea page link for reminder
 // emails. The page address comes from the "Automation" tab of the constants sheet, the person's token from
 // column D of the identity sheet. Any problem just leaves the line out, so a reminder is never blocked.
-function tea_page_line(emails){
+// address of the tea page (PAGE_URL in the Automation tab of the constants sheet), '' if not set
+function tea_page_url(){
   try {
     var tab = SpreadsheetApp.openById('1ZH80lgLYGEfc4d_lp4awKlKyMEUqnbMS122Cgf4wyl4').getSheetByName('Automation');
     if (!tab) return '';
     var url = '';
     tab.getRange(1, 1, tab.getLastRow(), 2).getValues().forEach(function(r){ if (r[0] === 'PAGE_URL') url = String(r[1]).trim(); });
+    return url;
+  } catch (e) {
+    Logger.log('tea_page_url: ' + e);
+    return '';
+  }
+}
+
+function tea_page_line(emails){
+  try {
+    var url = tea_page_url();
     if (!url) return '';
     if (emails.length === 1){
       var constants = get_global_constants();

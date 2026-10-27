@@ -111,7 +111,8 @@ function get_email_from_notion_id(notion_id, mapping_sheet_id){
 function send_email(email, title, body, constants, replyto_email){  
   const notion_site_url =  constants['notion_site_url'];  
   const today = new Date();
-  var footer = '--------\nGatsby Tea Bot @ ' + today.getFullYear() + '\n' + notion_site_url + '\n\nMake me smarter at scheduling by keeping your away dates updated. Get your away date spreadsheet from ' + notion_site_url + '.';
+  var page = tea_page_url();
+  var footer = '--------\nGatsby Tea Bot @ ' + today.getFullYear() + '\n' + notion_site_url + '\n\nMake me smarter at scheduling by keeping your away dates up to date' + (page ? ' on your tea page (' + page + ') or' : '') + ' in your away-date sheet (linked from your profile on ' + notion_site_url + ').';
   body = body + '\n\n\n' + footer;
   
   if ( replyto_email == null ){

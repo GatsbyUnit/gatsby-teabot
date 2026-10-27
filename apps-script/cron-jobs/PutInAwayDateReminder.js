@@ -21,7 +21,8 @@ function putawaydatereminder(admin_email, constants) {
     // send talk reminders
     send_email(email_group, "Please update your away dates", 
       "Hi friends,\n\n" + 
-      "This is a reminder to update your away dates for next month and the month after before the 17th of this month. Tea talks for next month and research talks for the month after will be scheduled after the 17th.", constants, admin_email );
+      "This is a reminder to update your away dates for next month and the month after before the 17th of this month. Tea talks for next month and research talks for the month after will be scheduled after the 17th." +
+      (tea_page_url() ? "\n\nThe easiest way is your tea page (pick your name to get your personal link):\n" + tea_page_url() + "\nYour away-date sheet works as before; both hold the same dates." : ""), constants, admin_email );
   }
 }
 
