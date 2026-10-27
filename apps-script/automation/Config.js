@@ -28,7 +28,8 @@ const SETTINGS = [
   ['LINKS_IN_EVENTS', 'TRUE', 'Add "swap your slot" and "edit title" links to upcoming calendar events.'],
   ['GO_LIVE_ON', '', 'Optional date (YYYY-MM-DD). While DRY_RUN is TRUE, the bot switches itself live on this date and emails the organiser. Clear it to cancel.'],
   ['HANDBOOK_URL', '', 'Link to the organiser handbook, included in reminder emails.'],
-  ['PAGE_URL', '', 'Address of the personal tea page (set when it is deployed; also read by the reminder emails of the old Cron Jobs).']
+  ['PAGE_URL', '', 'Address of the personal tea page (set when it is deployed; also read by the reminder emails of the old Cron Jobs).'],
+  ['FAVICON_URL', '', 'Optional browser-tab icon of the tea page: an image address or a data:image/png;base64,… text. Kept here rather than in the public repo.']
 ];
 
 // managed by the script itself, kept in Script Properties

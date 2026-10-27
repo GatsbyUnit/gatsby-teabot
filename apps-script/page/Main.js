@@ -12,9 +12,17 @@ function doGet(e){
   var t = HtmlService.createTemplateFromFile('Page');
   t.token = /^[0-9a-f]{40}$/.test(p.t || '') ? p.t : '';
   t.confirm = /^[0-9a-f]{32}$/.test(p.confirm || '') ? p.confirm : '';
-  return t.evaluate()
+  var out = t.evaluate()
     .setTitle('Gatsby tea')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  // the tab icon lives in the private constants sheet (setting FAVICON_URL); a bad value never breaks the page
+  try {
+    var icon = TeaBot.get_settings().FAVICON_URL;
+    if (icon) out.setFaviconUrl(icon);
+  } catch (err) {
+    console.log('favicon: ' + err);
+  }
+  return out;
 }
 
 function api_state(token){ return TeaBot.api_state(token); }
