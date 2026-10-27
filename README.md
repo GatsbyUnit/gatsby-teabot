@@ -1,42 +1,61 @@
 # gatsby-teabot
 
-Automation for the Gatsby Unit tea / rota system (research and tea talks, MLJC, TNJC, coffee).
+Automation for the Gatsby Unit tea / rota system: research and tea talks, tea, MLJC, TNJC (with CSNJC),
+coffee cleaning and external seminars. It runs as Google Apps Script under the shared bot account
+(gatsby.teabot@gmail.com), with no server of its own.
 
-- **Source of truth:** the Notion "Gatsby Rotas" databases (Schedule, People).
-- **Shared calendar:** gatsby.tea@gmail.com.
-- **Runs as:** Google Apps Script under the shared bot account (no own server).
-- **Scheduling algorithm:** https://github.com/KevHH/gatsby_tea_scheduling
-
-See `PLAN.md` for the roadmap and transition plan, and `docs/` for the organiser handbook.
+What to read where (each topic lives in one place only):
+- **Unit members:** the Gatsby Rotas pages on Notion (gcnu.notion.site): rules, guides, and how to swap, add a
+  title, set away dates or request Zoom.
+- **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
+  yearly jobs, handing over.
+- **Whoever maintains the code:** this file.
+- **Ideas for later:** [docs/next-steps.md](docs/next-steps.md): how one might move off Notion.
 
 ## Layout
-- `apps-script/automation/`: the "Gatsby Tea Automation" Apps Script project: calendar ↔ Notion sync for all rotas, the personal tea page (`WebApp.js`, `Page.html`), finalising, organiser reminders. Settings and admin functions are described at the top of `Config.js` and `Setup.js`.
-- `apps-script/archive-helper/`: one-off script that moved superseded scripts and notebooks into an archive folder.
-- `apps-script/cron-jobs/`: the older "Gatsby Tea Cron Jobs" project (reminder emails, people sync, away-date sheets), now under version control.
-- `inventory/`: read-only snapshot of the older bot scripts, for reference
-- `tests/`: local tests (`node tests/run.js`) and the scheduler cross-check against the original Python (`python3 tests/crosscheck_scheduler.py`)
-- `docs/handbook.md`: organiser handbook; `docs/pitch.md`: the original proposal
+- `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ Notion sync, scheduling and
+  finalising, emails, organiser reminders, and everything behind the tea page. Settings are described at the top
+  of `Config.js`, one-off admin functions in `Setup.js`.
+- `apps-script/page/`: "Gatsby Tea Page", the personal tea page (web app): `doGet`, thin `api_*` wrappers and
+  `Page.html`. It uses the automation as the library `TeaBot`, because a web page can call every top-level
+  function of its own project; a test makes sure it exposes nothing else.
+- `apps-script/cron-jobs/`: the older "Gatsby Tea Cron Jobs" (talk reminders, people sync, away-date sheets,
+  adding newcomers to rotas), now under version control.
+- `apps-script/archive-helper/`: one-off script that moved the superseded scripts, forms and notebooks into the
+  archive folder. Not deployed.
+- `deploy/`: `deploy.py` and `projects.json`.
+- `tests/`: `node tests/run.js`, and `python3 tests/crosscheck_scheduler.py`, which runs the scheduler port
+  against Kevin's original `script.py` on random inputs.
 
 ## Deploying
-GitHub is the single source of truth for the projects in `deploy/projects.json` ("Gatsby Tea Automation" and
-"Gatsby Tea Cron Jobs"). Every deployed file starts with a header naming the commit and saying not to edit it in
-the Apps Script editor.
+GitHub is the single source of truth for the three projects in `deploy/projects.json`. Every deployed file
+starts with a header naming the commit and saying not to edit it in the Apps Script editor.
 
     python3 deploy/deploy.py --check   # is anything live different from GitHub?
     python3 deploy/deploy.py           # deploy what is on origin/main
 
 The deploy refuses unless your checkout is clean and equal to origin/main, runs the tests, saves (to
-`backups/drift/`) and shows anything that was edited live, uploads the complete project, verifies it and moves the
-tea page to the new version. It uses the bot account's clasp login (`clasp login --user teabot`, once).
+`backups/drift/`) and shows anything that was edited live, uploads the complete project through the Apps Script
+API, verifies it and moves the tea page to the new version. It uses the bot account's clasp login
+(`clasp login --user teabot`, once). CI (GitHub Actions) only runs the tests; it never deploys.
 
-## Where things live
+Useful from the Apps Script editor:
+- `send_examples()` in `Checks.js` emails the TNJC organiser one example of every bot email.
+- `backup_all()` in `Backup.js` snapshots the calendar, Notion and the sheets into a new spreadsheet.
+
+## Where the data lives
 | What | Where |
 |---|---|
 | People, rota, schedule, titles, guest speakers | Notion (source of truth) |
-| Registered emails | identity sheet (synced from Notion by the old Cron Jobs) |
-| Settings: emails, IDs, Notion token | constants sheet, first tab |
+| Registered emails, tea-page tokens, away calendars | identity sheet (emails synced from Notion by the Cron Jobs) |
+| Away dates | one sheet per person, linked from their Notion page |
+| Emails, IDs, Notion token | constants sheet, first tab |
 | Automation switches (dry run / pause, rotas) and dated reminders | constants sheet, tabs **Automation** and **Automation reminders** |
-| Code | this repo, deployed to Apps Script with clasp |
 | Calendar | a copy of Notion; hand edits are pulled back into Notion |
 
-Secrets never go in this repo.
+Secrets never go in this repo. The sheets and scripts it names are owned by the bot account and not shared by
+link, so their IDs here give nobody access.
+
+## Credits
+The scheduling algorithm and the original Cron Jobs are by Kevin
+([KevHH/gatsby_tea_scheduling](https://github.com/KevHH/gatsby_tea_scheduling)) and earlier tea tsars.

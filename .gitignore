@@ -1,6 +1,6 @@
 .clasprc.json
 *.env
 backups/
-inventory/raw/
 .DS_Store
 tests/.cache/
+__pycache__/
