@@ -1,6 +1,8 @@
 // One-off live test: invite Jan to his own 22 Dec TNJC slot (INVITE_TYPES stays empty). Run it again after
-// declining the invitation to get the "still yours" email. Remove afterwards.
+// declining the invitation to get the "still yours" email. Also adds the new INVITE_TYPES row to the
+// Automation tab. Remove afterwards.
 function run_once_invite_test(){
+  ensure_settings_tabs();
   var ctx = make_context(get_global_constants(), get_settings());
   ctx.settings = Object.assign({}, ctx.settings, {invite_types: ['TNJC']});
   var day = new Date(2026, 11, 22);
