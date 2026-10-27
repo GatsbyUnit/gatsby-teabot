@@ -1,6 +1,7 @@
 // The personal tea page (web app, runs as the bot, open to anyone with the link).
 //   ?t=<token>       your page: upcoming duties (swap, edit title), away dates, email, organiser tools
 //   ?confirm=<code>  confirms an email change
+//   ?swap=<code>     accept or decline a swap someone asked you for
 //   (nothing)        lists the registered people by name and emails the chosen one their personal link
 //
 // SECURITY: a web page can call every top-level function of this project through google.script.run, so this
@@ -12,6 +13,7 @@ function doGet(e){
   var t = HtmlService.createTemplateFromFile('Page');
   t.token = /^[0-9a-f]{40}$/.test(p.t || '') ? p.t : '';
   t.confirm = /^[0-9a-f]{32}$/.test(p.confirm || '') ? p.confirm : '';
+  t.swap = /^[0-9a-f]{32}$/.test(p.swap || '') ? p.swap : '';
   var settings = {};
   try { settings = TeaBot.get_settings(); } catch (err) { console.log('settings: ' + err); }
   t.exec_url = settings.PAGE_URL || '';
@@ -45,6 +47,10 @@ function doPost(e){
 
 function api_state(token){ return TeaBot.api_state(token); }
 function api_swap(token, row_id, duty, to_id){ return TeaBot.api_swap(token, row_id, duty, to_id); }
+function api_swap_request(code){ return TeaBot.api_swap_request(code); }
+function api_answer_swap(code, accept){ return TeaBot.api_answer_swap(code, accept); }
+function api_answer_swap_mine(token, code, accept){ return TeaBot.api_answer_swap_mine(token, code, accept); }
+function api_withdraw_swap(token, code){ return TeaBot.api_withdraw_swap(token, code); }
 function api_title(token, row_id, title, description){ return TeaBot.api_title(token, row_id, title, description); }
 function api_cancel(token, row_id, reason){ return TeaBot.api_cancel(token, row_id, reason); }
 function api_add_away(token, from, to, reason){ return TeaBot.api_add_away(token, from, to, reason); }
@@ -57,7 +63,6 @@ function api_finalise(token, rota, email_group){ return TeaBot.api_finalise(toke
 function api_plan_slots(token, rota, ranges){ return TeaBot.api_plan_slots(token, rota, ranges); }
 function api_fill_slots(token, rota){ return TeaBot.api_fill_slots(token, rota); }
 function api_request_zoom(token, row_id, reason){ return TeaBot.api_request_zoom(token, row_id, reason); }
-function api_set_away_calendar(token, calendar_id){ return TeaBot.api_set_away_calendar(token, calendar_id); }
 
 // run once from the editor after creating the project, to grant it the bot's permissions. (The page's
 // address is the PAGE_URL setting in the Automation tab of the constants sheet.)

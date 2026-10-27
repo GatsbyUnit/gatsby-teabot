@@ -226,7 +226,7 @@ function fill_slots(rota, ctx){
     return {id: p.id, name: p.name, away_from: away.from, away_until: away.until,
             tea_excluded: p.tea_excluded, tt_excluded: p.tt_excluded, rt_excluded: p.rt_excluded};
   });
-  people.filter(function(p){ return !ctx.people[p.id].away_sheet && !ctx.people[p.id].away_calendar; }).forEach(function(p){ warnings.push(p.name + ' has no away dates (no sheet or calendar), treated as always available'); });
+  people.filter(function(p){ return !ctx.people[p.id].away_sheet; }).forEach(function(p){ warnings.push(p.name + ' has no away-dates sheet, treated as always available'); });
 
   var result = sched_main(to_fill.map(sched_talk), past, people, rota === 'talks' ? 'ResearchTeaTalks' : rota);
   var filled = [], unfilled = [];
@@ -293,8 +293,7 @@ function eligible_people(rota, ctx){
   });
 }
 
-// all away ranges, past ones included (the algorithm only looks at the slot dates anyway): the away-dates
-// sheet plus, if connected, the busy days of the person's away calendar for the next year
+// all away ranges from the person's away-dates sheet, past ones included (the algorithm only looks at the slot dates)
 function read_away_all(person){
   var out = [];
   if (person.away_sheet){
@@ -307,7 +306,6 @@ function read_away_all(person){
       }).filter(function(a){ return a; });
     }
   }
-  if (person.away_calendar) out = out.concat(calendar_busy_ranges(person.away_calendar, start_of_today(), add_days(start_of_today(), 365)));
   return out;
 }
 

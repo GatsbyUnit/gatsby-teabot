@@ -58,7 +58,7 @@ fairness history must survive the move intact.
 | Pages on gcnu.notion.site | Member guides and the toolbox pages (they point to the tea page) | row 25 |
 
 The Notion page ID of a person is their ID everywhere: in the Presenter and Tea relations, in column A of the
-identity sheet, and therefore behind the tea-page tokens (column D) and away calendars (column E). The Notion
+identity sheet, and therefore behind the tea-page tokens (column D). The Notion
 page ID of a slot is the row ID the tea page and the sync use.
 
 ### Target
@@ -67,7 +67,7 @@ page ID of a slot is the row ID the tea page and the sync use.
   keep working; new rows get generated IDs.
 - **Presenter and Tea columns hold names**, with a dropdown (data validation) from the People tab, so organisers
   can still edit by hand. The code maps names to IDs; names must stay unique (the People tab can enforce it).
-- **The identity sheet merges into the People tab** (email, token, away calendar). One copy of each person
+- **The identity sheet merges into the People tab** (email, token). One copy of each person
   instead of two, and the Cron Jobs' people sync goes away.
 - **Organiser views** become filter views per rota; the gatsby.tea calendar already is the calendar view.
 - **Member guides** can stay on Notion as plain pages (no API or token needed), or move to a Google Site. Moving

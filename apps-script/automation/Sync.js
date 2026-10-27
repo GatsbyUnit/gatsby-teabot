@@ -29,6 +29,7 @@ function run_sync(){
     var ctx = make_context(constants, get_settings());
     maybe_go_live(ctx);
     sync_all(ctx);
+    if (!ctx.settings.dry_run) remind_swap_requests(ctx);
     clear_failures('Calendar sync');
   } catch (err) {
     notify_error('Calendar sync', err, constants, 3);

@@ -7,16 +7,15 @@
 // can act as that person: the same trust as the old forms, where you type someone's email address.
 
 const TOKEN_COL = 4;
-const AWAY_CAL_COL = 5;
 
 // ---- tokens ----
 
 function identity_rows(constants){
   var sheet = SpreadsheetApp.openById(constants['identity_mapping_id']).getSheets()[0];
   var last = sheet.getLastRow();
-  var values = last > 1 ? sheet.getRange(2, 1, last - 1, AWAY_CAL_COL).getValues() : [];
+  var values = last > 1 ? sheet.getRange(2, 1, last - 1, TOKEN_COL).getValues() : [];
   return {sheet: sheet, rows: values.map(function(r, i){
-    return {row: i + 2, id: id_from_notion_url(r[0]), name: String(r[1]), email: String(r[2]).trim(), token: String(r[3]).trim(), away_calendar: String(r[4] || '').trim()};
+    return {row: i + 2, id: id_from_notion_url(r[0]), name: String(r[1]), email: String(r[2]).trim(), token: String(r[3]).trim()};
   })};
 }
 
@@ -91,6 +90,16 @@ function api_state(token){
     if (row.presenter_ids.indexOf(me.id) >= 0) add('presenter');
     if (row.tea_ids.indexOf(me.id) >= 0) add('tea');
   });
+  var requests = swap_requests();
+  duties.forEach(function(d){
+    var out = requests.filter(function(r){ return r.row_id === d.row_id && r.duty === d.duty && r.from === me.id; })[0];
+    if (out) d.pending = {code: out.code, to: names_of([out.to], ctx.people)[0], created: out.created};
+  });
+  var incoming = requests.filter(function(r){ return r.to === me.id && r.start > Date.now(); }).map(function(r){
+    var d = new Date(r.start);
+    return {code: r.code, from: names_of([r.from], ctx.people)[0], what: r.duty === 'tea' ? (r.type === 'Coffee Cleaning' ? 'coffee duty' : 'tea duty') : r.type + ' talk',
+            when: fmt_day(d) + (r.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(d))};
+  });
   var people = Object.keys(ctx.people).map(function(id){ return ctx.people[id]; })
     .filter(function(p){ return p.active && p.name && p.id !== me.id; })
     .sort(function(a, b){ return a.name.localeCompare(b.name); })
@@ -107,8 +116,8 @@ function api_state(token){
     return {row_id: r.id, when: fmt_day(r.start) + ', ' + fmt_time(r.start), title: r.title && !is_tentative(r) ? r.title : ''};
   });
   return {
-    name: me.name, email: ctx.me_identity.email, duties: duties, people: people,
-    away: read_away(me), has_away_sheet: !!me.away_sheet, away_calendar: ctx.me_identity.away_calendar,
+    name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming,
+    away: read_away(me), has_away_sheet: !!me.away_sheet,
     organiser: organiser, seminars: seminars, zoom_admin: zoom_admin_name(ctx),
     notion_url: ctx.constants['notion_site_url']
   };
@@ -119,7 +128,41 @@ function api_swap(token, row_id, duty, to_id){
   var row = to_row(notion_get_page(row_id, ctx.constants));
   var ids = duty === 'tea' ? row.tea_ids : row.presenter_ids;
   if (ids.indexOf(ctx.me.id) < 0) throw new Error('This is not your slot (any more). Please reload the page.');
-  return apply_swap(row, duty, ctx.me.id, normalise_id(to_id), ctx);
+  return request_swap(row, duty, ctx.me.id, normalise_id(to_id), ctx);
+}
+
+// the page opened from a swap-request email (the code in the link is the only key)
+function api_swap_request(code){
+  var ctx = make_context(get_global_constants(), get_settings());
+  return swap_request_info(code, ctx);
+}
+
+function api_answer_swap(code, accept){
+  var ctx = make_context(get_global_constants(), get_settings());
+  var lock = LockService.getScriptLock();
+  lock.waitLock(120 * 1000);   // the hourly sync can hold it for a minute or two
+  try {
+    return answer_swap(code, accept === true, ctx);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// the requester takes a request back, or the asked person answers from their own page
+function api_withdraw_swap(token, code){
+  var ctx = page_context(token);
+  var req = swap_request(code);
+  if (!req || req.from !== ctx.me.id) throw new Error('This request has already been answered or withdrawn.');
+  drop_swap_request(code);
+  log_row(ctx, 'swap', req.type, new Date(req.start), 'swap request withdrawn', ctx.me.name);
+  return 'Withdrawn. The slot stays yours.';
+}
+
+function api_answer_swap_mine(token, code, accept){
+  var ctx = page_context(token);
+  var req = swap_request(code);
+  if (!req || req.to !== ctx.me.id) throw new Error('This request has already been answered or withdrawn.');
+  return api_answer_swap(code, accept);
 }
 
 // Cancelling is a last resort; the page offers it only behind "Swap" and asks for a reason.
@@ -332,40 +375,6 @@ function api_request_zoom(token, row_id, reason){
   return 'Sent to ' + zoom_admin_name(ctx) + ', who sets up Zoom. Replies come straight to you.';
 }
 
-// Opt-in: a Google Calendar of the person's choice, shared with the bot as free/busy only. Every busy day
-// in it counts as away (for the page and for scheduling). '' turns it off.
-function api_set_away_calendar(token, calendar_id){
-  var ctx = page_context(token);
-  calendar_id = String(calendar_id || '').trim();
-  if (calendar_id){
-    if (calendar_id.toLowerCase() === String(ctx.constants['google_calendar_id']).toLowerCase()) throw new Error('That is the tea calendar itself; please pick one of your own calendars.');
-    calendar_busy_ranges(calendar_id, start_of_today(), add_days(start_of_today(), 30));   // throws if the bot cannot see it
-  }
-  var ident = identity_rows(ctx.constants);
-  if (ident.sheet.getRange(1, AWAY_CAL_COL).getValue() === '') ident.sheet.getRange(1, AWAY_CAL_COL).setValue('Away calendar (tea bot)');
-  ident.sheet.getRange(ctx.me_identity.row, AWAY_CAL_COL).setValue(calendar_id);
-  CacheService.getScriptCache().remove(PEOPLE_CACHE_KEY);
-  log_row(ctx, 'page', '', null, 'away calendar', ctx.me.name + (calendar_id ? ': on' : ': off'));
-  return calendar_id ? 'Connected. Busy days in that calendar now count as away dates.' : 'Disconnected. Only the away dates you enter here count now.';
-}
-
-// busy days of a calendar shared with the bot (free/busy is enough), as [{from, to}] (yyyy-MM-dd, inclusive)
-function calendar_busy_ranges(calendar_id, from, to){
-  var res = Calendar.Freebusy.query({timeMin: from.toISOString(), timeMax: to.toISOString(), items: [{id: calendar_id}]});
-  var cal = res.calendars && res.calendars[calendar_id];
-  if (!cal || (cal.errors && cal.errors.length)){
-    throw new Error('The bot cannot see that calendar yet. In Google Calendar, open the calendar\'s settings, under "Share with specific people" add gatsby.teabot@gmail.com with "See only free/busy", then try again.');
-  }
-  return busy_to_day_ranges(cal.busy || []);
-}
-
-function busy_to_day_ranges(busy){
-  return busy.map(function(b){
-    var start = new Date(b.start), end = new Date(new Date(b.end).getTime() - 1);   // end is exclusive
-    return {from: fmt_iso_date(start), to: fmt_iso_date(end < start ? start : end)};
-  });
-}
-
 function zoom_admin_name(ctx){
   var admin = String(ctx.constants['gatsby_admin_email'] || '').toLowerCase();
   var hit = Object.keys(ctx.people).map(function(id){ return ctx.people[id]; }).filter(function(p){ return p.email.toLowerCase() === admin; })[0];
@@ -386,8 +395,7 @@ function away_sheet(person){
   return SpreadsheetApp.openByUrl(person.away_sheet).getSheets()[0];
 }
 
-// upcoming away ranges: from the person's sheet (columns B from, C to, D reason, from row 2; removable)
-// and, if connected, busy days from their away calendar (shown, not removable here)
+// upcoming away ranges from the person's sheet (columns B from, C to, D reason, from row 2)
 function read_away(person){
   var today = start_of_today();
   var out = [];
@@ -402,16 +410,6 @@ function read_away(person){
         }).filter(function(a){ return a && !a.past; });
       }
     } catch (e) { /* unreadable sheet: show nothing from it */ }
-  }
-  if (person.away_calendar){
-    try {
-      calendar_busy_ranges(person.away_calendar, today, add_days(today, 180)).forEach(function(r){
-        var f = parse_iso_date(r.from), t = parse_iso_date(r.to);
-        out.push({row: 0, from: r.from, to: r.to, label: fmt_day(f) + (r.to !== r.from ? ' – ' + fmt_day(t) : ''), reason: 'from your calendar', calendar: true});
-      });
-    } catch (e) {
-      out.push({row: 0, from: '', to: '', label: 'Your away calendar cannot be read at the moment', reason: '', calendar: true});
-    }
   }
   return out.sort(function(a, b){ return a.from < b.from ? -1 : 1; });
 }

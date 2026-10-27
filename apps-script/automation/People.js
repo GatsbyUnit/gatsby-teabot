@@ -27,7 +27,6 @@ function load_people(constants){
       tt_excluded: !!(props['Excluded from tea talk'] && props['Excluded from tea talk'].checkbox),
       rt_excluded: !!(props['Excluded from research talk'] && props['Excluded from research talk'].checkbox),
       away_sheet: props['Away Date Sheet'] && props['Away Date Sheet'].url ? props['Away Date Sheet'].url : '',
-      away_calendar: emails[id] ? emails[id].away_calendar : '',
       email: emails[id] ? emails[id].email : ''
     };
   });
@@ -35,15 +34,15 @@ function load_people(constants){
   return people;
 }
 
-// {notion id: {email, away_calendar}} from the identity sheet (A = Notion URL, C = email, E = away calendar)
+// {notion id: {email}} from the identity sheet (A = Notion URL, C = email)
 function load_identity_emails(constants){
-  var values = SpreadsheetApp.openById(constants['identity_mapping_id']).getSheets()[0].getRange('A:E').getValues();
+  var values = SpreadsheetApp.openById(constants['identity_mapping_id']).getSheets()[0].getRange('A:C').getValues();
   var out = {};
   for (var i = 1; i < values.length; i++){
     if (!values[i][0]) continue;
     var id = id_from_notion_url(values[i][0]);
     var email = String(values[i][2]).trim();
-    if (id && email) out[id] = {email: email, away_calendar: String(values[i][4] || '').trim()};
+    if (id && email) out[id] = {email: email};
   }
   return out;
 }

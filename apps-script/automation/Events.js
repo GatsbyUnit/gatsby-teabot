@@ -71,14 +71,19 @@ function finalise_rota(rota, email_group, ctx){
 
 // Swap one person's duty in a slot for another person: Notion, calendar, and one email to both.
 // Returns a short message for the person who asked; throws with a readable message if not possible.
-function apply_swap(row, duty, from_id, to_id, ctx){
+function validate_swap(row, duty, from_id, to_id, ctx){
   var ids = duty === 'tea' ? row.tea_ids : row.presenter_ids;
   if (is_tentative(row)) throw new Error('This slot is still tentative, so it cannot be swapped yet.');
+  if (is_cancelled_title(row.title)) throw new Error('This talk has been cancelled.');
   if (ids.indexOf(from_id) < 0) throw new Error('This slot has changed in the meantime. Please reload the page.');
   if (from_id === to_id) throw new Error('The slot already belongs to this person.');
   if (!ctx.people[to_id] || !ctx.people[to_id].active) throw new Error('That person is not on the active list.');
   if (!is_live(ctx, row.type)) throw new Error('Swaps for ' + row.type + ' are not switched on yet. Please ask the organiser.');
+  return ids;
+}
 
+function apply_swap(row, duty, from_id, to_id, ctx){
+  var ids = validate_swap(row, duty, from_id, to_id, ctx);
   var new_ids = ids.map(function(id){ return id === from_id ? to_id : id; });
   var props = {};
   props[duty === 'tea' ? 'Tea' : 'Presenter'] = {relation: new_ids.map(function(id){ return {id: hyphenate_id(id)}; })};

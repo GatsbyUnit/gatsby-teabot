@@ -55,7 +55,7 @@ Useful from the Apps Script editor:
 | What | Where |
 |---|---|
 | People, rota, schedule, titles, guest speakers | Notion (source of truth) |
-| Registered emails, tea-page tokens, away calendars | identity sheet (emails synced from Notion by the Cron Jobs) |
+| Registered emails, tea-page tokens | identity sheet (emails synced from Notion by the Cron Jobs) |
 | Away dates | one sheet per person, linked from their Notion page |
 | Emails, IDs, Notion token | constants sheet, first tab |
 | Automation switches (dry run / pause, rotas) and dated reminders | constants sheet, tabs **Automation** and **Automation reminders** |

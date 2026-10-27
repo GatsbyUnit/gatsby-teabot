@@ -51,6 +51,7 @@
 <script>
   var TOKEN = <?!= JSON.stringify(token) ?>;
   var CONFIRM = <?!= JSON.stringify(confirm) ?>;
+  var SWAP = <?!= JSON.stringify(swap) ?>;
   var EXEC_URL = <?!= JSON.stringify(exec_url) ?>;
   var app = document.getElementById('app');
 
@@ -126,6 +127,45 @@
     });
   }
 
+  // ---- answering a swap request (link from the email; accepting takes a click, as mail scanners open links) ----
+  function renderSwapAnswer(){
+    app.innerHTML = '';
+    app.appendChild(el('h1', {text: 'Gatsby tea'}));
+    var msg = el('div', {class: 'msg'});
+    app.appendChild(msg);
+    call('api_swap_request', [SWAP], function(r){
+      msg.className = 'msg'; msg.textContent = '';
+      var yes = el('button', {class: 'primary', text: 'Accept: I take it over'});
+      var no = el('button', {text: 'Decline'});
+      var done = function(res){ yes.disabled = true; no.disabled = true; ok(msg, res); };
+      yes.addEventListener('click', function(){ call('api_answer_swap', [SWAP, true], done, msg, yes); });
+      no.addEventListener('click', function(){ call('api_answer_swap', [SWAP, false], done, msg, no); });
+      app.insertBefore(el('div', {class: 'card'}, [
+        el('p', {}, [el('strong', {text: r.from}), ' asks whether you can take over their ' + r.what + '.']),
+        el('div', {class: 'when', text: r.when}),
+        r.title ? el('div', {class: 'title', text: r.title}) : null,
+        el('div', {class: 'row', style: 'margin-top:12px'}, [yes, no])
+      ]), msg);
+    }, msg);
+  }
+
+  function incomingCard(s){
+    var card = el('div', {class: 'card'});
+    s.incoming.forEach(function(r){
+      var msg = el('div', {class: 'msg'});
+      var yes = el('button', {class: 'primary', text: 'Accept'});
+      var no = el('button', {text: 'Decline'});
+      var done = function(res){ ok(msg, res); setTimeout(load, 2000); };
+      yes.addEventListener('click', function(){ call('api_answer_swap_mine', [TOKEN, r.code, true], done, msg, yes); });
+      no.addEventListener('click', function(){ call('api_answer_swap_mine', [TOKEN, r.code, false], done, msg, no); });
+      card.appendChild(el('div', {style: 'margin-bottom:8px'}, [
+        el('div', {}, [el('strong', {text: r.from}), ' asks you to take over their ' + r.what + ': ', el('span', {class: 'when', text: r.when})]),
+        el('div', {class: 'row', style: 'margin-top:6px'}, [yes, no]), msg
+      ]));
+    });
+    return card;
+  }
+
   // ---- personal page ----
   function load(){ call('api_state', [TOKEN], render); }
 
@@ -134,7 +174,12 @@
     ZOOM_ADMIN = s.zoom_admin || ZOOM_ADMIN;
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Hi ' + s.name.split(' ')[0]}));
-    app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update Notion and the shared calendar straight away.'}));
+    app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update Notion and the shared calendar.'}));
+
+    if (s.incoming && s.incoming.length){
+      app.appendChild(el('h2', {text: 'Asked of you'}));
+      app.appendChild(incomingCard(s));
+    }
 
     app.appendChild(el('h2', {text: 'Your upcoming duties'}));
     if (!s.duties.length) app.appendChild(el('p', {class: 'muted', text: 'Nothing scheduled for you at the moment.'}));
@@ -177,7 +222,12 @@
     if (d.tentative){
       card.appendChild(el('p', {class: 'muted', style: 'margin:8px 0 0', text: 'Tentative: you can swap or add a title once the organiser confirms it.'}));
     } else {
-      if (d.live) actions.appendChild(el('button', {text: 'Swap', onclick: function(){ showSwap(panel, d, people, msg); }}));
+      if (d.pending){
+        var withdraw = el('button', {text: 'Withdraw'});
+        withdraw.addEventListener('click', function(){ call('api_withdraw_swap', [TOKEN, d.pending.code], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, withdraw); });
+        card.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [el('span', {class: 'muted', text: 'Waiting for ' + d.pending.to + ' to accept your swap request.'}), withdraw]));
+      }
+      if (d.live) actions.appendChild(el('button', {text: d.pending ? 'Ask someone else' : 'Swap', onclick: function(){ showSwap(panel, d, people, msg); }}));
       if (d.can_title) actions.appendChild(el('button', {text: d.title ? 'Edit title' : 'Add title', onclick: function(){ showTitle(panel, d, msg); }}));
       if (d.can_zoom) actions.appendChild(el('button', {text: 'Request Zoom', onclick: function(){ showZoom(panel, d.row_id, msg); }}));
       card.appendChild(actions);
@@ -207,7 +257,7 @@
       if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please choose a person.'; return; }
       call('api_swap', [TOKEN, d.row_id, d.duty, sel.value], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, btn);
     });
-    panel.appendChild(el('p', {class: 'muted', text: 'Agree it with the other person first. You will both get an email.'}));
+    panel.appendChild(el('p', {class: 'muted', text: 'They get an email to accept. Nothing changes until they do; if they have not answered after a day, you get a reminder. A slot less than a day away is swapped straight away.'}));
     panel.appendChild(sel);
     panel.appendChild(note);
     panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
@@ -285,47 +335,19 @@
     return card;
   }
 
-  function calendarPanel(s, msg){
-    var input = el('input', {type: 'text', placeholder: 'Calendar ID, e.g. abc123@group.calendar.google.com', value: s.away_calendar || ''});
-    var save = el('button', {class: 'primary', text: s.away_calendar ? 'Change' : 'Connect'});
-    save.addEventListener('click', function(){ call('api_set_away_calendar', [TOKEN, input.value], function(res){ ok(msg, res); setTimeout(load, 1200); }, msg, save); });
-    var off = el('button', {text: 'Disconnect'});
-    off.addEventListener('click', function(){ call('api_set_away_calendar', [TOKEN, ''], function(res){ ok(msg, res); setTimeout(load, 1200); }, msg, off); });
-    var help = el('div', {class: 'hidden muted', style: 'font-size:14px;margin-top:6px'}, [
-      el('div', {text: '1. In Google Calendar, pick (or create) a calendar that only holds your time away, e.g. "Away".'}),
-      el('div', {text: '2. Open its settings → "Share with specific people" → add gatsby.teabot@gmail.com with "See only free/busy (hide details)".'}),
-      el('div', {text: '3. Copy the "Calendar ID" from the "Integrate calendar" section of the same settings page and paste it here.'}),
-      el('div', {text: 'Every busy day in that calendar then counts as an away day. The bot only sees busy / free, never titles or details.'})
-    ]);
-    var how = el('a', {href: '#', text: 'How?'});
-    how.addEventListener('click', function(ev){ ev.preventDefault(); help.classList.toggle('hidden'); });
-    return el('div', {class: 'panel'}, [
-      el('div', {class: 'when', style: 'font-size:14px', text: s.away_calendar ? 'Connected to a calendar' : 'Optional: use one of your Google Calendars'}),
-      el('p', {class: 'muted', style: 'margin:2px 0 6px;font-size:14px'}, ['Busy days in a calendar you choose count as away. ', how]),
-      help,
-      input,
-      el('div', {class: 'row', style: 'margin-top:8px'}, s.away_calendar ? [save, off] : [save])
-    ]);
-  }
-
   function awayCard(s){
     var msg = el('div', {class: 'msg'});
     var card = el('div', {class: 'card'});
     if (!s.away.length) card.appendChild(el('p', {class: 'muted', text: 'No upcoming away dates.'}));
     s.away.forEach(function(a){
-      var right = null;
-      if (!a.calendar){
-        right = el('button', {text: 'Remove'});
-        right.addEventListener('click', function(){ call('api_remove_away', [TOKEN, a.row], function(res){ ok(msg, res); setTimeout(load, 800); }, msg, right); });
-      }
+      var right = el('button', {text: 'Remove'});
+      right.addEventListener('click', function(){ call('api_remove_away', [TOKEN, a.row], function(res){ ok(msg, res); setTimeout(load, 800); }, msg, right); });
       card.appendChild(el('div', {class: 'row', style: 'justify-content:space-between;margin-bottom:6px'}, [
         el('span', {}, [el('span', {class: 'when', text: a.label}), a.reason ? el('span', {class: 'muted', text: ' · ' + a.reason}) : null]), right
       ]));
     });
     if (!s.has_away_sheet){
-      card.appendChild(el('p', {class: 'muted', text: 'You do not have an away-dates sheet yet, so dates can only come from a calendar (below). Ask the tea tsar for a sheet.'}));
-      card.appendChild(calendarPanel(s, msg));
-      card.appendChild(msg);
+      card.appendChild(el('p', {class: 'muted', text: 'You do not have an away-dates sheet yet. Please ask the tea tsar for one.'}));
       return card;
     }
     var from = el('input', {type: 'date'});
@@ -338,7 +360,6 @@
       el('label', {text: 'Reason'}), reason,
       el('div', {class: 'row', style: 'margin-top:8px'}, [add])
     ]));
-    card.appendChild(calendarPanel(s, msg));
     card.appendChild(msg);
     return card;
   }
@@ -406,7 +427,8 @@
     ]);
   }
 
-  if (CONFIRM) renderConfirm();
+  if (SWAP) renderSwapAnswer();
+  else if (CONFIRM) renderConfirm();
   else if (TOKEN) load();
   else renderLanding();
 </script>
