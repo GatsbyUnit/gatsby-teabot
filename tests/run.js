@@ -200,7 +200,7 @@ t('cap: at most 10 invitations to one person a day; the rest held back, the tea 
   try {
     for (var i = 0; i < 12; i++) sync_invites(row({gcal_id: 'ev' + i, start: soon}), ictx(), []);
     assert.strictEqual(guests_ev.patches.length, 10);
-    assert.deepStrictEqual(m, ['tsar@x | Calendar invitations to Nikolai Petrov stopped | org@x']);
+    assert.deepStrictEqual(m, ['tsar@x | Calendar invitations to Nikolai Petrov stopped | ']);
     assert.deepStrictEqual(load_invite_state('ev11').g, []);
     assert.deepStrictEqual(load_invite_state('ev3').g, ['nikolai@x']);
     sync_invites(row({gcal_id: 'ev11', start: soon}), ictx(), []);
@@ -210,6 +210,7 @@ t('cap: at most 10 invitations to one person a day; the rest held back, the tea 
     assert.strictEqual(guests_ev.patches.length, 11);
   } finally { send_mail = saved; }
 });
+t('badges: the tsar gets the crowned teapot, organisers their crowned duty, everyone else nothing', () => { Utilities.base64Encode = x => Buffer.from(x).toString('base64'); Utilities.Charset = {UTF_8: 'utf8'}; var c = ctx(false); c.constants = {admin_email: 'tsar@x', tnjc_admin_email: 'org@x', mljc_admin_email: 'ml@x', coffee_admin_email: 'cof@x'}; var who = e => { c.me_identity = {email: e}; var b = royal_badge(c); return b && b.label; }; assert.strictEqual(who('Tsar@x'), 'Tea Tsar'); assert.strictEqual(who('org@x'), 'Royal house of TNJC'); assert.strictEqual(who('cof@x'), 'Royal house of Coffee'); assert.strictEqual(who('lena@x'), null); assert.strictEqual(who(''), null); c.me_identity = {email: 'tsar@x'}; assert.ok(royal_badge(c).src.startsWith('data:image/svg+xml;base64,')); });
 // just tea cancelled in the calendar
 t('just tea renamed to cancelled: tea person cleared, keeps their turn', () => { __props = {}; Calendar = null; var r = row({type: 'Just Tea', presenter_ids: [], tea_ids: ['a'], start: soon}); save_state('ev1', {t: 'JUST TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = cev('JUST TEA: CANCELLED'); var c = cctx(e); c.settings.live_types.push('Just Tea'); sync_row(r, c, start_of_today()); assert.strictEqual(patched[0].Title.title[0].text.content, 'Cancelled'); assert.deepStrictEqual(patched[0].Tea.relation, []); assert.strictEqual(patched[0].Presenter, undefined); assert.ok(/^lena@x \| Cancelled: Just Tea/.test(mailed[0]), mailed[0]); });
 t('just tea deleted: cancelled an hour later', () => { __props = {}; var r = row({type: 'Just Tea', presenter_ids: [], tea_ids: ['a'], start: soon}); save_state('ev1', {t: 'JUST TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var c = cctx(null); c.settings.live_types.push('Just Tea'); sync_row(r, c, start_of_today()); assert.strictEqual(patched.length, 0); c = cctx(null); c.settings.live_types.push('Just Tea'); sync_row(row({type: 'Just Tea', presenter_ids: [], tea_ids: ['a'], start: soon}), c, start_of_today()); assert.deepStrictEqual(patched[0].Tea.relation, []); });

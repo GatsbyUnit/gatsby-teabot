@@ -11,7 +11,7 @@
 //
 // Safety cap: Google emails a person for every invitation and cancellation, so the bot sends one person at
 // most INVITE_CAP of them in any 24 hours. More is almost certainly a bug: the rest is held back (and tried
-// again later), and the tea tsar gets one alert per person and day.
+// again later), and the tea tsar (only) gets one alert per person and day.
 
 const INVITE_PREFIX = 'invite:';
 const INVITE_NUDGE_CC_DAYS = 7;
@@ -130,12 +130,11 @@ function alert_invite_cap(email, ctx){
   var id = Object.keys(ctx.people).filter(function(k){ return String(ctx.people[k].email).toLowerCase() === email; })[0];
   var name = id ? ctx.people[id].name : email;
   var tsar = ctx.constants['admin_email'] || ctx.constants['tnjc_admin_email'];
-  var maintainer = ctx.constants['tnjc_admin_email'];
   send_mail(tsar, 'Calendar invitations to ' + name + ' stopped', [
     'The bot was about to send ' + name + ' more than ' + INVITE_CAP + ' calendar invitations or cancellations within a day. That is almost certainly a bug, so it stopped: nothing more goes to them until a day has passed, and their other slots are unaffected.',
     'Please have a look at the "Gatsby Tea Automation log" sheet (rows "invitations"). To switch invitations off for everyone, empty INVITE_TYPES in the Automation tab of the constants sheet.',
     {link: 'Log', url: ctx.log.getUrl ? ctx.log.getUrl() : ''}
-  ], ctx.constants, maintainer && maintainer !== tsar ? {cc: maintainer} : {});
+  ], ctx.constants);
   log_row(ctx, 'sync', '', null, 'invitation cap reached', name);
 }
 

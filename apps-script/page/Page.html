@@ -274,7 +274,13 @@
 
   function render(s){
     app.innerHTML = '';
-    app.appendChild(el('h1', {text: 'Hi ' + s.name.split(' ')[0]}));
+    var hi = el('h1', {text: 'Hi ' + s.name.split(' ')[0]});
+    if (s.badge){
+      hi.style.cssText = 'display:flex;align-items:center;gap:10px';
+      hi.insertBefore(el('img', {src: s.badge.src, alt: s.badge.label, title: s.badge.label, width: '48', height: '48'}), hi.firstChild);
+    }
+    app.appendChild(hi);
+    if (s.badge) app.appendChild(el('p', {class: 'muted', style: 'margin:-2px 0 6px;font-size:13px', text: s.badge.label}));
     app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update Notion and the shared calendar.'}));
 
     if (s.incoming && s.incoming.length){

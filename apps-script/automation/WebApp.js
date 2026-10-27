@@ -114,7 +114,7 @@ function api_state(token){
   return {
     name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming,
     away: read_away(me), has_away_sheet: !!me.away_sheet,
-    organiser: organiser,
+    organiser: organiser, badge: royal_badge(ctx),
     notion_url: ctx.constants['notion_site_url']
   };
 }
