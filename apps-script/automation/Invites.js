@@ -8,9 +8,15 @@
 // on their own, so it is often an accident. Whoever declines gets one friendly email saying the slot is still
 // theirs and how to swap if they really can't make it (organiser in cc when the slot is less than a week
 // away). Cancelling stays on the tea page.
+//
+// Safety cap: Google emails a person for every invitation and cancellation, so the bot sends one person at
+// most INVITE_CAP of them in any 24 hours. More is almost certainly a bug: the rest is held back (and tried
+// again later), and the tea tsar gets one alert per person and day.
 
 const INVITE_PREFIX = 'invite:';
 const INVITE_NUDGE_CC_DAYS = 7;
+const INVITE_CAP = 10;
+const INVITE_COUNT_PREFIX = 'invcount:';
 
 function invites_on(ctx, type){
   return is_live(ctx, type) && !ctx.baseline && (ctx.settings.invite_types || []).indexOf(type) >= 0;
@@ -68,21 +74,29 @@ function sync_invites(row, ctx, attendees){
   var add = want.filter(function(e){ return !(e in status); });
   var remove = st.g.filter(function(e){ return want.indexOf(e) < 0 && (e in status); });
   var out = {};
+  var held = [];
   if (add.length || remove.length){
-    set_guests(row.gcal_id, add, remove, ctx);
-    log_row(ctx, 'sync', row.type, row.start, 'invitations', (add.length ? 'invited ' + add.length : '') + (add.length && remove.length ? ', ' : '') + (remove.length ? 'uninvited ' + remove.length : ''));
-    out.invited = add.length;
+    var done = set_guests(row.gcal_id, add, remove, ctx);
+    held = add.filter(function(e){ return done.add.indexOf(e) < 0; }).concat(remove.filter(function(e){ return done.remove.indexOf(e) < 0; }));
+    if (done.add.length || done.remove.length) log_row(ctx, 'sync', row.type, row.start, 'invitations', (done.add.length ? 'invited ' + done.add.length : '') + (done.add.length && done.remove.length ? ', ' : '') + (done.remove.length ? 'uninvited ' + done.remove.length : ''));
+    out.invited = done.add.length;
   }
   var declined = want.filter(function(e){ return status[e] === 'declined' && st.no.indexOf(e) < 0; });
   declined.forEach(function(e){ nudge_decline(row, e, ctx); });
-  var next = {d: row.start.getTime(), g: want, no: st.no.filter(function(e){ return want.indexOf(e) >= 0; }).concat(declined)};
+  // held-back changes stay pending: an invitation not sent is not ours yet, a removal not sent still is
+  var mine = want.filter(function(e){ return held.indexOf(e) < 0; }).concat(remove.filter(function(e){ return held.indexOf(e) >= 0; }));
+  var next = {d: row.start.getTime(), g: mine, no: st.no.filter(function(e){ return want.indexOf(e) >= 0; }).concat(declined)};
   if (JSON.stringify(next) !== JSON.stringify(st)) save_invite_state(row.gcal_id, next);
   out.declined = declined.length;
   return out;
 }
 
-// Google emails the people added (invitation) and removed (cancellation)
+// Google emails the people added (invitation) and removed (cancellation). Returns what was actually done:
+// changes for people who reached the cap are held back.
 function set_guests(event_id, add, remove, ctx){
+  add = add.filter(function(e){ return within_invite_cap(e, ctx); });
+  remove = remove.filter(function(e){ return within_invite_cap(e, ctx); });
+  if (!add.length && !remove.length) return {add: [], remove: []};
   var cal_id = ctx.constants['google_calendar_id'];
   var id = event_key(event_id);
   var ev = Calendar.Events.get(cal_id, id);
@@ -90,6 +104,39 @@ function set_guests(event_id, add, remove, ctx){
   var have = attendees.map(function(a){ return String(a.email).toLowerCase(); });
   add.filter(function(e){ return have.indexOf(e) < 0; }).forEach(function(e){ attendees.push({email: e}); });
   Calendar.Events.patch({attendees: attendees, guestsCanInviteOthers: false}, cal_id, id, {sendUpdates: 'all'});
+  return {add: add, remove: remove};
+}
+
+// counts one Google email to this person; false (and the tea tsar alerted) once they had INVITE_CAP in 24 hours
+function within_invite_cap(email, ctx){
+  var props = PropertiesService.getScriptProperties();
+  var key = INVITE_COUNT_PREFIX + email;
+  var day_ago = Date.now() - 864e5;
+  var times = JSON.parse(props.getProperty(key) || '[]').filter(function(t){ return t > day_ago; });
+  if (times.length >= INVITE_CAP){
+    alert_invite_cap(email, ctx);
+    return false;
+  }
+  times.push(Date.now());
+  props.setProperty(key, JSON.stringify(times));
+  return true;
+}
+
+function alert_invite_cap(email, ctx){
+  var props = PropertiesService.getScriptProperties();
+  var key = 'invcap_alert:' + email;
+  if (Number(props.getProperty(key) || 0) > Date.now() - 864e5) return;
+  props.setProperty(key, String(Date.now()));
+  var id = Object.keys(ctx.people).filter(function(k){ return String(ctx.people[k].email).toLowerCase() === email; })[0];
+  var name = id ? ctx.people[id].name : email;
+  var tsar = ctx.constants['admin_email'] || ctx.constants['tnjc_admin_email'];
+  var maintainer = ctx.constants['tnjc_admin_email'];
+  send_mail(tsar, 'Calendar invitations to ' + name + ' stopped', [
+    'The bot was about to send ' + name + ' more than ' + INVITE_CAP + ' calendar invitations or cancellations within a day. That is almost certainly a bug, so it stopped: nothing more goes to them until a day has passed, and their other slots are unaffected.',
+    'Please have a look at the "Gatsby Tea Automation log" sheet (rows "invitations"). To switch invitations off for everyone, empty INVITE_TYPES in the Automation tab of the constants sheet.',
+    {link: 'Log', url: ctx.log.getUrl ? ctx.log.getUrl() : ''}
+  ], ctx.constants, maintainer && maintainer !== tsar ? {cc: maintainer} : {});
+  log_row(ctx, 'sync', '', null, 'invitation cap reached', name);
 }
 
 // after a cancellation: the people no longer on duty get Google's cancellation
@@ -98,8 +145,8 @@ function uninvite(row, ids, ctx){
   var st = load_invite_state(row.gcal_id);
   var gone = emails_of(ids, ctx.people).map(function(e){ return e.toLowerCase(); }).filter(function(e){ return st.g.indexOf(e) >= 0; });
   if (!gone.length) return;
-  set_guests(row.gcal_id, [], gone, ctx);
-  st.g = st.g.filter(function(e){ return gone.indexOf(e) < 0; });
+  var done = set_guests(row.gcal_id, [], gone, ctx);
+  st.g = st.g.filter(function(e){ return done.remove.indexOf(e) < 0; });
   save_invite_state(row.gcal_id, st);
 }
 
@@ -138,5 +185,6 @@ function prune_invite_state(before){
   var all = props.getProperties();
   Object.keys(all).forEach(function(k){
     if (k.indexOf(INVITE_PREFIX) === 0 && JSON.parse(all[k]).d < before.getTime()) props.deleteProperty(k);
+    if (k.indexOf(INVITE_COUNT_PREFIX) === 0 && JSON.parse(all[k]).every(function(t){ return t < Date.now() - 864e5; })) props.deleteProperty(k);
   });
 }

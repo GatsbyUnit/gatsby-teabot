@@ -195,6 +195,21 @@ t('decline further ahead: personal link, gentle wording', () => { var m = declin
 t('sync_row uses the attendee listing and survives an API error', () => { __props = {}; cal_api([]); var e = cev('TNJC: Nikolai Petrov'); var c = cctx(e); c.settings.invite_types = ['TNJC']; c.attendees = {ev1: []}; var r = row({start: soon}); sync_row(r, c, start_of_today()); assert.deepStrictEqual(guests_ev.patches[0].emails, ['nikolai@x']); Calendar.Events.get = () => { throw new Error('boom'); }; __props = {}; c = cctx(e); c.settings.invite_types = ['TNJC']; c.attendees = {ev1: []}; sync_row(r, c, start_of_today()); assert.ok(logged.some(l => /invitations failed/.test(l)), logged.join('; ')); });
 t('tea-page swap updates the guests straight away', () => { __props = {}; save_invite_state('ev1', {d: 1, g: ['nikolai@x'], no: []}); cal_api(att([['nikolai@x', 'accepted']])); var c = ictx(); var e = ev('TNJC: Nikolai Petrov'); c.cal = {getEventById: () => e}; apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); assert.deepStrictEqual(guests_ev.patches[0].emails, ['lena@x']); });
 t('cancelling a talk uninvites the presenter, the tea person stays', () => { __props = {}; save_invite_state('ev1', {d: 1, g: ['lena@x', 'nikolai@x'], no: []}); cal_api(att([['lena@x', 'accepted'], ['nikolai@x', 'accepted']])); var e = cev('TEA TALK: Nikolai Petrov TEA: Lena Weber'); var c = cctx(e); c.settings.invite_types = ['Tea Talk']; c.settings.live_types.push('Tea Talk'); cancel_slot(row({type: 'Tea Talk', tea_ids: ['a'], start: soon}), c, {source: 'page', by: 'Nikolai Petrov', reason: 'ill, asked three people'}); assert.deepStrictEqual(guests_ev.patches[0].emails, ['lena@x']); });
+t('cap: at most 10 invitations to one person a day; the rest held back, the tea tsar alerted once', () => {
+  __props = {}; cal_api([]); var m = []; var saved = send_mail; send_mail = function(to, subj, b, k, o){ m.push(to + ' | ' + subj + ' | ' + ((o || {}).cc || '')); };
+  try {
+    for (var i = 0; i < 12; i++) sync_invites(row({gcal_id: 'ev' + i, start: soon}), ictx(), []);
+    assert.strictEqual(guests_ev.patches.length, 10);
+    assert.deepStrictEqual(m, ['tsar@x | Calendar invitations to Nikolai Petrov stopped | org@x']);
+    assert.deepStrictEqual(load_invite_state('ev11').g, []);
+    assert.deepStrictEqual(load_invite_state('ev3').g, ['nikolai@x']);
+    sync_invites(row({gcal_id: 'ev11', start: soon}), ictx(), []);
+    assert.strictEqual(guests_ev.patches.length, 10); assert.strictEqual(m.length, 1);
+    __props['invcount:nikolai@x'] = JSON.stringify(JSON.parse(__props['invcount:nikolai@x']).map(t => t - 864e5 - 1));
+    sync_invites(row({gcal_id: 'ev11', start: soon}), ictx(), []);
+    assert.strictEqual(guests_ev.patches.length, 11);
+  } finally { send_mail = saved; }
+});
 // just tea cancelled in the calendar
 t('just tea renamed to cancelled: tea person cleared, keeps their turn', () => { __props = {}; Calendar = null; var r = row({type: 'Just Tea', presenter_ids: [], tea_ids: ['a'], start: soon}); save_state('ev1', {t: 'JUST TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = cev('JUST TEA: CANCELLED'); var c = cctx(e); c.settings.live_types.push('Just Tea'); sync_row(r, c, start_of_today()); assert.strictEqual(patched[0].Title.title[0].text.content, 'Cancelled'); assert.deepStrictEqual(patched[0].Tea.relation, []); assert.strictEqual(patched[0].Presenter, undefined); assert.ok(/^lena@x \| Cancelled: Just Tea/.test(mailed[0]), mailed[0]); });
 t('just tea deleted: cancelled an hour later', () => { __props = {}; var r = row({type: 'Just Tea', presenter_ids: [], tea_ids: ['a'], start: soon}); save_state('ev1', {t: 'JUST TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var c = cctx(null); c.settings.live_types.push('Just Tea'); sync_row(r, c, start_of_today()); assert.strictEqual(patched.length, 0); c = cctx(null); c.settings.live_types.push('Just Tea'); sync_row(row({type: 'Just Tea', presenter_ids: [], tea_ids: ['a'], start: soon}), c, start_of_today()); assert.deepStrictEqual(patched[0].Tea.relation, []); });
