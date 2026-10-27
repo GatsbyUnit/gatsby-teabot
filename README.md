@@ -25,9 +25,14 @@ copied back. The [handbook](docs/handbook.md) explains each part.
 - `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ Notion sync, scheduling and
   finalising, emails, organiser reminders, and everything behind the tea page. Settings are described at the top
   of `Config.js`, one-off admin functions in `Setup.js`.
-- `apps-script/page/`: "Gatsby Tea Page", the personal tea page (web app): `doGet`, thin `api_*` wrappers and
-  `Page.html`. It uses the automation as the library `TeaBot`, because a web page can call every top-level
-  function of its own project; a test makes sure it exposes nothing else.
+- `site/`: the tea page itself, a static page on GitHub Pages (https://gatsbyunit.github.io/gatsby-teabot/),
+  published by `.github/workflows/pages.yml` whenever it changes. It is not served by Apps Script because Apps
+  Script web pages don't open for people signed in to several Google accounts. Its address is public, so it
+  shows nothing without the personal code or the unit key (`PAGE_KEY`) in the link.
+- `apps-script/page/`: "Gatsby Tea Page", the tea page's back end (web app): `doPost` with thin `api_*` wrappers,
+  and a `doGet` that points old links to the new address. It uses the automation as the library `TeaBot`,
+  because a web page can call every top-level function of its own project; a test makes sure it exposes
+  nothing else.
 - `apps-script/cron-jobs/`: the older "Gatsby Tea Cron Jobs" (talk reminders, people sync, away-date sheets,
   adding newcomers to rotas), now under version control.
 - `apps-script/archive-helper/`: one-off functions that moved everything superseded into the archive folder in

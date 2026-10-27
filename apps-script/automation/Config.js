@@ -29,7 +29,8 @@ const SETTINGS = [
   ['LINKS_IN_EVENTS', 'TRUE', 'Add "swap your slot" and "edit title" links to upcoming calendar events.'],
   ['GO_LIVE_ON', '', 'Optional date (YYYY-MM-DD). While DRY_RUN is TRUE, the bot switches itself live on this date and emails the organiser. Clear it to cancel.'],
   ['HANDBOOK_URL', '', 'Link to the organiser handbook, included in reminder emails.'],
-  ['PAGE_URL', '', 'Address of the personal tea page (set when it is deployed; also read by the reminder emails of the old Cron Jobs).'],
+  ['PAGE_URL', '', 'Address of the tea page (GitHub Pages: https://gatsbyunit.github.io/gatsby-teabot/; also read by the reminder emails of the old Cron Jobs).'],
+  ['PAGE_KEY', '', 'Unit key in the general tea-page link (calendar events, emails to several people); without it, the page shows nothing to someone who only knows its public address. Any random letters and digits. Changing it breaks the general links already sent; the calendar events get the new one within the hour.'],
   ['FAVICON_URL', '', 'Optional browser-tab icon of the tea page: an image address ending in .png (a Drive image shared by link: https://lh3.googleusercontent.com/d/<file id>#.png). Kept here rather than in the public repo.']
 ];
 

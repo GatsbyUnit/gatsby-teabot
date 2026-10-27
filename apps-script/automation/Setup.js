@@ -87,7 +87,7 @@ const OLD_FORM_RESPONSE_SHEETS = {
 };
 
 function close_old_forms(){
-  var url = page_url(get_settings());
+  var url = page_link(get_settings());
   Object.keys(OLD_FORM_RESPONSE_SHEETS).forEach(function(name){
     var form = FormApp.openByUrl(SpreadsheetApp.openById(OLD_FORM_RESPONSE_SHEETS[name]).getFormUrl());
     form.setCustomClosedFormMessage('This form has been replaced by the tea page, where you can swap your slots, add your talk title and set your away dates: ' + url);

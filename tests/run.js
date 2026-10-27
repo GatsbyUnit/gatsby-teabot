@@ -217,6 +217,8 @@ t('just tea deleted: cancelled an hour later', () => { __props = {}; var r = row
 t('coffee event deleted: reported, not cancelled', () => { __props = {}; var r = row({type: 'Coffee Cleaning', presenter_ids: [], tea_ids: ['a'], start: soon}); save_state('ev1', {t: 'x', n: notion_fingerprint(r), d: soon.getTime()}); var out = sync_row(r, cctx(null), start_of_today()); assert.strictEqual(out.finding.kind, 'missing_event'); assert.strictEqual(patched.length, 0); });
 // leaving the tea system
 t('leave link: personal for one registered recipient, general otherwise', () => { var saved = identity_rows; identity_rows = () => ({rows: [{id: 'b', email: 'Nikolai@x', token: 'tok'}]}); identity_token_cache = null; try { var base = page_url(get_settings()); assert.strictEqual(leave_url('nikolai@x', {}, {}), base + '?t=tok&leave=1'); assert.strictEqual(leave_url('nikolai@x', {cc: 'org@x'}, {}), base + '?leave=1'); assert.strictEqual(leave_url('nikolai@x,lena@x', {}, {}), base + '?leave=1'); assert.strictEqual(leave_url('list@x', {}, {}), base + '?leave=1'); } finally { identity_rows = saved; identity_token_cache = null; } });
+t('tea-page links: the general one carries the unit key, links with a personal code do not', () => { var s = {PAGE_URL: 'https://page', PAGE_KEY: 'unitkey1'}; assert.strictEqual(page_link(s), 'https://page?k=unitkey1'); assert.strictEqual(page_link(s, {leave: 1}), 'https://page?k=unitkey1&leave=1'); assert.strictEqual(personal_link('tok', s), 'https://page?t=tok'); assert.strictEqual(page_link(s, {t: 'tok', leave: 1}), 'https://page?t=tok&leave=1'); assert.strictEqual(page_link(s, {swap: 'c1'}), 'https://page?swap=c1'); assert.strictEqual(page_link({PAGE_URL: 'https://page'}, {leave: 1}), 'https://page?leave=1'); });
+t('general page: no names, links or leaving without the unit key', () => { settings_cache = Object.assign({}, get_settings(), {PAGE_KEY: 'unitkey1'}); try { assert.throws(() => api_link_people(''), /calendar event/); assert.throws(() => api_link_people('wrongkey'), /calendar event/); assert.throws(() => api_request_link('', '0123456789abcdef0123456789abcdef'), /calendar event/); assert.throws(() => api_leave_by_name('wrongkey', '0123456789abcdef0123456789abcdef'), /calendar event/); } finally { settings_cache = null; } });
 t('leaving: inactive in Notion, email and code cleared, requests dropped, organiser told about slots', () => {
   __props = {}; var m = [], cleared = [];
   var saved = [identity_rows, upcoming_rows_of, send_mail];
@@ -248,11 +250,11 @@ t('leaving by picking a name: one click, the tea tsar is warned anyone could hav
   CacheService = {getScriptCache: () => ({get: k => store[k] || null, put: (k, v) => { store[k] = v; }, remove: () => {}})};
   LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
   try {
-    assert.ok(/left the Gatsby tea system/.test(api_leave_by_name('0123456789abcdef0123456789abcdef')));
+    assert.ok(/left the Gatsby tea system/.test(api_leave_by_name('', '0123456789abcdef0123456789abcdef')));
     assert.deepStrictEqual(patched[0], {Active: {checkbox: false}});
     assert.ok(/^nikolai@x \| You have left/.test(m[0])); assert.ok(/^tsar@x \| Nikolai Petrov has left/.test(m[1]) && /anyone could do/.test(m[1]), m[1]);
-    assert.throws(() => api_leave_by_name('fedcba9876543210fedcba9876543210'), /not in the tea system/);
-    store['leave:all'] = '5'; assert.throws(() => api_leave_by_name('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'), /try again later/);
+    assert.throws(() => api_leave_by_name('', 'fedcba9876543210fedcba9876543210'), /not in the tea system/);
+    store['leave:all'] = '5'; assert.throws(() => api_leave_by_name('', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'), /try again later/);
   } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; make_context = saved[3]; CacheService = saved[4]; LockService = saved[5]; get_global_constants = saved[6]; delete people['0123456789abcdef0123456789abcdef']; delete people['fedcba9876543210fedcba9876543210']; }
 });
 t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai Petrov has left the tea system']); });

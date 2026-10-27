@@ -45,11 +45,26 @@ function page_url(settings){
   return settings.PAGE_URL || ScriptApp.getService().getUrl();
 }
 
-function personal_link(token, settings){
-  return page_url(settings) + '?t=' + token;
+// The tea page's address with these parameters. Its address is public (GitHub Pages), so links without a
+// personal code (t, swap, confirm) carry the unit key PAGE_KEY; without it, the page shows nothing.
+function page_link(settings, params){
+  params = params || {};
+  var q = settings.PAGE_KEY && !(params.t || params.swap || params.confirm) ? ['k=' + encodeURIComponent(settings.PAGE_KEY)] : [];
+  Object.keys(params).forEach(function(k){ q.push(k + '=' + encodeURIComponent(params[k])); });
+  return page_url(settings) + (q.length ? '?' + q.join('&') : '');
 }
 
-// ---- page API (called from Page.html via google.script.run) ----
+function personal_link(token, settings){
+  return page_link(settings, {t: token});
+}
+
+// the general page (no personal code) works only with the unit key from the calendar events and emails
+function check_page_key(key){
+  var want = get_settings().PAGE_KEY;
+  if (want && String(key || '') !== want) throw new Error('Please open the tea page from the link in a gatsby.tea calendar event or in one of the tea bot\'s emails.');
+}
+
+// ---- page API (called from the tea page, site/index.html, through the doPost of the Gatsby Tea Page project) ----
 
 function page_context(token){
   var constants = get_global_constants();
@@ -238,7 +253,7 @@ function api_change_email(token, new_email){
   CacheService.getScriptCache().put('email:' + code, JSON.stringify({id: ctx.me.id, email: new_email}), 6 * 3600);
   send_mail(new_email, 'Confirm your new email for the tea system', [
     'Hi ' + ctx.me.name + ', please confirm that you want the Gatsby tea system to use this address from now on.',
-    {link: 'Confirm this address', url: page_url(ctx.settings) + '?confirm=' + code},
+    {link: 'Confirm this address', url: page_link(ctx.settings, {confirm: code})},
     'The link works for 6 hours. If you did not ask for this, just ignore this email.'
   ], ctx.constants);
   return 'We sent a confirmation link to ' + new_email + '. Your address changes once you click it.';
@@ -262,10 +277,11 @@ function api_confirm_email(code){
   return 'Done: the tea system now uses ' + req.email + '. Your personal link stays the same.';
 }
 
-// The page without a personal link lists the registered people by name; the link goes only to the chosen
+// The general page (with the unit key) lists the registered people by name; the link goes only to the chosen
 // person's registered address, which the page shows half hidden. Limited to 3 links per person per 6 hours
 // and 40 per hour overall, so nobody can flood inboxes.
-function api_link_people(){
+function api_link_people(key){
+  check_page_key(key);
   var constants = get_global_constants();
   var people = load_people(constants);
   return identity_rows(constants).rows
@@ -274,8 +290,14 @@ function api_link_people(){
     .sort(function(a, b){ return a.name.localeCompare(b.name); });
 }
 
-function api_request_link(person_id){
+function api_request_link(key, person_id){
+  check_page_key(key);
   return send_personal_link(person_id, 'Your tea page', page_link_blocks);
+}
+
+// the browser-tab icon of the tea page (setting FAVICON_URL), '' if none
+function api_page_icon(){
+  return get_settings().FAVICON_URL || '';
 }
 
 // emails the chosen person (only ever to their registered address) a mail built around their personal link;

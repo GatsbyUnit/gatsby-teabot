@@ -22,7 +22,7 @@ function strip_links(desc){
 // With the personal page deployed, one link does it all (the page lets you pick your name and sends you
 // your personal link); before that, prefilled links to the old forms.
 function links_footer(row, ctx, html){
-  var page = ctx.settings.PAGE_URL;
+  var page = ctx.settings.PAGE_URL ? page_link(ctx.settings) : '';
   if (page){
     if (html) return '<br><br>' + LINK_MARK + ' <a href="' + esc(page) + '">Swap your slot, add a title or set away dates</a>';
     return '\n\n' + LINK_MARK + ' Swap your slot, add a title or set away dates: ' + page;

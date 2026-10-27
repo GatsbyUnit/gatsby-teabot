@@ -47,7 +47,7 @@ function request_swap(row, duty, from_id, to_id, ctx){
   var req = {code: Utilities.getUuid().replace(/-/g, ''), row_id: row.id, duty: duty, from: from_id, to: to_id,
              created: Date.now(), start: row.start.getTime(), type: row.type, reminded: false};
   save_swap_request(req);
-  var url = page_url(ctx.settings) + '?swap=' + req.code;
+  var url = page_link(ctx.settings, {swap: req.code});
   send_mail(to.email, from.name + ' asks you to take over their ' + duty_word(row, duty) + ' on ' + fmt_day(row.start), [
     from.name + ' asks whether you can take over their ' + duty_word(row, duty) + '.',
     slot_table(row),
@@ -105,7 +105,7 @@ function remind_swap_requests(ctx){
       send_mail(from.email, to.name + ' has not answered your swap request yet', [
         'A day ago you asked ' + to.name + ' to take over your ' + (req.duty === 'tea' ? 'duty' : 'talk') + ' on ' + fmt_day(new Date(req.start)) + ' (' + req.type + '). They have not answered yet, so the slot is still yours.',
         'You could remind them, or ask someone else on your tea page (that replaces this request).',
-        {link: 'Open my tea page', url: tokens[req.from] ? personal_link(tokens[req.from], ctx.settings) : page_url(ctx.settings)}
+        {link: 'Open my tea page', url: tokens[req.from] ? personal_link(tokens[req.from], ctx.settings) : page_link(ctx.settings)}
       ], ctx.constants, {reply_to: to.email || undefined});
     }
     req.reminded = true;

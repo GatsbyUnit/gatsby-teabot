@@ -34,7 +34,7 @@ function send_examples(){
     var f = finding(row, 'uncertain_match', 'The calendar says "TNJC: Sam", but Notion says "TNJC: ' + person.name + '". I could not tell for sure who is meant: "Sam" could be Sam Smith or Sam Jones. Nothing was changed. Please record the right person in Notion.', false);
     send_mail(me, 'Could not match a name in the TNJC calendar', digest_blocks([f], false, ctx.log.getUrl()), constants);
     // 4. someone asked for their personal page link
-    send_mail(me, 'Your tea page', page_link_blocks(page_url(ctx.settings) + '?t=' + '0'.repeat(40)), constants);
+    send_mail(me, 'Your tea page', page_link_blocks(personal_link('0'.repeat(40), ctx.settings)), constants);
     // 5. organiser reminder (Mondays, when the schedule is running out)
     send_mail(me, 'Time to schedule more TNJC slots', [
       'The TNJC schedule currently runs until Tue 22 Dec 2026 (18 days from now).',
@@ -44,7 +44,7 @@ function send_examples(){
     MailApp.sendEmail(me, '[Example] [Gatsby Tea Bot] REMINDER TNJC Presentation on 10 Nov 2026',
       'Hi,\n\nThis is a reminder for your talk next week. \n\n=============\n\nTitle: \nType: TNJC\nTime: 13:30 - 14:30, 10 Nov 2026\nPresenter: ' + person.name + '\nZoom Link: ' + constants['gatsby_zoom_link'] + '\nDescription: \n=============\n\n' +
       '(... rest of the usual reminder text ...)\n\n' +
-      'Swap your slot, add your title or set away dates on your tea page:\n' + page_url(ctx.settings) + '?t=' + '0'.repeat(40) + '\n\n\n\n--------\nGatsby Tea Bot @ 2026\n' + constants['notion_site_url'], {name: 'Gatsby Tea Bot'});
+      'Swap your slot, add your title or set away dates on your tea page:\n' + personal_link('0'.repeat(40), ctx.settings) + '\n\n\n\n--------\nGatsby Tea Bot @ 2026\n' + constants['notion_site_url'], {name: 'Gatsby Tea Bot'});
     sent.push('REMINDER TNJC Presentation (old format + page line)');
   } finally {
     send_mail = real_send;

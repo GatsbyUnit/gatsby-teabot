@@ -161,7 +161,7 @@ function nudge_decline(row, email, ctx){
     slot_table(row),
     'If you really can\'t make it, please swap: pick someone on your tea page, and the slot moves to them once they accept. If you are away that day, adding it to your away dates there keeps you from being scheduled then in future.',
     // the personal link only when nobody else gets this email
-    {link: soon ? 'Open the tea page' : 'Open my tea page', url: soon ? page_url(ctx.settings) : tea_page_link_for(id, ctx)},
+    {link: soon ? 'Open the tea page' : 'Open my tea page', url: soon ? page_link(ctx.settings) : tea_page_link_for(id, ctx)},
     duty === 'presenter'
       ? 'Only if nobody at all can take over, there is "Nobody can take over?" on your tea page. That cancels the talk, so it is the last resort.'
       : 'If nobody at all can take over, reply to this email and the organiser will sort it out.'
@@ -176,7 +176,7 @@ function tea_page_link_for(id, ctx){
     ctx.tokens = {};
     identity_rows(ctx.constants).rows.forEach(function(r){ if (r.id && r.token) ctx.tokens[r.id] = r.token; });
   }
-  return ctx.tokens[id] ? personal_link(ctx.tokens[id], ctx.settings) : page_url(ctx.settings);
+  return ctx.tokens[id] ? personal_link(ctx.tokens[id], ctx.settings) : page_link(ctx.settings);
 }
 
 function prune_invite_state(before){

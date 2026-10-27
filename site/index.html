@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-<base target="_top">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Gatsby tea</title>
+<link id="icon" rel="icon" href="data:,">
 <style>
   :root {
     --bg: #f7f7f5; --card: #ffffff; --text: #1f2328; --muted: #656d76; --line: #d8dee4;
@@ -54,11 +58,16 @@
 <main id="app"><p class="muted">Loading…</p></main>
 
 <script>
-  var TOKEN = <?!= JSON.stringify(token) ?>;
-  var CONFIRM = <?!= JSON.stringify(confirm) ?>;
-  var SWAP = <?!= JSON.stringify(swap) ?>;
-  var LEAVE = <?!= JSON.stringify(leave) ?>;
-  var EXEC_URL = <?!= JSON.stringify(exec_url) ?>;
+  // A static page (GitHub Pages); everything on it comes from the tea bot's web app ("Gatsby Tea Page"), which
+  // checks the personal code (t, swap, confirm) or, on the general page, the unit key (k) from the link.
+  var EXEC_URL = 'https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec';
+  var QUERY = new URLSearchParams(location.search);
+  function param(name, re){ var v = QUERY.get(name) || ''; return re.test(v) ? v : ''; }
+  var TOKEN = param('t', /^[0-9a-f]{40}$/);
+  var CONFIRM = param('confirm', /^[0-9a-f]{32}$/);
+  var SWAP = param('swap', /^[0-9a-f]{32}$/);
+  var LEAVE = QUERY.get('leave') ? '1' : '';
+  var KEY = param('k', /^[\w-]{6,64}$/);
   var app = document.getElementById('app');
 
   function el(tag, attrs, children){
@@ -72,9 +81,8 @@
     (children || []).forEach(function(c){ if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
     return e;
   }
-  // Calls go to the web app as an anonymous POST (doPost): google.script.run breaks for people signed in to
-  // several Google accounts. It is only the fallback for calls that just read, so nothing can happen twice.
-  var READ_ONLY = ['api_state', 'api_link_people'];
+  // Calls go to the web app as an anonymous POST (doPost); credentials are left out, so being signed in to
+  // Google (with one account or several) makes no difference.
   function call(fn, args, done, msgEl, button){
     if (button) button.disabled = true;
     if (msgEl){ msgEl.className = 'msg muted'; msgEl.textContent = 'Working…'; }
@@ -85,18 +93,10 @@
       if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = text; }
       else { app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: text})); }
     };
-    var classic = function(){
-      var runner = google.script.run.withSuccessHandler(finish).withFailureHandler(function(err){ fail(err && err.message ? err.message : err); });
-      runner[fn].apply(runner, args);
-    };
-    if (!EXEC_URL || !window.fetch) return classic();
     fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: fn, args: args}), credentials: 'omit', redirect: 'follow'})
       .then(function(r){ return r.json(); })
       .then(function(res){ if (res.ok) finish(res.result); else fail(res.error); })
-      .catch(function(){
-        if (READ_ONLY.indexOf(fn) >= 0) classic();
-        else fail('Could not reach the tea bot. Please reload the page and check whether your change went through before trying again.');
-      });
+      .catch(function(){ fail('Could not reach the tea bot. Please reload the page and check whether your change went through before trying again.'); });
   }
   function ok(msgEl, text){ msgEl.className = 'msg ok'; msgEl.textContent = text; }
 
@@ -108,9 +108,9 @@
     btn.disabled = true;
     btn.addEventListener('click', function(){
       if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please pick your name.'; return; }
-      call('api_request_link', [sel.value], function(res){ ok(msg, res); }, msg, btn);
+      call('api_request_link', [KEY, sel.value], function(res){ ok(msg, res); }, msg, btn);
     });
-    call('api_link_people', [], function(people){
+    call('api_link_people', [KEY], function(people){
       sel.innerHTML = '';
       sel.appendChild(el('option', {value: '', text: 'Pick your name…'}));
       people.forEach(function(p){ sel.appendChild(el('option', {value: p.id, text: p.name})); });
@@ -185,7 +185,7 @@
     call('api_leave_info', [TOKEN], function(info){
       msg.className = 'msg'; msg.textContent = '';
       var go = el('button', {class: 'danger', text: 'Yes, take me out of the tea system'});
-      var stay = el('a', {class: 'btn', href: (EXEC_URL || '') + '?t=' + TOKEN, text: 'No, back to my tea page'});
+      var stay = el('a', {class: 'btn', href: location.pathname + '?t=' + TOKEN, text: 'No, back to my tea page'});
       var card = el('div', {class: 'card'}, [
         el('p', {}, ['You are ', el('strong', {text: info.name}), '.']),
         el('p', {text: LEAVE_TEXT}),
@@ -213,9 +213,9 @@
     btn.disabled = true;
     btn.addEventListener('click', function(){
       if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please pick your name.'; return; }
-      call('api_leave_by_name', [sel.value], function(res){ btn.disabled = true; sel.disabled = true; ok(msg, res); }, msg, btn);
+      call('api_leave_by_name', [KEY, sel.value], function(res){ btn.disabled = true; sel.disabled = true; ok(msg, res); }, msg, btn);
     });
-    call('api_link_people', [], function(people){
+    call('api_link_people', [KEY], function(people){
       sel.innerHTML = '';
       sel.appendChild(el('option', {value: '', text: 'Pick your name…'}));
       people.forEach(function(p){ sel.appendChild(el('option', {value: p.id, text: p.name})); });
@@ -504,12 +504,25 @@
     ]);
   }
 
+  // ---- no personal code and no unit key: only the address, which is public ----
+  function renderNoKey(){
+    app.appendChild(el('h1', {text: 'Gatsby tea'}));
+    app.appendChild(el('p', {text: 'Please open the tea page from the link in a gatsby.tea calendar event or in one of the tea bot\'s emails.'}));
+  }
+
+  // the tab icon is a setting (FAVICON_URL in the constants sheet); without it the tab has none
+  fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: 'api_page_icon', args: []}), credentials: 'omit'})
+    .then(function(r){ return r.json(); })
+    .then(function(res){ if (res.ok && res.result) document.getElementById('icon').href = res.result; })
+    .catch(function(){});
+
   if (SWAP) renderSwapAnswer();
   else if (CONFIRM) renderConfirm();
   else if (LEAVE && TOKEN) renderLeave();
-  else if (LEAVE) renderLeaveLanding();
+  else if (LEAVE && KEY) renderLeaveLanding();
   else if (TOKEN) load();
-  else renderLanding();
+  else if (KEY) renderLanding();
+  else renderNoKey();
 </script>
 </body>
 </html>

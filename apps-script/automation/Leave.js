@@ -12,16 +12,16 @@
 
 function leave_url(to, options, constants){
   try {
-    var url = page_url(get_settings());
-    if (!url) return '';
+    var settings = get_settings();
+    if (!page_url(settings)) return '';
     var single = String(to).indexOf(',') < 0 && !(options && options.cc);
     if (single){
       if (!identity_token_cache) identity_token_cache = identity_rows(constants).rows;
       var want = String(to).trim().toLowerCase();
       var hit = identity_token_cache.filter(function(r){ return r.email.toLowerCase() === want && r.token; })[0];
-      if (hit) return personal_link(hit.token, get_settings()) + '&leave=1';
+      if (hit) return page_link(settings, {t: hit.token, leave: 1});
     }
-    return url + '?leave=1';
+    return page_link(settings, {leave: 1});
   } catch (e) {
     return '';
   }
@@ -57,8 +57,9 @@ function api_leave(token){
   return LEFT_MESSAGE;
 }
 
-// the page without a personal link: pick your name, one click
-function api_leave_by_name(person_id){
+// the general page (with the unit key): pick your name, one click
+function api_leave_by_name(key, person_id){
+  check_page_key(key);
   person_id = normalise_id(String(person_id || '').trim());
   if (!/^[0-9a-f]{32}$/.test(person_id)) throw new Error('Please pick your name.');
   var cache = CacheService.getScriptCache();
