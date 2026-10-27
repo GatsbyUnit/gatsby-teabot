@@ -13,6 +13,44 @@ What to read where (each topic lives in one place only):
 - **Next steps:** [docs/next-steps.md](docs/next-steps.md): keeping this public repo clean, what else is public
   (personal data on the Notion site, tea-page links), and how one might move off Notion.
 
+## The setup at a glance
+
+```mermaid
+flowchart LR
+  members(["Unit members"])
+  organisers(["Organisers"])
+
+  subgraph apps["Google Apps Script, running as gatsby.teabot"]
+    page["Gatsby Tea Page<br/>personal tea page (web app)"]
+    auto["Gatsby Tea Automation<br/>hourly sync, scheduling, emails"]
+    cron["Gatsby Tea Cron Jobs<br/>talk reminders, people sync"]
+  end
+
+  subgraph sheets["Google Sheets"]
+    consts["constants sheet<br/>settings, Notion token"]
+    ident["identity sheet<br/>emails, page links"]
+    away["away-date sheets<br/>one per person"]
+  end
+
+  notion[("Notion: Schedule, People<br/>source of truth")]
+  cal[("gatsby.tea calendar")]
+  github["GitHub<br/>code, tests, docs"]
+
+  members -->|swap, title, away dates, Zoom| page
+  organisers -->|create, fill, finalise slots| page
+  page -->|uses as library| auto
+  auto <-->|every hour| notion
+  auto <-->|writes events, reads hand edits| cal
+  members -.->|edit events by hand| cal
+  auto --- sheets
+  cron -->|reads| notion
+  cron -->|reminder emails| members
+  github -->|deploy.py| apps
+```
+
+Notion decides who does what and when; the calendar is a copy that the bot keeps in step, and hand edits to it are
+copied back. The [handbook](docs/handbook.md) explains each part.
+
 ## Layout
 - `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ Notion sync, scheduling and
   finalising, emails, organiser reminders, and everything behind the tea page. Settings are described at the top
