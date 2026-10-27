@@ -106,6 +106,15 @@ function keep_label(current, expected, type){
   return label[1] + expected.slice(own[1].length);
 }
 
+const CANCELLED_TITLE = 'Cancelled';
+
+// The calendar title of a cancelled slot: "No TNJC — CANCELLED", "TEA TALK: CANCELLED TEA: Lena Weber".
+function cancelled_title(row, people){
+  if (row.type === 'TNJC' || row.type === 'MLJC') return 'No ' + row.type + ' — CANCELLED';
+  var tea = names_of(row.tea_ids, people);
+  return row.type.toUpperCase() + ': CANCELLED' + (tea.length ? ' TEA: ' + tea.join(', ') : '');
+}
+
 function is_cancelled_title(title){
   return /\bcancel(?:l?ed)?\b|\bno\s+(?:tnjc|mljc|csnjc|talk|tea|journal club)\b/i.test(String(title));
 }

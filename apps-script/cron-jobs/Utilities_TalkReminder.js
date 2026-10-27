@@ -182,6 +182,13 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
     var tea_people_ids = relevant_talk['properties']['Tea']['relation'];
     var presenter_names = get_names_from_ids(presenter_ids, people);
     var tea_people_names = get_names_from_ids(tea_people_ids, people);
+    // a guest speaker (TNJC / MLJC) is recorded in "Guest speaker" instead of Presenter
+    var guest_prop = relevant_talk['properties']['Guest speaker'];
+    if (presenter_names.length == 0 && guest_prop && guest_prop['rich_text'] && guest_prop['rich_text'].length > 0){
+      presenter_names = [guest_prop['rich_text'].map(function(x){ return x['plain_text']; }).join('')];
+    }
+    // cancelled talks (title "Cancelled", set by the tea bot) get no group reminder
+    var talk_cancelled = /\bcancel(?:l?ed)?\b/i.test(talk_title);
     if ( presenter_names.length > 0 ){
       var presenter_title_text = " by " + presenter_names.join(", ");
     } else {
@@ -190,7 +197,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
 
     // send group reminders about the talk
 
-    if (email_option == 'group'){
+    if (email_option == 'group' && !talk_cancelled){
       if (talk_type == 'Research Talk' || talk_type == 'Tea Talk' || talk_type == 'Just Tea' || talk_type == 'External Seminar' || talk_type == 'Leaving Tea' ) {
         // send reminder to everyone about the talk
         send_email(email_group, talk_date_name.toUpperCase() + " " + talk_start_time + ", " + talk_type + presenter_title_text, 

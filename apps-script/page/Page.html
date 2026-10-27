@@ -28,6 +28,9 @@
   .title { margin-top: 4px; }
   button, .btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.danger { background: var(--err); border-color: var(--err); color: #ffffff; }
+  button.quiet { border: none; background: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 13px; }
+  .warn { border-left: 3px solid var(--err); padding-left: 10px; }
   button:disabled { opacity: .5; cursor: default; }
   input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 100%; }
   textarea { min-height: 90px; }
@@ -140,7 +143,8 @@
       el('span', {class: 'when', text: d.when}),
       el('span', {class: 'chip', text: d.type}),
       el('span', {class: 'chip', text: d.duty_label}),
-      d.tentative ? el('span', {class: 'chip', text: 'tentative'}) : null
+      d.tentative ? el('span', {class: 'chip', text: 'tentative'}) : null,
+      d.cancelled ? el('span', {class: 'chip', text: 'talk cancelled'}) : null
     ]);
     var card = el('div', {class: 'card'}, [head]);
     if (d.duty === 'presenter') card.appendChild(el('div', {class: 'title' + (d.title ? '' : ' muted'), text: d.title || 'No title yet'}));
@@ -152,6 +156,7 @@
       if (d.can_title) actions.appendChild(el('button', {text: d.title ? 'Edit title' : 'Add title', onclick: function(){ showTitle(panel, d, msg); }}));
       if (d.can_zoom) actions.appendChild(el('button', {text: 'Request Zoom', onclick: function(){ showZoom(panel, d.row_id, msg); }}));
       card.appendChild(actions);
+      if (d.can_cancel) card.appendChild(el('div', {style: 'margin-top:8px'}, [el('button', {class: 'quiet', text: 'Nobody can take over?', onclick: function(){ showCancel(panel, d, people, msg); }})]));
     }
     card.appendChild(panel);
     card.appendChild(msg);
@@ -170,6 +175,33 @@
     panel.appendChild(el('p', {class: 'muted', text: 'Agree it with the other person first. You will both get an email.'}));
     panel.appendChild(sel);
     panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
+  }
+
+  // Cancelling is a last resort: it sits behind "Swap", asks who was asked, and offers the swap again.
+  function showCancel(panel, d, people, msg){
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    panel.appendChild(el('p', {class: 'warn'}, [el('strong', {text: 'Please swap instead of cancelling.'}),
+      ' A cancelled talk is a gap for everyone. Ask colleagues directly, then hand the slot over with Swap. Cancel only if really nobody can take over.']));
+    panel.appendChild(el('p', {class: 'muted', text: 'If you cancel, the calendar shows the talk as cancelled, the organiser is told, and you stay in the queue, so you will be scheduled again soon. Tea duty stays as it is.'}));
+    var reason = el('textarea', {placeholder: 'Who did you ask, and why can nobody take over?'});
+    var check = el('input', {type: 'checkbox', style: 'width:auto;margin:0 8px 0 0'});
+    var btn = el('button', {class: 'danger', text: 'Cancel my talk'});
+    btn.disabled = true;
+    var update = function(){ btn.disabled = !(check.checked && reason.value.trim().length >= 10); };
+    check.addEventListener('change', update);
+    reason.addEventListener('input', update);
+    btn.addEventListener('click', function(){
+      call('api_cancel', [TOKEN, d.row_id, reason.value], function(res){ ok(msg, res); panel.classList.add('hidden'); setTimeout(load, 2500); }, msg, btn);
+    });
+    panel.appendChild(el('label', {text: 'Who did you ask, and why can nobody take over?'}));
+    panel.appendChild(reason);
+    panel.appendChild(el('label', {style: 'display:flex;align-items:center;color:var(--text);font-size:14px;margin-top:10px'}, [check, 'I asked colleagues, and nobody can take over.']));
+    panel.appendChild(el('div', {class: 'row', style: 'margin-top:10px'}, [
+      el('button', {class: 'primary', text: 'Swap instead', onclick: function(){ showSwap(panel, d, people, msg); }}),
+      btn,
+      el('button', {text: 'Close', onclick: function(){ panel.classList.add('hidden'); }})
+    ]));
   }
 
   function showTitle(panel, d, msg){

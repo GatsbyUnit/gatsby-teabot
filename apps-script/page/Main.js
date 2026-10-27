@@ -20,6 +20,7 @@ function doGet(e){
 function api_state(token){ return TeaBot.api_state(token); }
 function api_swap(token, row_id, duty, to_id){ return TeaBot.api_swap(token, row_id, duty, to_id); }
 function api_title(token, row_id, title, description){ return TeaBot.api_title(token, row_id, title, description); }
+function api_cancel(token, row_id, reason){ return TeaBot.api_cancel(token, row_id, reason); }
 function api_add_away(token, from, to, reason){ return TeaBot.api_add_away(token, from, to, reason); }
 function api_remove_away(token, row_number){ return TeaBot.api_remove_away(token, row_number); }
 function api_change_email(token, new_email){ return TeaBot.api_change_email(token, new_email); }

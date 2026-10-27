@@ -7,6 +7,9 @@
 //                                   are recorded in Notion; an unknown presenter in a journal club is a
 //                                   guest speaker; anything unclear goes to the tea tsar
 //   - both changed and disagree  -> ask the organiser
+// A talk whose event is deleted, or renamed to "… CANCELLED", by hand is recorded as cancelled (see
+// cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup can't cancel a talk.
+// Slots titled "Cancelled" in Notion are left alone.
 // A talk title or description edited in Notion rewrites the event description (future slots, and only
 // when the Notion text changed since last time, so text typed into the calendar is otherwise left alone).
 // Confirmed future slots without an event get one (same title / description as the finalizing scripts).
@@ -74,6 +77,7 @@ function sync_all(ctx){
   var findings = [];
   var mismatches = [];
   var links = 0;
+  ctx.deleted_events = recently_deleted_events(ctx);
   ctx.settings.sync_types.forEach(function(type){
     ctx.baseline = !props.getProperty(BASELINE_PREFIX + type);
     ctx.no_event = JSON.parse(props.getProperty(NO_EVENT_PREFIX + type) || '[]');
@@ -104,7 +108,7 @@ function sync_all(ctx){
 
 function sync_row(row, ctx, today){
   var out = {};
-  if (is_tentative(row)) return out;
+  if (is_tentative(row) || is_cancelled_title(row.title)) return out;
   var future = row.start.getTime() >= today.getTime();
   if (!row.gcal_id){
     if (!future) return out;
@@ -119,7 +123,19 @@ function sync_row(row, ctx, today){
     return out;
   }
   var event = ctx.cal.getEventById(row.gcal_id);
-  if (!event){
+  if (!event || (ctx.deleted_events || {})[event_key(row.gcal_id)]){
+    var known = load_state(row.gcal_id);
+    if (future && known && !ctx.baseline && PRESENTER_TYPES.indexOf(row.type) >= 0){
+      if (!known.gone){
+        known.gone = Date.now();  // look again next hour before acting
+        save_state(row.gcal_id, known);
+        return out;
+      }
+      if (!act(ctx, row, 'cancel_from_calendar', 'event deleted', function(){ cancel_slot(row, ctx, {source: 'deleted'}); })){
+        out.finding = finding(row, 'deleted_event', 'The calendar event was deleted, so the bot would record this talk as cancelled.', false);
+      }
+      return out;
+    }
     if (future) out.finding = finding(row, 'missing_event', 'The calendar event for this slot no longer exists. Was it deleted by hand? (The bot does not recreate deleted events.)', false);
     return out;
   }
@@ -129,6 +145,15 @@ function sync_row(row, ctx, today){
   var fingerprint = notion_fingerprint(row);
   var prev = load_state(row.gcal_id);
   var parsed = parse_title(actual, row.type);
+
+  if (is_cancelled_title(actual) && future && prev && prev.t !== actual && !ctx.baseline &&
+      PRESENTER_TYPES.indexOf(row.type) >= 0 && (row.presenter_ids.length || row.guest)){
+    if (!act(ctx, row, 'cancel_from_calendar', actual, function(){ cancel_slot(row, ctx, {source: 'renamed'}); })){
+      out.finding = finding(row, 'renamed_cancelled', 'The event was renamed to "' + actual + '", so the bot would record this talk as cancelled.', false);
+      save_state(row.gcal_id, Object.assign({}, prev, {t: actual}));
+    }
+    return out;
+  }
 
   if (actual !== expected && !is_cancelled_title(actual) && !(parsed && titles_agree(parsed, row, ctx.people))){
     var res = classify_difference(row, event, actual, expected, parsed, prev, fingerprint, ctx, future);
@@ -147,7 +172,7 @@ function sync_row(row, ctx, today){
   if (future && ctx.settings.links_in_events){
     out.links_updated = ensure_links(event, row, ctx);
   }
-  if (!prev || prev.t !== actual || prev.n !== fingerprint || prev.x !== text) save_state(row.gcal_id, {t: actual, n: fingerprint, d: row.start.getTime(), x: text});
+  if (!prev || prev.t !== actual || prev.n !== fingerprint || prev.x !== text || prev.gone) save_state(row.gcal_id, {t: actual, n: fingerprint, d: row.start.getTime(), x: text});
   return out;
 }
 
@@ -391,4 +416,26 @@ function prune_state(before){
 
 function digest(s){
   return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s)).replace(/=+$/, '');
+}
+
+// Events deleted in the calendar during the last few days. CalendarApp can still hand out a deleted event,
+// the Calendar API marks it as cancelled.
+function recently_deleted_events(ctx){
+  var out = {};
+  try {
+    var page;
+    do {
+      var res = Calendar.Events.list(ctx.constants['google_calendar_id'], {showDeleted: true, maxResults: 250, pageToken: page,
+        updatedMin: new Date(Date.now() - 3 * 864e5).toISOString()});
+      (res.items || []).forEach(function(e){ if (e.status === 'cancelled') out[event_key(e.id)] = true; });
+      page = res.nextPageToken;
+    } while (page);
+  } catch (err) {
+    Logger.log('Could not list deleted events: ' + err);
+  }
+  return out;
+}
+
+function event_key(id){
+  return String(id).replace(/@google\.com$/, '');
 }

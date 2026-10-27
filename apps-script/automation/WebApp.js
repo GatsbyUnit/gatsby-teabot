@@ -82,7 +82,9 @@ function api_state(token){
         title: is_tentative(row) ? '' : row.title, description: row.description,
         tentative: is_tentative(row), live: is_live(ctx, row.type),
         can_title: duty === 'presenter' && !is_tentative(row),
-        can_zoom: duty === 'presenter' && !is_tentative(row)
+        can_zoom: duty === 'presenter' && !is_tentative(row),
+        cancelled: is_cancelled_title(row.title),
+        can_cancel: duty === 'presenter' && can_cancel(row, ctx)
       });
     };
     if (row.presenter_ids.indexOf(me.id) >= 0) add('presenter');
@@ -117,6 +119,24 @@ function api_swap(token, row_id, duty, to_id){
   var ids = duty === 'tea' ? row.tea_ids : row.presenter_ids;
   if (ids.indexOf(ctx.me.id) < 0) throw new Error('This is not your slot (any more). Please reload the page.');
   return apply_swap(row, duty, ctx.me.id, normalise_id(to_id), ctx);
+}
+
+// Cancelling is a last resort; the page offers it only behind "Swap" and asks for a reason.
+function can_cancel(row, ctx){
+  return PRESENTER_TYPES.indexOf(row.type) >= 0 && is_live(ctx, row.type) && !is_tentative(row) && !is_cancelled_title(row.title) &&
+    row.presenter_ids.length === 1 && row.start.getTime() > Date.now();
+}
+
+function api_cancel(token, row_id, reason){
+  var ctx = page_context(token);
+  var row = to_row(notion_get_page(row_id, ctx.constants));
+  if (row.presenter_ids.indexOf(ctx.me.id) < 0) throw new Error('This is not your talk (any more). Please reload the page.');
+  if (row.presenter_ids.length > 1) throw new Error('You share this slot with someone else. Please ask the organiser.');
+  if (!can_cancel(row, ctx)) throw new Error('This talk can\'t be cancelled here. Please ask the organiser.');
+  reason = String(reason || '').trim().slice(0, 1000);
+  if (reason.length < 10) throw new Error('Please say briefly who you asked and why nobody can take over.');
+  cancel_slot(row, ctx, {source: 'page', by: ctx.me.name, reason: reason});
+  return 'Cancelled. The organiser has been told, and you will be scheduled again soon.';
 }
 
 function api_title(token, row_id, title, description){
