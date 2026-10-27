@@ -27,8 +27,8 @@ copied back. The [handbook](docs/handbook.md) explains each part.
   of `Config.js`, one-off admin functions in `Setup.js`.
 - `site/`: the tea page itself, a static page on GitHub Pages (https://gatsbyunit.github.io/gatsby-teabot/),
   published by `.github/workflows/pages.yml` whenever it changes. It is not served by Apps Script because Apps
-  Script web pages don't open for people signed in to several Google accounts. Its address is public, so it
-  shows nothing without the personal code or the unit key (`PAGE_KEY`) in the link.
+  Script web pages don't open for people signed in to several Google accounts. Its address is public, so without the
+  personal code or the unit key (`PAGE_KEY`) in the link it only offers to email your link to your registered address.
 - `apps-script/page/`: "Gatsby Tea Page", the tea page's back end (web app): `doPost` with thin `api_*` wrappers,
   and a `doGet` that points old links to the new address. It uses the automation as the library `TeaBot`,
   because a web page can call every top-level function of its own project; a test makes sure it exposes

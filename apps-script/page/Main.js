@@ -50,6 +50,7 @@ function api_confirm_email(code){ return TeaBot.api_confirm_email(code); }
 function api_link_people(key){ return TeaBot.api_link_people(key); }
 function api_request_link(key, person_id){ return TeaBot.api_request_link(key, person_id); }
 function api_page_icon(){ return TeaBot.api_page_icon(); }
+function api_request_link_by_email(email){ return TeaBot.api_request_link_by_email(email); }
 function api_finalise(token, rota, email_group){ return TeaBot.api_finalise(token, rota, email_group); }
 function api_plan_slots(token, rota, ranges){ return TeaBot.api_plan_slots(token, rota, ranges); }
 function api_fill_slots(token, rota){ return TeaBot.api_fill_slots(token, rota); }

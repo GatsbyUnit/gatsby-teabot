@@ -300,6 +300,24 @@ function api_page_icon(){
   return get_settings().FAVICON_URL || '';
 }
 
+// The page without the unit key (e.g. linked from the public Notion site): you type your registered address
+// and your link goes there. The answer is the same whether or not the address is registered, so it reveals
+// nobody; the usual rate limits apply.
+const LINK_BY_EMAIL_REPLY = 'If this address is registered, your link is on its way. Check your inbox (and spam). Nothing after a few minutes? Ask the tea tsar.';
+
+function api_request_link_by_email(email){
+  email = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('That does not look like an email address.');
+  var constants = get_global_constants();
+  var people = load_people(constants);
+  var row = identity_rows(constants).rows.filter(function(r){ return r.email && r.email.toLowerCase() === email && people[r.id] && people[r.id].active; })[0];
+  if (row){
+    try { send_personal_link(row.id, 'Your tea page', page_link_blocks); }
+    catch (err) { Logger.log('link by email: ' + err); }
+  }
+  return LINK_BY_EMAIL_REPLY;
+}
+
 // emails the chosen person (only ever to their registered address) a mail built around their personal link;
 // rate-limited, as anyone can ask
 function send_personal_link(person_id, subject, make_blocks){

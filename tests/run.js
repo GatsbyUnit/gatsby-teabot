@@ -219,6 +219,23 @@ t('coffee event deleted: reported, not cancelled', () => { __props = {}; var r =
 t('leave link: personal for one registered recipient, general otherwise', () => { var saved = identity_rows; identity_rows = () => ({rows: [{id: 'b', email: 'Nikolai@x', token: 'tok'}]}); identity_token_cache = null; try { var base = page_url(get_settings()); assert.strictEqual(leave_url('nikolai@x', {}, {}), base + '?t=tok&leave=1'); assert.strictEqual(leave_url('nikolai@x', {cc: 'org@x'}, {}), base + '?leave=1'); assert.strictEqual(leave_url('nikolai@x,lena@x', {}, {}), base + '?leave=1'); assert.strictEqual(leave_url('list@x', {}, {}), base + '?leave=1'); } finally { identity_rows = saved; identity_token_cache = null; } });
 t('tea-page links: the general one carries the unit key, links with a personal code do not', () => { var s = {PAGE_URL: 'https://page', PAGE_KEY: 'unitkey1'}; assert.strictEqual(page_link(s), 'https://page?k=unitkey1'); assert.strictEqual(page_link(s, {leave: 1}), 'https://page?k=unitkey1&leave=1'); assert.strictEqual(personal_link('tok', s), 'https://page?t=tok'); assert.strictEqual(page_link(s, {t: 'tok', leave: 1}), 'https://page?t=tok&leave=1'); assert.strictEqual(page_link(s, {swap: 'c1'}), 'https://page?swap=c1'); assert.strictEqual(page_link({PAGE_URL: 'https://page'}, {leave: 1}), 'https://page?leave=1'); });
 t('general page: no names, links or leaving without the unit key', () => { settings_cache = Object.assign({}, get_settings(), {PAGE_KEY: 'unitkey1'}); try { assert.throws(() => api_link_people(''), /calendar event/); assert.throws(() => api_link_people('wrongkey'), /calendar event/); assert.throws(() => api_request_link('', '0123456789abcdef0123456789abcdef'), /calendar event/); assert.throws(() => api_leave_by_name('wrongkey', '0123456789abcdef0123456789abcdef'), /calendar event/); } finally { settings_cache = null; } });
+t('link by email: sent only to an active registered address, the same answer either way', () => {
+  var m = [], store = {}; var saved = [identity_rows, send_mail, load_people, get_global_constants, CacheService];
+  get_global_constants = () => ({});
+  load_people = () => ({'0123456789abcdef0123456789abcdef': {active: true, name: 'Nikolai Petrov'}, 'fedcba9876543210fedcba9876543210': {active: false, name: 'Lena Weber'}});
+  identity_rows = () => ({rows: [{id: '0123456789abcdef0123456789abcdef', email: 'Nikolai@x.org', token: 'a'.repeat(40)}, {id: 'fedcba9876543210fedcba9876543210', email: 'lena@x.org', token: 'b'.repeat(40)}]});
+  send_mail = function(to){ m.push(to); };
+  CacheService = {getScriptCache: () => ({get: k => store[k] || null, put: (k, v) => { store[k] = v; }, remove: () => {}})};
+  try {
+    var a = api_request_link_by_email(' nikolai@X.org ');
+    assert.strictEqual(api_request_link_by_email('nobody@x.org'), a);
+    assert.strictEqual(api_request_link_by_email('lena@x.org'), a);
+    assert.deepStrictEqual(m, ['Nikolai@x.org']);
+    api_request_link_by_email('nikolai@x.org'); api_request_link_by_email('nikolai@x.org');
+    assert.strictEqual(api_request_link_by_email('nikolai@x.org'), a); assert.strictEqual(m.length, 3);
+    assert.throws(() => api_request_link_by_email('not an email'), /does not look like/);
+  } finally { identity_rows = saved[0]; send_mail = saved[1]; load_people = saved[2]; get_global_constants = saved[3]; CacheService = saved[4]; }
+});
 t('leaving: inactive in Notion, email and code cleared, requests dropped, organiser told about slots', () => {
   __props = {}; var m = [], cleared = [];
   var saved = [identity_rows, upcoming_rows_of, send_mail];

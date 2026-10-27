@@ -504,11 +504,20 @@
     ]);
   }
 
-  // ---- no personal code and no unit key: only the address, which is public ----
+  // ---- no personal code and no unit key (the public address, e.g. from Notion): your link by email ----
   function renderNoKey(){
+    var msg = el('div', {class: 'msg'});
+    var input = el('input', {type: 'email', placeholder: 'you@ucl.ac.uk', autocomplete: 'email'});
+    var btn = el('button', {class: 'primary', text: 'Send me my link'});
+    var send = function(){ call('api_request_link_by_email', [input.value], function(res){ ok(msg, res); }, msg, btn); };
+    btn.addEventListener('click', send);
+    input.addEventListener('keydown', function(e){ if (e.key === 'Enter') send(); });
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Gatsby tea'}));
-    app.appendChild(el('p', {text: 'Please open the tea page from the link in a gatsby.tea calendar event or in one of the tea bot\'s emails.'}));
+    app.appendChild(el('p', {class: 'muted', text: 'Swap your slot, add your talk title and set your away dates on your personal tea page. Enter the email address the tea system knows you by, and we will send you its link.' +
+      (LEAVE ? ' Leaving the tea system is at the bottom of that page.' : '')}));
+    app.appendChild(el('div', {class: 'card'}, [el('label', {text: 'Your email'}), input, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg,
+      el('p', {class: 'muted', style: 'margin:10px 0 0;font-size:13px', text: 'The link is also in every gatsby.tea calendar event and in the tea bot\'s emails.'})]));
   }
 
   // the tab icon is a setting (FAVICON_URL in the constants sheet); without it the tab has none
