@@ -1,0 +1,21 @@
+# Runs the tests on every push and pull request. Deploying stays a manual step (deploy/deploy.py), so no
+# credentials of the bot account are stored on GitHub.
+name: tests
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/London   # same as the Apps Script projects
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Logic tests (Google services stubbed)
+        run: node tests/run.js
+      - name: Scheduler matches the original algorithm
+        run: python3 tests/crosscheck_scheduler.py 1000

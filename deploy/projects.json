@@ -1,0 +1,22 @@
+{
+  "repo_url": "https://github.com/GatsbyUnit/gatsby-teabot",
+  "clasp_user": "teabot",
+  "projects": [
+    {
+      "name": "Gatsby Tea Automation",
+      "dir": "apps-script/automation",
+      "script_id": "196XK7FwFXSPW51FevvghFjH-4LRs5836xclNVnMJ2s3AhGRdWwagH-2w"
+    },
+    {
+      "name": "Gatsby Tea Page",
+      "dir": "apps-script/page",
+      "script_id": "1f1XkELpaDPJEMS8_hxGVSZZe8y2rv_P9sY-Izcoce8oOoxT-ksRT66M0",
+      "webapp_deployment_id": "AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx"
+    },
+    {
+      "name": "Gatsby Tea Cron Jobs",
+      "dir": "apps-script/cron-jobs",
+      "script_id": "1ez23ZLLkE7dObLy61WZvqqB3-ePBcvLHQfOLx2W_3Z2ifoK065Svo_kl"
+    }
+  ]
+}

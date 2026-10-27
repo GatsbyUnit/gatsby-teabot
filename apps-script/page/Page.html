@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --text: #1f2328; --muted: #656d76; --line: #d8dee4;
+    --accent: #1a73e8; --accent-text: #ffffff; --ok: #1a7f37; --err: #cf222e; --chip: #eef2f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161a1f; --card: #1f252c; --text: #e6edf3; --muted: #9aa5b1; --line: #313a44;
+      --accent: #5b9cf5; --accent-text: #0d1117; --ok: #3fb950; --err: #f85149; --chip: #2a323b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 0 0 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 1px 10px; font-size: 13px; }
+  .when { font-weight: 600; }
+  .title { margin-top: 4px; }
+  button, .btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 100%; }
+  textarea { min-height: 90px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 3px; }
+  .panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .msg { margin-top: 8px; font-size: 14px; }
+  .msg.ok { color: var(--ok); }
+  .msg.err { color: var(--err); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hidden { display: none; }
+  a { color: var(--accent); }
+  footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Loading…</p></main>
+
+<script>
+  var TOKEN = <?!= JSON.stringify(token) ?>;
+  var CONFIRM = <?!= JSON.stringify(confirm) ?>;
+  var app = document.getElementById('app');
+
+  function el(tag, attrs, children){
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function(k){
+      if (k === 'class') e.className = attrs[k];
+      else if (k === 'text') e.textContent = attrs[k];
+      else if (k.indexOf('on') === 0) e.addEventListener(k.slice(2), attrs[k]);
+      else e.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function(c){ if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function call(fn, args, done, msgEl, button){
+    if (button) button.disabled = true;
+    if (msgEl){ msgEl.className = 'msg muted'; msgEl.textContent = 'Working…'; }
+    var runner = google.script.run
+      .withSuccessHandler(function(res){ if (button) button.disabled = false; done(res); })
+      .withFailureHandler(function(err){
+        if (button) button.disabled = false;
+        var text = (err && err.message ? err.message : String(err)).replace(/^Exception: /, '').replace(/^Error: /, '');
+        if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = text; }
+        else { app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: text})); }
+      });
+    runner[fn].apply(runner, args);
+  }
+  function ok(msgEl, text){ msgEl.className = 'msg ok'; msgEl.textContent = text; }
+
+  // ---- no link: ask for the email ----
+  function renderLanding(){
+    var msg = el('div', {class: 'msg'});
+    var input = el('input', {type: 'email', placeholder: 'you@ucl.ac.uk', autocomplete: 'email'});
+    var btn = el('button', {class: 'primary', text: 'Send me my link', onclick: function(){
+      call('api_request_link', [input.value], function(res){ ok(msg, res); }, msg, btn);
+    }});
+    app.innerHTML = '';
+    app.appendChild(el('h1', {text: 'Gatsby tea'}));
+    app.appendChild(el('p', {class: 'muted', text: 'Swap your slot, add your talk title and set your away dates. Enter the email address you are registered with, and we will send you your personal link.'}));
+    app.appendChild(el('div', {class: 'card'}, [el('label', {text: 'Your email'}), input, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg]));
+  }
+
+  // ---- email change confirmation ----
+  function renderConfirm(){
+    call('api_confirm_email', [CONFIRM], function(res){
+      app.innerHTML = '';
+      app.appendChild(el('h1', {text: 'Gatsby tea'}));
+      app.appendChild(el('p', {class: 'msg ok', text: res}));
+    });
+  }
+
+  // ---- personal page ----
+  function load(){ call('api_state', [TOKEN], render); }
+
+  var ZOOM_ADMIN = 'the unit admin';
+  function render(s){
+    ZOOM_ADMIN = s.zoom_admin || ZOOM_ADMIN;
+    app.innerHTML = '';
+    app.appendChild(el('h1', {text: 'Hi ' + s.name.split(' ')[0]}));
+    app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update Notion and the shared calendar straight away.'}));
+
+    app.appendChild(el('h2', {text: 'Your upcoming duties'}));
+    if (!s.duties.length) app.appendChild(el('p', {class: 'muted', text: 'Nothing scheduled for you at the moment.'}));
+    s.duties.forEach(function(d){ app.appendChild(dutyCard(d, s.people)); });
+
+    app.appendChild(el('h2', {text: 'Away dates'}));
+    app.appendChild(awayCard(s));
+
+    if (s.seminars && s.seminars.length){
+      app.appendChild(el('h2', {text: 'External seminars'}));
+      app.appendChild(seminarsCard(s));
+    }
+
+    if (s.organiser.length){
+      app.appendChild(el('h2', {text: 'Organiser'}));
+      s.organiser.forEach(function(o){ app.appendChild(organiserCard(o)); });
+    }
+
+    app.appendChild(el('h2', {text: 'Your email'}));
+    app.appendChild(emailCard(s));
+
+    app.appendChild(el('footer', {}, [
+      'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas on Notion'}), '. Keep this page\'s link to yourself: anyone with it can act as you here.'
+    ]));
+  }
+
+  function dutyCard(d, people){
+    var msg = el('div', {class: 'msg'});
+    var panel = el('div', {class: 'panel hidden'});
+    var head = el('div', {class: 'row'}, [
+      el('span', {class: 'when', text: d.when}),
+      el('span', {class: 'chip', text: d.type}),
+      el('span', {class: 'chip', text: d.duty_label}),
+      d.tentative ? el('span', {class: 'chip', text: 'tentative'}) : null
+    ]);
+    var card = el('div', {class: 'card'}, [head]);
+    if (d.duty === 'presenter') card.appendChild(el('div', {class: 'title' + (d.title ? '' : ' muted'), text: d.title || 'No title yet'}));
+    var actions = el('div', {class: 'row', style: 'margin-top:10px'});
+    if (d.tentative){
+      card.appendChild(el('p', {class: 'muted', style: 'margin:8px 0 0', text: 'Tentative: you can swap or add a title once the organiser confirms it.'}));
+    } else {
+      if (d.live) actions.appendChild(el('button', {text: 'Swap', onclick: function(){ showSwap(panel, d, people, msg); }}));
+      if (d.can_title) actions.appendChild(el('button', {text: d.title ? 'Edit title' : 'Add title', onclick: function(){ showTitle(panel, d, msg); }}));
+      if (d.can_zoom) actions.appendChild(el('button', {text: 'Request Zoom', onclick: function(){ showZoom(panel, d.row_id, msg); }}));
+      card.appendChild(actions);
+    }
+    card.appendChild(panel);
+    card.appendChild(msg);
+    return card;
+  }
+
+  function showSwap(panel, d, people, msg){
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    var sel = el('select', {}, [el('option', {value: '', text: 'Choose who takes it over…'})].concat(people.map(function(p){ return el('option', {value: p.id, text: p.name}); })));
+    var btn = el('button', {class: 'primary', text: 'Swap'});
+    btn.addEventListener('click', function(){
+      if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please choose a person.'; return; }
+      call('api_swap', [TOKEN, d.row_id, d.duty, sel.value], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, btn);
+    });
+    panel.appendChild(el('p', {class: 'muted', text: 'Agree it with the other person first. You will both get an email.'}));
+    panel.appendChild(sel);
+    panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
+  }
+
+  function showTitle(panel, d, msg){
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    var t = el('input', {type: 'text', value: d.title || '', placeholder: 'Talk title'});
+    var desc = el('textarea', {placeholder: 'Description, paper link, …'});
+    desc.value = d.description || '';
+    var btn = el('button', {class: 'primary', text: 'Save'});
+    btn.addEventListener('click', function(){
+      call('api_title', [TOKEN, d.row_id, t.value, desc.value], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, btn);
+    });
+    panel.appendChild(el('label', {text: 'Title'}));
+    panel.appendChild(t);
+    panel.appendChild(el('label', {text: 'Description (for journal clubs, include the paper link)'}));
+    panel.appendChild(desc);
+    panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
+  }
+
+  function showZoom(panel, row_id, msg){
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    var reason = el('input', {type: 'text', placeholder: 'Optional, e.g. speaker joins remotely'});
+    var btn = el('button', {class: 'primary', text: 'Send request'});
+    btn.addEventListener('click', function(){ call('api_request_zoom', [TOKEN, row_id, reason.value], function(res){ ok(msg, res); panel.classList.add('hidden'); }, msg, btn); });
+    panel.appendChild(el('p', {class: 'muted', text: 'Zoom is set up on request. This emails ' + ZOOM_ADMIN + ' with the details; replies come straight to you.'}));
+    panel.appendChild(el('label', {text: 'Reason'}));
+    panel.appendChild(reason);
+    panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
+  }
+
+  function seminarsCard(s){
+    var card = el('div', {class: 'card'});
+    card.appendChild(el('p', {class: 'muted', style: 'margin:0 0 8px', text: 'Hosting an external speaker who needs Zoom? Ask ' + s.zoom_admin + ' here.'}));
+    s.seminars.forEach(function(x){
+      var msg = el('div', {class: 'msg'});
+      var panel = el('div', {class: 'panel hidden'});
+      card.appendChild(el('div', {style: 'margin-bottom:8px'}, [
+        el('div', {class: 'row', style: 'justify-content:space-between'}, [
+          el('span', {}, [el('span', {class: 'when', text: x.when}), x.title ? el('span', {class: 'muted', text: ' · ' + x.title}) : null]),
+          el('button', {text: 'Request Zoom', onclick: function(){ showZoom(panel, x.row_id, msg); }})
+        ]), panel, msg
+      ]));
+    });
+    return card;
+  }
+
+  function calendarPanel(s, msg){
+    var input = el('input', {type: 'text', placeholder: 'Calendar ID, e.g. abc123@group.calendar.google.com', value: s.away_calendar || ''});
+    var save = el('button', {class: 'primary', text: s.away_calendar ? 'Change' : 'Connect'});
+    save.addEventListener('click', function(){ call('api_set_away_calendar', [TOKEN, input.value], function(res){ ok(msg, res); setTimeout(load, 1200); }, msg, save); });
+    var off = el('button', {text: 'Disconnect'});
+    off.addEventListener('click', function(){ call('api_set_away_calendar', [TOKEN, ''], function(res){ ok(msg, res); setTimeout(load, 1200); }, msg, off); });
+    var help = el('div', {class: 'hidden muted', style: 'font-size:14px;margin-top:6px'}, [
+      el('div', {text: '1. In Google Calendar, pick (or create) a calendar that only holds your time away, e.g. "Away".'}),
+      el('div', {text: '2. Open its settings → "Share with specific people" → add gatsby.teabot@gmail.com with "See only free/busy (hide details)".'}),
+      el('div', {text: '3. Copy the "Calendar ID" from the "Integrate calendar" section of the same settings page and paste it here.'}),
+      el('div', {text: 'Every busy day in that calendar then counts as an away day. The bot only sees busy / free, never titles or details.'})
+    ]);
+    var how = el('a', {href: '#', text: 'How?'});
+    how.addEventListener('click', function(ev){ ev.preventDefault(); help.classList.toggle('hidden'); });
+    return el('div', {class: 'panel'}, [
+      el('div', {class: 'when', style: 'font-size:14px', text: s.away_calendar ? 'Connected to a calendar' : 'Optional: use one of your Google Calendars'}),
+      el('p', {class: 'muted', style: 'margin:2px 0 6px;font-size:14px'}, ['Busy days in a calendar you choose count as away. ', how]),
+      help,
+      input,
+      el('div', {class: 'row', style: 'margin-top:8px'}, s.away_calendar ? [save, off] : [save])
+    ]);
+  }
+
+  function awayCard(s){
+    var msg = el('div', {class: 'msg'});
+    var card = el('div', {class: 'card'});
+    if (!s.away.length) card.appendChild(el('p', {class: 'muted', text: 'No upcoming away dates.'}));
+    s.away.forEach(function(a){
+      var right = null;
+      if (!a.calendar){
+        right = el('button', {text: 'Remove'});
+        right.addEventListener('click', function(){ call('api_remove_away', [TOKEN, a.row], function(res){ ok(msg, res); setTimeout(load, 800); }, msg, right); });
+      }
+      card.appendChild(el('div', {class: 'row', style: 'justify-content:space-between;margin-bottom:6px'}, [
+        el('span', {}, [el('span', {class: 'when', text: a.label}), a.reason ? el('span', {class: 'muted', text: ' · ' + a.reason}) : null]), right
+      ]));
+    });
+    if (!s.has_away_sheet){
+      card.appendChild(el('p', {class: 'muted', text: 'You do not have an away-dates sheet yet, so dates can only come from a calendar (below). Ask the tea tsar for a sheet.'}));
+      card.appendChild(calendarPanel(s, msg));
+      card.appendChild(msg);
+      return card;
+    }
+    var from = el('input', {type: 'date'});
+    var to = el('input', {type: 'date'});
+    var reason = el('input', {type: 'text', placeholder: 'Optional, e.g. conference'});
+    var add = el('button', {class: 'primary', text: 'Add away dates'});
+    add.addEventListener('click', function(){ call('api_add_away', [TOKEN, from.value, to.value, reason.value], function(res){ ok(msg, res); setTimeout(load, 800); }, msg, add); });
+    card.appendChild(el('div', {class: 'panel'}, [
+      el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'From'}), from]), el('div', {}, [el('label', {text: 'To'}), to])]),
+      el('label', {text: 'Reason'}), reason,
+      el('div', {class: 'row', style: 'margin-top:8px'}, [add])
+    ]));
+    card.appendChild(calendarPanel(s, msg));
+    card.appendChild(msg);
+    return card;
+  }
+
+  function organiserCard(o){
+    var msg = el('div', {class: 'msg'});
+    var talks = o.rota === 'talks';
+    var from = el('input', {type: 'date', value: o.from});
+    var to = el('input', {type: 'date', value: o.to});
+    var tfrom = el('input', {type: 'date', value: o.tea_from});
+    var tto = el('input', {type: 'date', value: o.tea_to});
+    var create = el('button', {text: '1. Create empty slots'});
+    create.addEventListener('click', function(){
+      var ranges = talks ? {research_from: from.value, research_to: to.value, tea_from: tfrom.value, tea_to: tto.value} : {from: from.value, to: to.value};
+      call('api_create_slots', [TOKEN, o.rota, ranges], function(res){ ok(msg, res); setTimeout(load, 2500); }, msg, create);
+    });
+    var fill = el('button', {text: '2. Fill ' + o.empty + ' empty slot' + (o.empty === 1 ? '' : 's') + ' with people'});
+    if (!o.empty) fill.disabled = true;
+    fill.addEventListener('click', function(){
+      call('api_fill_slots', [TOKEN, o.rota], function(res){
+        msg.className = 'msg ok'; msg.innerHTML = '';
+        msg.appendChild(el('div', {text: 'Filled ' + res.filled.length + ' slots. Check them in Notion and change anyone you like, then finalise.'}));
+        var list = el('ul', {style: 'margin:6px 0 0;padding-left:18px'});
+        res.filled.concat(res.unfilled).forEach(function(l){ list.appendChild(el('li', {text: l})); });
+        msg.appendChild(list);
+        res.warnings.forEach(function(w){ msg.appendChild(el('div', {class: 'muted', text: w})); });
+      }, msg, fill);
+      msg.textContent = 'Reading everyone\'s away dates and filling the slots. This can take a minute or two…';
+    });
+    var box = el('input', {type: 'checkbox', style: 'width:auto'});
+    var fin = el('button', {class: 'primary', text: '3. Finalise ' + o.tentative + ' tentative slot' + (o.tentative === 1 ? '' : 's')});
+    if (!o.tentative) fin.disabled = true;
+    fin.addEventListener('click', function(){
+      call('api_finalise', [TOKEN, o.rota, box.checked], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, fin);
+    });
+    var dates = talks
+      ? [el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'Research talks from'}), from]), el('div', {}, [el('label', {text: 'to'}), to])]),
+         el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'Tea talks from'}), tfrom]), el('div', {}, [el('label', {text: 'to'}), tto])])]
+      : [el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'From'}), from]), el('div', {}, [el('label', {text: 'To'}), to])])];
+    return el('div', {class: 'card'}, [
+      el('div', {class: 'when', text: o.label}),
+      el('p', {class: 'muted', style: 'margin:4px 0 0', text: 'Plan the next slots: create them, delete the ones you do not need in Notion, fill them with people (fairly, respecting away dates), check, then finalise.'})
+    ].concat(dates).concat([
+      el('div', {class: 'row', style: 'margin-top:10px'}, [create, fill]),
+      el('label', {style: 'display:flex;gap:8px;align-items:center;color:inherit;font-size:14px;margin-top:12px'}, [box, 'When finalising, email the group that the schedule was updated']),
+      el('div', {class: 'row', style: 'margin-top:8px'}, [fin]),
+      msg
+    ]));
+  }
+
+  function emailCard(s){
+    var msg = el('div', {class: 'msg'});
+    var input = el('input', {type: 'email', placeholder: 'new address'});
+    var btn = el('button', {text: 'Change'});
+    btn.addEventListener('click', function(){ call('api_change_email', [TOKEN, input.value], function(res){ ok(msg, res); }, msg, btn); });
+    return el('div', {class: 'card'}, [
+      el('p', {}, ['Reminders and swap emails go to ', el('strong', {text: s.email}), '.']),
+      el('div', {class: 'row'}, [el('div', {style: 'flex:1;min-width:200px'}, [input]), btn]),
+      msg
+    ]);
+  }
+
+  if (CONFIRM) renderConfirm();
+  else if (TOKEN) load();
+  else renderLanding();
+</script>
+</body>
+</html>
