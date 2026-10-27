@@ -222,24 +222,49 @@ function api_confirm_email(code){
   return 'Done: the tea system now uses ' + req.email + '. Your personal link stays the same.';
 }
 
-function api_request_link(email){
-  email = String(email || '').trim().toLowerCase();
-  var generic = 'If this address is registered, a link is on its way. Check your inbox (and spam).';
-  if (!email) return generic;
-  var cache = CacheService.getScriptCache();
-  var key = 'linkreq:' + email;
-  var count = Number(cache.get(key) || 0);
-  if (count >= 3) return generic;
-  cache.put(key, String(count + 1), 6 * 3600);
+// The page without a personal link lists the registered people by name; the link goes only to the chosen
+// person's registered address, which the page shows half hidden. Limited to 3 links per person per 6 hours
+// and 40 per hour overall, so nobody can flood inboxes.
+function api_link_people(){
   var constants = get_global_constants();
-  var row = identity_rows(constants).rows.filter(function(r){ return r.email.toLowerCase() === email; })[0];
-  if (!row) return generic;
+  var people = load_people(constants);
+  return identity_rows(constants).rows
+    .filter(function(r){ return r.id && r.email && people[r.id] && people[r.id].active; })
+    .map(function(r){ return {id: r.id, name: people[r.id].name || r.name}; })
+    .sort(function(a, b){ return a.name.localeCompare(b.name); });
+}
+
+function api_request_link(person_id){
+  person_id = normalise_id(String(person_id || '').trim());
+  if (!/^[0-9a-f]{32}$/.test(person_id)) throw new Error('Please pick your name.');
+  var cache = CacheService.getScriptCache();
+  var total = Number(cache.get('linkreq:all') || 0);
+  if (total >= 40) throw new Error('Too many links were requested in the last hour. Please try again later.');
+  var key = 'linkreq:' + person_id;
+  var count = Number(cache.get(key) || 0);
+  if (count >= 3) throw new Error('Your link was already sent several times today. Please check your inbox (and spam).');
+  var constants = get_global_constants();
+  var find = function(){ return identity_rows(constants).rows.filter(function(r){ return r.id === person_id; })[0]; };
+  var row = find();
+  if (!row || !row.email) throw new Error('There is no registered email for this name. Please ask the tea tsar.');
   if (!row.token){
     ensure_tokens(constants);
-    row = identity_rows(constants).rows.filter(function(r){ return r.email.toLowerCase() === email; })[0];
+    row = find();
   }
+  cache.put(key, String(count + 1), 6 * 3600);
+  cache.put('linkreq:all', String(total + 1), 3600);
   send_mail(row.email, 'Your tea page', page_link_blocks(personal_link(row.token, get_settings())), constants);
-  return generic;
+  return 'Sent to ' + mask_email(row.email) + '. Check your inbox (and spam).';
+}
+
+// "jan.bauer@ucl.ac.uk" -> "ja•••r@u•••.ac.uk"
+function mask_email(email){
+  var at = String(email).lastIndexOf('@');
+  if (at < 1) return '•••';
+  var local = email.slice(0, at), domain = email.slice(at + 1);
+  var shown = local.length <= 2 ? local.charAt(0) + '•••' : local.slice(0, 2) + '•••' + (local.length > 4 ? local.slice(-1) : '');
+  var dot = domain.indexOf('.');
+  return shown + '@' + domain.charAt(0) + '•••' + (dot > 0 ? domain.slice(dot) : '');
 }
 
 function api_finalise(token, rota, email_group){

@@ -82,14 +82,25 @@
   // ---- no link: ask for the email ----
   function renderLanding(){
     var msg = el('div', {class: 'msg'});
-    var input = el('input', {type: 'email', placeholder: 'you@ucl.ac.uk', autocomplete: 'email'});
-    var btn = el('button', {class: 'primary', text: 'Send me my link', onclick: function(){
-      call('api_request_link', [input.value], function(res){ ok(msg, res); }, msg, btn);
-    }});
+    var sel = el('select', {}, [el('option', {value: '', text: 'Loading names…'})]);
+    var btn = el('button', {class: 'primary', text: 'Send me my link'});
+    btn.disabled = true;
+    btn.addEventListener('click', function(){
+      if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please pick your name.'; return; }
+      call('api_request_link', [sel.value], function(res){ ok(msg, res); }, msg, btn);
+    });
+    call('api_link_people', [], function(people){
+      sel.innerHTML = '';
+      sel.appendChild(el('option', {value: '', text: 'Pick your name…'}));
+      people.forEach(function(p){ sel.appendChild(el('option', {value: p.id, text: p.name})); });
+      msg.className = 'msg'; msg.textContent = '';
+      btn.disabled = false;
+    }, msg);
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Gatsby tea'}));
-    app.appendChild(el('p', {class: 'muted', text: 'Swap your slot, add your talk title and set your away dates. Enter the email address you are registered with, and we will send you your personal link.'}));
-    app.appendChild(el('div', {class: 'card'}, [el('label', {text: 'Your email'}), input, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg]));
+    app.appendChild(el('p', {class: 'muted', text: 'Swap your slot, add your talk title and set your away dates. Pick your name, and we will email your personal link to the address you are registered with.'}));
+    app.appendChild(el('div', {class: 'card'}, [el('label', {text: 'Your name'}), sel, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg,
+      el('p', {class: 'muted', style: 'margin:10px 0 0;font-size:13px', text: 'Not in the list, or registered with an old address? Ask the tea tsar.'})]));
   }
 
   // ---- email change confirmation ----

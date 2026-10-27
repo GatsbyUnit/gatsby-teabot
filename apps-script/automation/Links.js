@@ -19,7 +19,7 @@ function strip_links(desc){
   return base.replace(/(\s|<br\s*\/?>)+$/i, '');
 }
 
-// With the personal page deployed, one link does it all (the page asks for your email and sends you
+// With the personal page deployed, one link does it all (the page lets you pick your name and sends you
 // your personal link); before that, prefilled links to the old forms.
 function links_footer(row, ctx, html){
   var page = ctx.settings.PAGE_URL;

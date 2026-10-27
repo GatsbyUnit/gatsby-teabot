@@ -1,7 +1,7 @@
 // The personal tea page (web app, runs as the bot, open to anyone with the link).
 //   ?t=<token>       your page: upcoming duties (swap, edit title), away dates, email, organiser tools
 //   ?confirm=<code>  confirms an email change
-//   (nothing)        asks for your registered email and sends you your personal link
+//   (nothing)        lists the registered people by name and emails the chosen one their personal link
 //
 // SECURITY: a web page can call every top-level function of this project through google.script.run, so this
 // project must contain only doGet and these thin wrappers. All logic lives in "Gatsby Tea Automation", used
@@ -33,7 +33,8 @@ function api_add_away(token, from, to, reason){ return TeaBot.api_add_away(token
 function api_remove_away(token, row_number){ return TeaBot.api_remove_away(token, row_number); }
 function api_change_email(token, new_email){ return TeaBot.api_change_email(token, new_email); }
 function api_confirm_email(code){ return TeaBot.api_confirm_email(code); }
-function api_request_link(email){ return TeaBot.api_request_link(email); }
+function api_link_people(){ return TeaBot.api_link_people(); }
+function api_request_link(person_id){ return TeaBot.api_request_link(person_id); }
 function api_finalise(token, rota, email_group){ return TeaBot.api_finalise(token, rota, email_group); }
 function api_create_slots(token, rota, ranges){ return TeaBot.api_create_slots(token, rota, ranges); }
 function api_fill_slots(token, rota){ return TeaBot.api_fill_slots(token, rota); }
