@@ -12,11 +12,3 @@ function run_once_invite_test(){
   Logger.log(JSON.stringify(res) + ' state: ' + JSON.stringify(load_invite_state(row.gcal_id)));
 }
 
-// One-off check of "Who is on which rota" against the live data: counts only.
-function run_once_overview_check(){
-  var r = rota_overview(make_context(get_global_constants(), get_settings()));
-  var counts = {};
-  r.columns.forEach(function(c){ counts[c.label] = r.people.filter(function(p){ return p.on[c.key]; }).length; });
-  Logger.log('active ' + r.people.length + ', inactive ' + r.inactive + ', without email ' + r.people.filter(function(p){ return !p.email; }).length +
-             ', with upcoming slots ' + r.people.filter(function(p){ return p.upcoming; }).length + ', per rota ' + JSON.stringify(counts));
-}
