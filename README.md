@@ -10,7 +10,8 @@ What to read where (each topic lives in one place only):
 - **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
   yearly jobs, handing over.
 - **Whoever maintains the code:** this file.
-- **Ideas for later:** [docs/next-steps.md](docs/next-steps.md): how one might move off Notion.
+- **Next steps:** [docs/next-steps.md](docs/next-steps.md): before the repo goes public, what is already public
+  (personal data on the Notion site, tea-page links), and how one might move off Notion.
 
 ## Layout
 - `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ Notion sync, scheduling and
