@@ -127,6 +127,10 @@ function notion_fingerprint(row){
   return JSON.stringify([row.presenter_ids.slice().sort(), row.tea_ids.slice().sort(), row.guest, row.csnjc]);
 }
 
+function notion_text_fingerprint(row){
+  return JSON.stringify([is_tentative(row) ? '' : row.title || '', row.description || '']);
+}
+
 function start_of_today(){
   var s = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd').split('-');
   return new Date(+s[0], +s[1] - 1, +s[2]);

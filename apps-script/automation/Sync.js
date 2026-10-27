@@ -7,6 +7,8 @@
 //                                   are recorded in Notion; an unknown presenter in a journal club is a
 //                                   guest speaker; anything unclear goes to the tea tsar
 //   - both changed and disagree  -> ask the organiser
+// A talk title or description edited in Notion rewrites the event description (future slots, and only
+// when the Notion text changed since last time, so text typed into the calendar is otherwise left alone).
 // Confirmed future slots without an event get one (same title / description as the finalizing scripts).
 // The first run for a rota only takes stock: nothing is changed and nobody is emailed; what it found
 // is in the log. Rotas outside LIVE_TYPES (or everything while DRY_RUN is on) are only reported.
@@ -135,10 +137,17 @@ function sync_row(row, ctx, today){
     actual = res.actual_after;
     fingerprint = res.fingerprint_after;
   }
+  var text = notion_text_fingerprint(row);
+  if (future && prev && prev.x !== undefined && prev.x !== text){
+    var description = event_description(row, ctx);
+    if (strip_links(event.getDescription() || '') !== description){
+      out.text_updated = act(ctx, row, 'text_from_notion', 'title / description edited in Notion', function(){ event.setDescription(description); });
+    }
+  }
   if (future && ctx.settings.links_in_events){
     out.links_updated = ensure_links(event, row, ctx);
   }
-  if (!prev || prev.t !== actual || prev.n !== fingerprint) save_state(row.gcal_id, {t: actual, n: fingerprint, d: row.start.getTime()});
+  if (!prev || prev.t !== actual || prev.n !== fingerprint || prev.x !== text) save_state(row.gcal_id, {t: actual, n: fingerprint, d: row.start.getTime(), x: text});
   return out;
 }
 

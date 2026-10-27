@@ -6,14 +6,14 @@ repeating it. How the code is deployed is in the [README](../README.md).
 
 ## How it fits together
 - **Notion** (Gatsby Rotas → Schedule, People) is the source of truth: who presents / does tea when.
-- **The gatsby.tea calendar** is generated from Notion. Edits made by hand to an event's people are copied back into Notion every hour, so the rota stays fair. Relabelled ("UPGRADE TALK: …") and cancelled events are left alone.
+- **The gatsby.tea calendar** is generated from Notion. Edits made by hand to an event's people are copied back into Notion every hour, so the rota stays fair. Relabelled ("UPGRADE TALK: …") and cancelled events are left alone. A talk title or description edited in Notion is copied into the event description too (text typed straight into the calendar is kept until the Notion text changes).
 - **The personal tea page** is where members swap slots, add titles, set away dates and request Zoom; you schedule from it too. Its link is at the end of every calendar event, and reminder emails include each person's own link. Page: https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec (without a personal link it asks for your email and sends you yours).
 - **Settings** are in the constants sheet: first tab = emails and IDs (the old scripts read it too); tab **Automation** = the bot's switches; tab **Automation reminders** = dated reminders for organisers.
 - **Registered emails, tea-page tokens and away calendars** are in the identity sheet (columns C, D, E); away dates in each person's away-date sheet, linked from their Notion page.
 
 ## Everyday
 - **Someone can't do their slot:** they swap it on their tea page. If they changed the calendar event or Notion by hand instead, that works too; the bot copies it across within the hour.
-- **Guest speaker (TNJC / MLJC):** put their name in the event title ("TNJC: Jane Doe") or in Notion's "Guest speaker" field. The bumped presenter keeps their turn.
+- **Guest speaker (TNJC / MLJC):** put their name in the event title ("TNJC: Jane Doe") or in Notion's "Guest speaker" field. The bumped presenter keeps their turn. To show who hosts them, add "Host: <name>" to the slot's Description in Notion.
 - **Zoom requests** from the tea page go to the unit admin in row 28 of the constants sheet, with the requester as reply-to.
 - **Pause the bot:** set `DRY_RUN` to `TRUE` in the Automation tab. Nothing else is needed.
 - **Something odd:** the bot emails the rota organiser (or the tea tsar, if it can't tell who a name refers to). Errors in the bot itself go to the TNJC organiser with the tea tsar in cc. Everything it does is in the "Gatsby Tea Automation log" sheet in gatsby.teabot's Drive, with open calendar/Notion differences on its Mismatches tab.
