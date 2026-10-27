@@ -6,7 +6,7 @@ coffee cleaning and external seminars. It runs as Google Apps Script under the s
 
 What to read where (each topic lives in one place only):
 - **Unit members:** the Gatsby Rotas pages on Notion (gcnu.notion.site): rules, guides, and how to swap, add a
-  title, set away dates or request Zoom.
+  title or set away dates.
 - **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
   yearly jobs, handing over.
 - **New organiser or tea tsar:** the handover guide at the end of the [handbook](docs/handbook.md#handing-over-a-guide-for-new-organisers-and-tea-tsars).

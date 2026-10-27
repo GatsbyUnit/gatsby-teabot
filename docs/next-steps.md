@@ -80,7 +80,7 @@ Most code works with row objects, not Notion pages, so the change is fairly cont
 - `automation/Notion.js` becomes a sheet store with the same operations: query slots, get one, patch one,
   create one, load people. `to_row()` in `Schedule.js` and `load_people()` in `People.js` are the only places
   that read Notion's property format.
-- Call sites of `notion_*`: `Schedule.js` (queries), `WebApp.js` (page state, swaps, titles, Zoom), `Events.js`
+- Call sites of `notion_*`: `Schedule.js` (queries), `WebApp.js` (page state, swaps, titles), `Events.js`
   (finalise, swaps), `Scheduler.js` (create and fill slots), `Sync.js` (schema check, copying hand edits back),
   `Reminders.js`, `Setup.js` (adds the Guest speaker property) and `Backup.js`.
 - Notion's filtered queries become in-memory filters. The data is small (about 5,500 schedule rows in 2026);

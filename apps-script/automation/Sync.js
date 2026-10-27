@@ -13,7 +13,8 @@
 // A talk title or description edited in Notion rewrites the event description (future slots, and only
 // when the Notion text changed since last time, so text typed into the calendar is otherwise left alone).
 // Confirmed future slots without an event get one (same title / description as the finalizing scripts).
-// For the rotas in INVITE_TYPES the people on duty are the event's guests (see Invites.js).
+// For the rotas in INVITE_TYPES the people on duty are the event's guests (see Invites.js). Upcoming talks
+// without a location get the unit's Zoom link as their location.
 // The first run for a rota only takes stock: nothing is changed and nobody is emailed; what it found
 // is in the log. Rotas outside LIVE_TYPES (or everything while DRY_RUN is on) are only reported.
 
@@ -176,6 +177,7 @@ function sync_row(row, ctx, today){
   if (future && ctx.settings.links_in_events){
     out.links_updated = ensure_links(event, row, ctx);
   }
+  if (future && is_live(ctx, row.type) && !ctx.baseline) out.zoom_added = ensure_zoom_location(event, row, ctx);
   var guests = future && ctx.attendees && invites_on(ctx, row.type) ? ctx.attendees[event_key(row.gcal_id)] : null;
   if (guests){
     try { out.invites = sync_invites(row, ctx, guests); }

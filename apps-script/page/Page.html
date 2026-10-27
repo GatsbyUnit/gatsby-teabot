@@ -173,12 +173,13 @@
   }
 
   // ---- leaving the tea system (link at the end of every bot email); always takes a click here ----
-  var LEAVE_TEXT = 'This is only about the Gatsby tea system: the rotas for research and tea talks, TNJC, MLJC, tea and coffee duty, and the tea bot\'s emails. Leaving does not take you off Gatsby\'s mailing lists, so group announcements still reach you.';
+  var LEAVE_TEXT = 'For people who are no longer members of the Unit. It is only about the Gatsby tea system: the rotas for research and tea talks, TNJC, MLJC, tea and coffee duty, and the tea bot\'s emails. Leaving does not take you off Gatsby\'s mailing lists.';
   var LEAVE_AFTER = 'Afterwards you will not be scheduled again and the bot will not email you any more; your Notion entry stays, marked inactive. To come back, just ask the tea tsar.';
 
   function renderLeave(){
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Leave the Gatsby tea system?'}));
+    app.appendChild(el('p', {class: 'muted', text: '(No longer a member of the Unit)'}));
     var msg = el('div', {class: 'msg'});
     app.appendChild(msg);
     call('api_leave_info', [TOKEN], function(info){
@@ -194,7 +195,7 @@
         card.appendChild(el('div', {class: 'warn', style: 'margin:10px 0'}, [
           el('p', {style: 'margin:0 0 4px', text: 'You still have ' + (info.slots.length === 1 ? 'this slot' : 'these slots') + ':'}),
           el('ul', {style: 'margin:0 0 6px;padding-left:18px'}, info.slots.map(function(x){ return el('li', {text: x}); })),
-          el('p', {style: 'margin:0', text: 'Leaving does not hand them over. Please swap them on your tea page first; otherwise the organiser has to find someone.'})
+          el('p', {style: 'margin:0', text: 'Leaving does not hand them over. Please swap them on your tea page first; otherwise the tea tsar has to find someone.'})
         ]));
       }
       card.appendChild(el('div', {class: 'row', style: 'margin-top:12px'}, [go, stay]));
@@ -208,11 +209,11 @@
   function renderLeaveLanding(){
     var msg = el('div', {class: 'msg'});
     var sel = el('select', {}, [el('option', {value: '', text: 'Loading names…'})]);
-    var btn = el('button', {class: 'primary', text: 'Email me a link to confirm'});
+    var btn = el('button', {class: 'danger', text: 'Take me out of the tea system'});
     btn.disabled = true;
     btn.addEventListener('click', function(){
       if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please pick your name.'; return; }
-      call('api_request_leave_link', [sel.value], function(res){ ok(msg, res); }, msg, btn);
+      call('api_leave_by_name', [sel.value], function(res){ btn.disabled = true; sel.disabled = true; ok(msg, res); }, msg, btn);
     });
     call('api_link_people', [], function(people){
       sel.innerHTML = '';
@@ -223,10 +224,11 @@
     }, msg);
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Leave the Gatsby tea system'}));
+    app.appendChild(el('p', {class: 'muted', text: '(No longer a member of the Unit)'}));
     app.appendChild(el('div', {class: 'card'}, [
       el('p', {text: LEAVE_TEXT}),
       el('p', {class: 'muted', text: LEAVE_AFTER}),
-      el('p', {text: 'Pick your name, and we will email a confirmation link to the address you are registered with.'}),
+      el('p', {text: 'Still have slots coming up? Please swap them on your tea page first; otherwise the tea tsar has to find someone.'}),
       el('label', {text: 'Your name'}), sel, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg
     ]));
   }
@@ -270,9 +272,7 @@
   // ---- personal page ----
   function load(){ call('api_state', [TOKEN], render); }
 
-  var ZOOM_ADMIN = 'the unit admin';
   function render(s){
-    ZOOM_ADMIN = s.zoom_admin || ZOOM_ADMIN;
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Hi ' + s.name.split(' ')[0]}));
     app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update Notion and the shared calendar.'}));
@@ -289,10 +289,6 @@
     app.appendChild(el('h2', {text: 'Away dates'}));
     app.appendChild(awayCard(s));
 
-    if (s.seminars && s.seminars.length){
-      app.appendChild(el('h2', {text: 'External seminars'}));
-      app.appendChild(seminarsCard(s));
-    }
 
     if (s.organiser.length){
       app.appendChild(el('h2', {text: 'Organiser'}));
@@ -306,7 +302,7 @@
 
     app.appendChild(el('footer', {}, [
       'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas on Notion'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
-      el('button', {class: 'quiet', text: 'Leave the tea system…', onclick: renderLeave})
+      el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave})
     ]));
   }
 
@@ -333,7 +329,6 @@
       }
       if (d.live) actions.appendChild(el('button', {text: d.pending ? 'Ask someone else' : 'Swap', onclick: function(){ showSwap(panel, d, people, msg); }}));
       if (d.can_title) actions.appendChild(el('button', {text: d.title ? 'Edit title' : 'Add title', onclick: function(){ showTitle(panel, d, msg); }}));
-      if (d.can_zoom) actions.appendChild(el('button', {text: 'Request Zoom', onclick: function(){ showZoom(panel, d.row_id, msg); }}));
       card.appendChild(actions);
       if (d.can_cancel) card.appendChild(el('div', {style: 'margin-top:8px'}, [el('button', {class: 'quiet', text: 'Nobody can take over?', onclick: function(){ showCancel(panel, d, people, msg); }})]));
     }
@@ -409,34 +404,6 @@
     panel.appendChild(el('label', {text: 'Description (for journal clubs, include the paper link)'}));
     panel.appendChild(desc);
     panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
-  }
-
-  function showZoom(panel, row_id, msg){
-    panel.innerHTML = '';
-    panel.classList.remove('hidden');
-    var reason = el('input', {type: 'text', placeholder: 'Optional, e.g. speaker joins remotely'});
-    var btn = el('button', {class: 'primary', text: 'Send request'});
-    btn.addEventListener('click', function(){ call('api_request_zoom', [TOKEN, row_id, reason.value], function(res){ ok(msg, res); panel.classList.add('hidden'); }, msg, btn); });
-    panel.appendChild(el('p', {class: 'muted', text: 'Zoom is set up on request. This emails ' + ZOOM_ADMIN + ' with the details; replies come straight to you.'}));
-    panel.appendChild(el('label', {text: 'Reason'}));
-    panel.appendChild(reason);
-    panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
-  }
-
-  function seminarsCard(s){
-    var card = el('div', {class: 'card'});
-    card.appendChild(el('p', {class: 'muted', style: 'margin:0 0 8px', text: 'Hosting an external speaker who needs Zoom? Ask ' + s.zoom_admin + ' here.'}));
-    s.seminars.forEach(function(x){
-      var msg = el('div', {class: 'msg'});
-      var panel = el('div', {class: 'panel hidden'});
-      card.appendChild(el('div', {style: 'margin-bottom:8px'}, [
-        el('div', {class: 'row', style: 'justify-content:space-between'}, [
-          el('span', {}, [el('span', {class: 'when', text: x.when}), x.title ? el('span', {class: 'muted', text: ' · ' + x.title}) : null]),
-          el('button', {text: 'Request Zoom', onclick: function(){ showZoom(panel, x.row_id, msg); }})
-        ]), panel, msg
-      ]));
-    });
-    return card;
   }
 
   function awayCard(s){

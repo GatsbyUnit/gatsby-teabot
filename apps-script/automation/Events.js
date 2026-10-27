@@ -20,6 +20,19 @@ const ROTAS = {
            text: 'The tea talk schedule has been updated for the next month and the research talk schedule for the month after. You may view it on the Notion Page or through the gatsby.tea Google Calendar.'}
 };
 
+// talks carry the unit's Zoom link as their location too, where calendar apps show it (and a join button)
+function zoom_location(row, ctx){
+  return row.type === 'Coffee Cleaning' ? '' : String(ctx.constants['gatsby_zoom_link'] || '');
+}
+
+// sets the Zoom link as location of an event that has none (a room typed in by hand is kept)
+function ensure_zoom_location(event, row, ctx){
+  var zoom = zoom_location(row, ctx);
+  if (!zoom || event.getLocation()) return false;
+  event.setLocation(zoom);
+  return true;
+}
+
 function event_description(row, ctx){
   if (row.type === 'Coffee Cleaning') return 'Duty Description:\n\n' + (row.description ? row.description + '\n' : '');
   var d = 'Title: ' + (is_tentative(row) ? '' : row.title) + '\nZoom Link: ' + ctx.constants['gatsby_zoom_link'];
@@ -32,6 +45,7 @@ function create_event(row, ctx, extra_props){
   var title = format_title(row, ctx.people);
   var end = row.end || new Date(row.start.getTime() + 3600 * 1000);
   var opts = {description: event_description(row, ctx)};
+  if (zoom_location(row, ctx)) opts.location = zoom_location(row, ctx);
   var event = row.type === 'Coffee Cleaning'
     ? ctx.cal.createAllDayEvent(title, row.start, end, opts)
     : ctx.cal.createEvent(title, row.start, end, opts);

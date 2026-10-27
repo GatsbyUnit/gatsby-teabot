@@ -15,6 +15,7 @@ var SpreadsheetApp = { openById: () => ({ getSheetByName: () => null }) };
 var UrlFetchApp = null;
 function UrlFetchApp_stub(fn){ UrlFetchApp = {fetch: fn}; }
 var Calendar = null;
+var LockService = null;
 var ScriptApp = { getService: () => ({ getUrl: () => 'https://page' }) };
 var CacheService = { getScriptCache: () => ({ get: () => null, put: () => {}, remove: () => {} }) };
 var Utilities = {
@@ -101,7 +102,7 @@ function ctx(dry){ patched = []; mailed = []; logged = [];
   return {settings: Object.assign(get_settings(), {dry_run: dry, live_types: ['TNJC', 'MLJC', 'Coffee Cleaning', 'Research Talk']}), people: people, has_guest_prop: true,
     constants: {tnjc_admin_email: 'org@x', admin_email: 'tsar@x'},
     log: {getSheetByName: () => ({appendRow: r => logged.push(r[5] + ': ' + r[6])})}}; }
-function ev(title){ return {title: title, getTitle(){ return this.title; }, setTitle(x){ this.title = x; }}; }
+function ev(title){ return {title: title, loc: '', getTitle(){ return this.title; }, setTitle(x){ this.title = x; }, getLocation(){ return this.loc; }, setLocation(x){ this.loc = x; }}; }
 function run(r, title, prev, dry, future){
   var c = ctx(dry), e = ev(title), exp = format_title(r, people);
   return {res: classify_difference(r, e, title, exp, parse_title(title, r.type), prev, notion_fingerprint(r), c, future !== false), e: e};
@@ -126,10 +127,10 @@ t('coffee hand edit swaps Tea, not Presenter', () => { var r = row({type: 'Coffe
 t('coffee unknown name is not a guest', () => { var r = row({type: 'Coffee Cleaning', presenter_ids: [], tea_ids: ['b']}); var fp = notion_fingerprint(r); var o = run(r, 'Coffee Duty This Week: Andrew Hollis', {t: 'Coffee Duty This Week: Nikolai Petrov', n: fp}, false); assert.strictEqual(o.res.finding.kind, 'unknown_person'); assert.strictEqual(patched.length, 0); });
 // sync_row: first look and event creation
 var created = [];
-function cal_stub(){ return { getEventById: () => null, createEvent: (t, s, e, o) => { created.push(t); return {getId: () => 'new1', getDescription: () => o.description, setDescription: function(){}, getTitle: () => t}; }, createAllDayEvent: (t) => { created.push('allday:' + t); return {getId: () => 'new2', getDescription: () => '', setDescription: function(){}}; } }; }
+function cal_stub(){ return { getEventById: () => null, createEvent: (t, s, e, o) => { created.push(t + (o.location ? ' @' + o.location : '')); return {getId: () => 'new1', getDescription: () => o.description, setDescription: function(){}, getTitle: () => t}; }, createAllDayEvent: (t) => { created.push('allday:' + t); return {getId: () => 'new2', getDescription: () => '', setDescription: function(){}}; } }; }
 t('first look: slot without event is left alone', () => { var c = ctx(false); c.baseline = true; c.no_event = []; c.cal = cal_stub(); created = []; var out = sync_row(row({gcal_id: '', start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.strictEqual(out.no_event, true); assert.strictEqual(created.length, 0); assert.strictEqual(patched.length, 0); });
 t('known slot without event stays alone', () => { var c = ctx(false); c.baseline = false; c.no_event = ['r1']; c.cal = cal_stub(); created = []; var out = sync_row(row({gcal_id: '', start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.strictEqual(created.length, 0); assert.strictEqual(out.no_event, true); });
-t('newly confirmed slot gets an event', () => { var c = ctx(false); c.baseline = false; c.no_event = []; c.cal = cal_stub(); c.constants.gatsby_zoom_link = 'z'; created = []; var out = sync_row(row({gcal_id: '', start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.deepStrictEqual(created, ['TNJC: Nikolai Petrov']); assert.strictEqual(patched[0]['GCal ID'].rich_text[0].text.content, 'new1'); assert.strictEqual(mailed.length, 0); });
+t('newly confirmed slot gets an event', () => { var c = ctx(false); c.baseline = false; c.no_event = []; c.cal = cal_stub(); c.constants.gatsby_zoom_link = 'z'; created = []; var out = sync_row(row({gcal_id: '', start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.deepStrictEqual(created, ['TNJC: Nikolai Petrov @z']); assert.strictEqual(patched[0]['GCal ID'].rich_text[0].text.content, 'new1'); assert.strictEqual(mailed.length, 0); });
 t('coffee events are all-day', () => { var c = ctx(false); c.baseline = false; c.no_event = []; c.cal = cal_stub(); created = []; sync_row(row({type: 'Coffee Cleaning', presenter_ids: [], tea_ids: ['a'], gcal_id: '', start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.deepStrictEqual(created, ['allday:Coffee Duty This Week: Lena Weber']); });
 t('tentative slots are skipped', () => { var c = ctx(false); c.baseline = false; c.no_event = []; c.cal = cal_stub(); created = []; sync_row(row({title: '[TNJC Tentative]', gcal_id: '', start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.strictEqual(created.length, 0); });
 t('event description matches the finalizing script', () => assert.strictEqual(event_description(row({title: 'Neurons', description: 'paper'}), {constants: {gatsby_zoom_link: 'Z'}}), 'Title: Neurons\\nZoom Link: Z\\nDescription: paper'));
@@ -141,6 +142,8 @@ t('title edited in Notion -> event description rewritten', () => { __props = {};
 t('Notion text unchanged -> hand-typed description kept', () => { __props = {}; var e = text_event('typed by hand'); var r = row({start: soon, title: 'Old'}); sync_row(r, text_ctx(e), start_of_today()); sync_row(r, text_ctx(e), start_of_today()); assert.strictEqual(e.desc, 'typed by hand'); });
 t('Notion text changed but event already matches (tea page) -> no write', () => { __props = {}; var e = text_event('Title: Old\\nZoom Link: Z'); var r = row({start: soon, title: 'Old'}); sync_row(r, text_ctx(e), start_of_today()); r.title = 'New'; e.desc = 'Title: New\\nZoom Link: Z'; var out = sync_row(r, text_ctx(e), start_of_today()); assert.strictEqual(out.text_updated, undefined); });
 t('past slot: Notion text change not pushed', () => { __props = {}; var e = text_event('Title: Old\\nZoom Link: Z'); var r = row({start: new Date(Date.now() - 5 * 864e5), title: 'Old'}); sync_row(r, text_ctx(e), start_of_today()); r.title = 'New'; sync_row(r, text_ctx(e), start_of_today()); assert.strictEqual(e.desc, 'Title: Old\\nZoom Link: Z'); });
+t('upcoming talk gets the Zoom link as location; a room typed by hand stays', () => { __props = {}; var e = text_event('x'); sync_row(row({start: soon}), text_ctx(e), start_of_today()); assert.strictEqual(e.loc, 'Z'); var e2 = text_event('x'); e2.loc = 'Room 4.01'; sync_row(row({start: soon}), text_ctx(e2), start_of_today()); assert.strictEqual(e2.loc, 'Room 4.01'); });
+t('coffee duty gets no Zoom location', () => { __props = {}; var e = text_event('x'); sync_row(row({type: 'Coffee Cleaning', presenter_ids: [], tea_ids: ['a'], start: soon}), text_ctx(e), start_of_today()); assert.strictEqual(e.loc, ''); });
 // apply_swap
 t('swap: Notion, calendar title, one email to both', () => { var c = ctx(false); var e = ev('TNJC: Nikolai Petrov'); c.cal = {getEventById: () => e}; var r = row({}); var msg = apply_swap(r, 'presenter', 'b', 'a', c); assert.strictEqual(patched[0].Presenter.relation[0].id.replace(/-/g, ''), 'a'); assert.strictEqual(e.title, 'TNJC: Lena Weber'); assert.strictEqual(mailed.length, 1); assert.ok(mailed[0].startsWith('nikolai@x,lena@x'), mailed[0]); assert.ok(msg.startsWith('Done')); });
 t('swap refused for a slot that is not theirs', () => { var c = ctx(false); assert.throws(() => apply_swap(row({}), 'presenter', 'a', 'c', c), /changed/); assert.strictEqual(patched.length, 0); });
@@ -208,17 +211,35 @@ t('leaving: inactive in Notion, email and code cleared, requests dropped, organi
     save_swap_request({code: 'c1', row_id: 'r1', duty: 'presenter', from: 'b', to: 'a', created: Date.now(), start: soon.getTime(), type: 'TNJC', reminded: false});
     save_swap_request({code: 'c2', row_id: 'r9', duty: 'tea', from: 'a', to: 'e', created: Date.now(), start: soon.getTime(), type: 'TNJC', reminded: false});
     var c = ctx(false); c.me = people.b; c.me_identity = {email: 'nikolai@x'};
-    leave_tea_system(c);
+    leave_tea_system(c, 'own link');
     assert.deepStrictEqual(patched[0], {Active: {checkbox: false}});
     assert.deepStrictEqual(swap_requests().map(x => x.code), ['c2']);
     assert.deepStrictEqual(cleared, [[5, 3, 2, [['', '']]]]);
     assert.strictEqual(m[0].to, 'nikolai@x'); assert.ok(/left the Gatsby tea system/.test(m[0].subj));
-    var org = m.filter(x => x.to === 'org@x')[0], tsar = m.filter(x => x.to === 'tsar@x')[0];
-    assert.ok(org && /TNJC talk/.test(org.text) && org.o.cc === 'tsar@x', JSON.stringify(m));
-    assert.ok(tsar && /tea duty/.test(tsar.text), JSON.stringify(m));
+    assert.strictEqual(m.length, 2);
+    var tsar = m[1];
+    assert.strictEqual(tsar.to, 'tsar@x'); assert.strictEqual(tsar.o.cc, 'org@x');
+    assert.ok(/TNJC talk/.test(tsar.text) && /tea duty/.test(tsar.text) && /no longer a member of the Unit/.test(tsar.text) && /personal link/.test(tsar.text), tsar.text);
   } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; }
 });
-t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai Petrov has left the tea system']); });
+t('leaving by picking a name: one click, the tea tsar is warned anyone could have done it; rate-limited', () => {
+  var m = [], store = {}; var saved = [identity_rows, upcoming_rows_of, send_mail, make_context, CacheService, LockService, get_global_constants];
+  get_global_constants = () => ({});
+  people['0123456789abcdef0123456789abcdef'] = Object.assign({}, people.b, {id: '0123456789abcdef0123456789abcdef'}); people['fedcba9876543210fedcba9876543210'] = Object.assign({}, people.d, {id: 'fedcba9876543210fedcba9876543210'});
+  identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: [{row: 5, id: '0123456789abcdef0123456789abcdef', email: 'nikolai@x', token: 'tok'}]}); upcoming_rows_of = () => [];
+  send_mail = function(to, subj, blocks){ m.push(to + ' | ' + subj + ' | ' + JSON.stringify(blocks)); };
+  make_context = () => { var c = ctx(false); return c; };
+  CacheService = {getScriptCache: () => ({get: k => store[k] || null, put: (k, v) => { store[k] = v; }, remove: () => {}})};
+  LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
+  try {
+    assert.ok(/left the Gatsby tea system/.test(api_leave_by_name('0123456789abcdef0123456789abcdef')));
+    assert.deepStrictEqual(patched[0], {Active: {checkbox: false}});
+    assert.ok(/^nikolai@x \| You have left/.test(m[0])); assert.ok(/^tsar@x \| Nikolai Petrov has left/.test(m[1]) && /anyone could do/.test(m[1]), m[1]);
+    assert.throws(() => api_leave_by_name('fedcba9876543210fedcba9876543210'), /not in the tea system/);
+    store['leave:all'] = '5'; assert.throws(() => api_leave_by_name('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'), /try again later/);
+  } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; make_context = saved[3]; CacheService = saved[4]; LockService = saved[5]; get_global_constants = saved[6]; delete people['0123456789abcdef0123456789abcdef']; delete people['fedcba9876543210fedcba9876543210']; }
+});
+t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai Petrov has left the tea system']); });
 t('rota overview: same rules as scheduling', () => { var saved = notion_query; notion_query = () => []; try { var c = ctx(false); c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false, email: 'p@x'}, q: {id: 'q', name: 'Old One', active: false}}; var r = rota_overview(c); assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false, mljc: true, research: false, teatalk: true, tea: true, coffee: false}); assert.strictEqual(r.inactive, 1); assert.strictEqual(r.people.length, 1); } finally { notion_query = saved; } });
 // slot creation (as the notebooks did it)
 t('london time, winter and summer', () => { assert.strictEqual(london_iso('2026-11-03', [13, 30]), '2026-11-03T13:30:00+00:00'); assert.strictEqual(london_iso('2027-05-04', [13, 30]), '2027-05-04T13:30:00+01:00'); });

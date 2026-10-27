@@ -1,12 +1,14 @@
-// Leaving the tea system: the "Leave the tea system" link at the end of every bot email. It only concerns the
-// tea system: the person is marked inactive in Notion (no more scheduling), their registered email and
-// tea-page code are cleared (no more emails from the bot or the Cron Jobs), their open swap requests are
-// dropped, and the organisers are told about any upcoming slots they still hold. Gatsby's mailing lists are
-// not touched. To come back, the tea tsar ticks Active on their Notion page and fills in their email again.
+// Leaving the tea system: the "Leave the tea system (no longer a member of the Unit)" link at the end of every
+// bot email. It only concerns the tea system: the person is marked inactive in Notion (no more scheduling),
+// their registered email and tea-page code are cleared (no more emails from the bot or the Cron Jobs), their
+// open swap requests are dropped, and the tea tsar gets an email (organisers of slots they still hold in cc).
+// Gatsby's mailing lists are not touched. To come back, the tea tsar ticks Active on their Notion page and
+// fills in their email again.
 //
-// Links in emails are opened by mail scanners, so leaving always takes a click on the page. An email to
-// several people (or with someone in cc) carries the general link: pick your name, and the confirmation
-// link goes to your registered address.
+// Links in emails are opened by mail scanners, so leaving takes one click on the page, but no confirmation
+// by email: people who left the Unit often can't read their university address any more. An email to several
+// people (or with someone in cc) carries the general link, where they pick their name; as anyone could do
+// that, the tea tsar's email says so, and the person's registered address gets a note too.
 
 function leave_url(to, options, constants){
   try {
@@ -47,19 +49,39 @@ function api_leave_info(token){
           slots: upcoming_rows_of(ctx.me.id, ctx).map(function(r){ return slot_line(r, ctx.me.id); })};
 }
 
+const LEFT_MESSAGE = 'Done: you have left the Gatsby tea system. You will not be scheduled again, and the tea bot will not email you any more. If you change your mind, ask the tea tsar.';
+
 function api_leave(token){
   var ctx = page_context(token);
-  var lock = LockService.getScriptLock();
-  lock.waitLock(60 * 1000);
-  try {
-    leave_tea_system(ctx);
-  } finally {
-    lock.releaseLock();
-  }
-  return 'Done: you have left the Gatsby tea system. You will not be scheduled again, and the tea bot will not email you any more. If you change your mind, ask the tea tsar.';
+  with_script_lock(function(){ leave_tea_system(ctx, 'own link'); });
+  return LEFT_MESSAGE;
 }
 
-function leave_tea_system(ctx){
+// the page without a personal link: pick your name, one click
+function api_leave_by_name(person_id){
+  person_id = normalise_id(String(person_id || '').trim());
+  if (!/^[0-9a-f]{32}$/.test(person_id)) throw new Error('Please pick your name.');
+  var cache = CacheService.getScriptCache();
+  var total = Number(cache.get('leave:all') || 0);
+  if (total >= 5) throw new Error('Several people have left in the last hour. Please try again later, or ask the tea tsar.');
+  var ctx = make_context(get_global_constants(), get_settings());
+  var me = ctx.people[person_id];
+  if (!me || !me.active) throw new Error('This name is not in the tea system (any more).');
+  ctx.me = me;
+  ctx.me_identity = identity_rows(ctx.constants).rows.filter(function(r){ return r.id === person_id; })[0] || {email: ''};
+  cache.put('leave:all', String(total + 1), 3600);
+  with_script_lock(function(){ leave_tea_system(ctx, 'name picked on the tea page'); });
+  return LEFT_MESSAGE;
+}
+
+function with_script_lock(fn){
+  var lock = LockService.getScriptLock();
+  lock.waitLock(60 * 1000);
+  try { fn(); } finally { lock.releaseLock(); }
+}
+
+// how: 'own link' (their personal link) or 'name picked on the tea page' (anyone could have done it)
+function leave_tea_system(ctx, how){
   var me = ctx.me;
   var rows = upcoming_rows_of(me.id, ctx);
   notion_patch_page(me.id, {'Active': {checkbox: false}}, ctx.constants);
@@ -80,31 +102,19 @@ function leave_tea_system(ctx){
   identity_token_cache = null;
   log_row(ctx, 'page', '', null, 'left the tea system', me.name + (rows.length ? ', ' + rows.length + ' upcoming slots to reassign' : ''));
 
-  // the organisers of the slots they still hold, else the tea tsar, are told
-  var by_organiser = {};
-  rows.forEach(function(r){ var o = admin_email_for_type(r.type, ctx.constants); (by_organiser[o] = by_organiser[o] || []).push(r); });
-  if (!rows.length) by_organiser[tsar] = [];
-  Object.keys(by_organiser).forEach(function(organiser){
-    var list = by_organiser[organiser];
-    var blocks = [me.name + ' has left the Gatsby tea system (with the link at the end of the bot\'s emails). They are now inactive in Notion, so they will not be scheduled again, and the bot no longer emails them.'];
-    if (list.length){
-      blocks.push('They still hold these slots. Please give them to someone else: in Notion or the calendar, or for tentative slots with "Fill … again" on your tea page after clearing them.');
-      blocks.push({items: list.map(function(r){ return '[' + slot_line(r, me.id) + '](' + r.url + ')'; })});
-    }
-    blocks.push('To undo: tick Active on their Notion page and put their email back in column C of the identity sheet.');
-    send_mail(organiser, me.name + ' has left the tea system', blocks, ctx.constants, tsar && tsar !== organiser ? {cc: tsar} : {});
-  });
-}
-
-// the page without a personal link: emails the chosen person a link to confirm leaving
-function api_request_leave_link(person_id){
-  return send_personal_link(person_id, 'Leaving the Gatsby tea system', function(url){
-    var leave = url + '&leave=1';
-    return [
-      'Someone, hopefully you, asked on the Gatsby tea page to leave the tea system with this address. To confirm, open this link and press the button there:',
-      {link: 'Leave the tea system', url: leave},
-      'Or copy this address into your browser: ' + leave,
-      'If you want to stay, just ignore this email; nothing changes.'
-    ];
-  });
+  // one email to the tea tsar; the organisers of slots they still hold in cc
+  var cc = rows.map(function(r){ return admin_email_for_type(r.type, ctx.constants); })
+    .filter(function(o, i, a){ return o && o !== tsar && a.indexOf(o) === i; });
+  var blocks = [
+    me.name + ' has left the Gatsby tea system (no longer a member of the Unit), using the link at the end of the bot\'s emails. They are now inactive in Notion, so they will not be scheduled again, and the bot no longer emails them.',
+    how === 'own link' ? 'They used their personal link.' : 'They picked their name on the tea page, which anyone could do. If this looks wrong, undo it (below) and let them know.'
+  ];
+  if (rows.length){
+    blocks.push('They still hold these slots. Please give them to someone else: in Notion or the calendar, or for tentative slots with "Fill … again" on the tea page after clearing them' + (cc.length ? ' (the organisers are in cc)' : '') + '.');
+    blocks.push({items: rows.map(function(r){ return '[' + slot_line(r, me.id) + '](' + r.url + ')'; })});
+  } else {
+    blocks.push('They had no upcoming slots.');
+  }
+  blocks.push('To undo: tick Active on their Notion page and put their email back in column C of the identity sheet.');
+  send_mail(tsar || ctx.constants['tnjc_admin_email'], me.name + ' has left the tea system', blocks, ctx.constants, cc.length ? {cc: cc.join(',')} : {});
 }

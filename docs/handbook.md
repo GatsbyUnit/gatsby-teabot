@@ -1,13 +1,13 @@
 # Gatsby tea bot: organiser handbook
 
 For the tea tsar and the rota organisers. What unit members need (rules, how to swap, add a title, set away
-dates, request Zoom) is on the Gatsby Rotas pages on Notion (gcnu.notion.site); point people there rather than
+dates) is on the Gatsby Rotas pages on Notion (gcnu.notion.site); point people there rather than
 repeating it. How the code is deployed is in the [README](../README.md).
 
 ## How it fits together
 - **Notion** (Gatsby Rotas → Schedule, People) is the source of truth: who presents / does tea when.
 - **The gatsby.tea calendar** is generated from Notion. Edits made by hand to an event's people are copied back into Notion every hour, so the rota stays fair. Relabelled events ("UPGRADE TALK: …") are left alone; cancelled ones are recorded as cancellations (see Everyday). A talk title or description edited in Notion is copied into the event description too (text typed straight into the calendar is kept until the Notion text changes).
-- **The personal tea page** is where members swap slots, add titles, set away dates and request Zoom; you schedule from it too. Its link is at the end of every calendar event, and reminder emails include each person's own link. Page: https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec (without a personal link it lists everyone by name and emails the chosen person their link, showing the address half hidden).
+- **The personal tea page** is where members swap slots, add titles and set away dates; you schedule from it too. Its link is at the end of every calendar event, and reminder emails include each person's own link. Page: https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec (without a personal link it lists everyone by name and emails the chosen person their link, showing the address half hidden).
 - **Settings** are in the constants sheet: first tab = emails and IDs (the old scripts read it too); tab **Automation** = the bot's switches; tab **Automation reminders** = dated reminders for organisers.
 - **Registered emails and tea-page tokens** are in the identity sheet (columns C, D); away dates in each person's away-date sheet, linked from their Notion page.
 
@@ -20,7 +20,7 @@ repeating it. How the code is deployed is in the [README](../README.md).
 - **Calendar invitations:** for the rotas in `INVITE_TYPES` (Automation tab), the presenter and the tea person are guests of their slot's event, so it shows up in their own calendar. The bot keeps the guest list in step: after a swap or cancellation Google sends the old person a cancellation and the new one an invitation; guests you add by hand are left alone. **Declining changes nothing in the rota** (Outlook's out-of-office and deleting the invitation decline on their own): whoever declines gets one email that the slot is still theirs and how to swap, with the organiser in cc if the slot is less than a week away. Anyone who can see the gatsby.tea calendar's event details can see the guests' registered emails.
 - **Someone leaves the tea system:** every bot email ends with "Leave the tea system", which opens a page explaining that this is only about the tea system (not Gatsby's mailing lists) and asks them to confirm. Leaving marks them inactive in Notion, clears their registered email and tea-page code, drops their swap requests, and tells the organisers about any upcoming slots they still hold (else the tea tsar). To undo: tick Active on their Notion page and put their email back in column C of the identity sheet.
 - **Who is on which rota:** on your tea page, "Who is on which rota" (below the Organiser section): everyone active with the rotas they can be scheduled for (the same rules as scheduling and the swap list), their upcoming slots and whether an email is registered.
-- **Zoom requests** from the tea page go to the unit admin in row 28 of the constants sheet, with the requester as reply-to.
+- **Zoom:** every talk's calendar event carries the unit's Zoom link (constants sheet, row 11): in the description, and as the event's location unless someone typed a room there. There are no Zoom requests any more.
 - **Pause the bot:** set `DRY_RUN` to `TRUE` in the Automation tab. Nothing else is needed.
 - **Something odd:** the bot emails the rota organiser (or the tea tsar, if it can't tell who a name refers to). Errors in the bot itself go to the TNJC organiser with the tea tsar in cc. Everything it does is in the "Gatsby Tea Automation log" sheet in gatsby.teabot's Drive, with open calendar/Notion differences on its Mismatches tab.
 

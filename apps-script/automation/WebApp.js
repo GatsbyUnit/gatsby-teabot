@@ -81,7 +81,6 @@ function api_state(token){
         title: is_tentative(row) ? '' : row.title, description: row.description,
         tentative: is_tentative(row), live: is_live(ctx, row.type),
         can_title: duty === 'presenter' && !is_tentative(row),
-        can_zoom: duty === 'presenter' && !is_tentative(row),
         cancelled: is_cancelled_title(row.title),
         usual: Object.keys(ctx.people).filter(function(id){ return id !== me.id && can_do_duty(ctx.people[id], row, duty); }),
         can_cancel: duty === 'presenter' && can_cancel(row, ctx)
@@ -112,13 +111,10 @@ function api_state(token){
             from: range.from, to: range.to,
             tea_from: rota === 'talks' ? range.from : '', tea_to: rota === 'talks' ? fmt_iso_date(add_days(parse_iso_date(range.from), 27)) : ''};
   });
-  var seminars = load_rows('External Seminar', today, add_days(today, 90), ctx).map(function(r){
-    return {row_id: r.id, when: fmt_day(r.start) + ', ' + fmt_time(r.start), title: r.title && !is_tentative(r) ? r.title : ''};
-  });
   return {
     name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming,
     away: read_away(me), has_away_sheet: !!me.away_sheet,
-    organiser: organiser, seminars: seminars, zoom_admin: zoom_admin_name(ctx),
+    organiser: organiser,
     notion_url: ctx.constants['notion_site_url']
   };
 }
@@ -359,32 +355,6 @@ function api_fill_slots(token, rota){
   } finally {
     lock.releaseLock();
   }
-}
-
-// Zoom is set up by the unit admin (constants row 28), on request: for your own talk, or for an external seminar
-function api_request_zoom(token, row_id, reason){
-  var ctx = page_context(token);
-  var row = to_row(notion_get_page(row_id, ctx.constants));
-  var own = row.presenter_ids.indexOf(ctx.me.id) >= 0;
-  if (!own && row.type !== 'External Seminar') throw new Error('You can request Zoom for your own talks and for external seminars.');
-  if (row.start < start_of_today()) throw new Error('That talk is in the past.');
-  var admin = ctx.constants['gatsby_admin_email'];
-  if (!admin) throw new Error('No unit admin address is set (constants sheet, row 28). Please ask the tea tsar.');
-  send_mail(admin, 'Zoom request: ' + row.type + ' on ' + fmt_day(row.start), [
-    ctx.me.name + ' asks for Zoom to be set up for this talk.',
-    {table: [['Talk', row.type + (row.title && !is_tentative(row) ? ': ' + row.title : '')], ['When', fmt_day(row.start) + ', ' + fmt_time(row.start)],
-             ['Presenter', names_of(row.presenter_ids, ctx.people).join(', ') || row.guest || '–'], ['Requested by', ctx.me.name + ' (' + ctx.me_identity.email + ')'],
-             ['Reason', String(reason || '').slice(0, 500) || '–']]},
-    'Reply to this email to reach ' + ctx.me.name.split(' ')[0] + '.'
-  ], ctx.constants, {reply_to: ctx.me_identity.email});
-  log_row(ctx, 'page', row.type, row.start, 'zoom request', ctx.me.name);
-  return 'Sent to ' + zoom_admin_name(ctx) + ', who sets up Zoom. Replies come straight to you.';
-}
-
-function zoom_admin_name(ctx){
-  var admin = String(ctx.constants['gatsby_admin_email'] || '').toLowerCase();
-  var hit = Object.keys(ctx.people).map(function(id){ return ctx.people[id]; }).filter(function(p){ return p.email.toLowerCase() === admin; })[0];
-  return hit ? hit.name.split(' ')[0] : 'the unit admin';
 }
 
 // ---- helpers ----
