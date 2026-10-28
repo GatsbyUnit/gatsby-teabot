@@ -275,7 +275,25 @@ t('leaving by picking a name: one click, the tea tsar is warned anyone could hav
   } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; make_context = saved[3]; CacheService = saved[4]; LockService = saved[5]; get_global_constants = saved[6]; delete people['0123456789abcdef0123456789abcdef']; delete people['fedcba9876543210fedcba9876543210']; }
 });
 t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai Petrov has left the tea system']); });
-t('rota overview: same rules as scheduling', () => { var saved = notion_query; notion_query = () => []; try { var c = ctx(false); c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false, email: 'p@x'}, q: {id: 'q', name: 'Old One', active: false}}; var r = rota_overview(c); assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false, mljc: true, research: false, teatalk: true, tea: true, coffee: false}); assert.strictEqual(r.inactive, 1); assert.strictEqual(r.people.length, 1); } finally { notion_query = saved; } });
+t('rota overview: same rules as scheduling', () => { var saved = notion_query; notion_query = () => []; try { var c = ctx(false); c.me_identity = {email: 'tsar@x'}; c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false, email: 'p@x'}, q: {id: 'q', name: 'Old One', active: false}}; var r = rota_overview(c); assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false, mljc: true, research: false, teatalk: true, tea: true, coffee: false}); assert.strictEqual(r.inactive, 1); assert.strictEqual(r.people.length, 1); } finally { notion_query = saved; } });
+t('rota overview: an organiser sees only their own rota', () => {
+  var saved = notion_query;
+  notion_query = () => [{start: '2026-11-03T13:30:00Z', type: 'TNJC', presenter: 'p'}, {start: '2026-11-02T13:30:00Z', type: 'MLJC', presenter: 'p'}, {start: '2026-11-02T13:30:00Z', type: 'MLJC', presenter: 'm'}].map(o => row({start: new Date(o.start), type: o.type, presenter_ids: [o.presenter], tea_ids: [], title: ''}));
+  var saved_to_row = to_row; to_row = r => r;
+  try {
+    var c = ctx(false); c.me_identity = {email: 'org@x'};
+    c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', email: 'p@x'},
+                m: {id: 'm', name: 'Mo Only', active: true, tnjc: false, csnjc: false, mljc: true, coffee: true, position: 'PhD student', email: 'm@x'},
+                q: {id: 'q', name: 'Old One', active: false, tnjc: true}, z: {id: 'z', name: 'Old Coffee', active: false, coffee: true}};
+    var r = rota_overview(c);
+    assert.deepStrictEqual(r.columns.map(x => x.key), ['tnjc', 'csnjc']);
+    assert.deepStrictEqual(r.people.map(p => p.name), ['Pat Kim']);
+    assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false});
+    assert.strictEqual(r.people[0].upcoming, 1); assert.ok(/TNJC/.test(r.people[0].next) && !/MLJC/.test(r.people[0].next), r.people[0].next);
+    assert.strictEqual(r.inactive, 1);
+    c.me_identity = {email: 'someone@x'}; assert.deepStrictEqual(rota_overview(c).columns, []);
+  } finally { notion_query = saved; to_row = saved_to_row; }
+});
 // slot creation (as the notebooks did it)
 t('london time, winter and summer', () => { assert.strictEqual(london_iso('2026-11-03', [13, 30]), '2026-11-03T13:30:00+00:00'); assert.strictEqual(london_iso('2027-05-04', [13, 30]), '2027-05-04T13:30:00+01:00'); });
 t('weekday', () => { assert.strictEqual(iso_weekday('2026-11-03'), 2); assert.strictEqual(iso_weekday('2026-11-02'), 1); });
