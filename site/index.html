@@ -68,6 +68,13 @@
   var SWAP = param('swap', /^[0-9a-f]{32}$/);
   var LEAVE = QUERY.get('leave') ? '1' : '';
   var KEY = param('k', /^[\w-]{6,64}$/);
+  // This browser remembers the last personal page opened in it (this site's local storage only), so the general
+  // links in calendar events and group emails open that page directly. "Forget me" on the page clears it.
+  var REMEMBER = 'gatsby-tea-page';
+  function remembered(){ try { var t = localStorage.getItem(REMEMBER) || ''; return /^[0-9a-f]{40}$/.test(t) ? t : ''; } catch (e) { return ''; } }
+  function remember(t){ try { localStorage.setItem(REMEMBER, t); } catch (e) {} }
+  function forget(){ try { localStorage.removeItem(REMEMBER); } catch (e) {} }
+  var FROM_MEMORY = false;
   var app = document.getElementById('app');
 
   function el(tag, attrs, children){
@@ -83,13 +90,14 @@
   }
   // Calls go to the web app as an anonymous POST (doPost); credentials are left out, so being signed in to
   // Google (with one account or several) makes no difference.
-  function call(fn, args, done, msgEl, button){
+  function call(fn, args, done, msgEl, button, failed){
     if (button) button.disabled = true;
     if (msgEl){ msgEl.className = 'msg muted'; msgEl.textContent = 'Working…'; }
     var finish = function(res){ if (button) button.disabled = false; done(res); };
     var fail = function(text){
       if (button) button.disabled = false;
       text = String(text || 'Something went wrong.').replace(/^Exception: /, '').replace(/^Error: /, '');
+      if (failed && failed(text)) return;
       if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = text; }
       else { app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: text})); }
     };
@@ -270,7 +278,14 @@
   }
 
   // ---- personal page ----
-  function load(){ call('api_state', [TOKEN], render); }
+  function load(){
+    call('api_state', [TOKEN], function(s){ remember(TOKEN); render(s); }, null, null, function(text){
+      if (!FROM_MEMORY || !/not valid any more/.test(text)) return false;
+      forget(); FROM_MEMORY = false; TOKEN = ''; route();  // a remembered link that stopped working
+      return true;
+    });
+  }
+  function forgetMe(){ forget(); location.href = location.pathname + (KEY ? '?k=' + encodeURIComponent(KEY) : ''); }
 
   function render(s){
     app.innerHTML = '';
@@ -280,6 +295,8 @@
       hi.insertBefore(el('img', {src: s.badge.src, alt: s.badge.label, title: s.badge.label, width: '48', height: '48'}), hi.firstChild);
     }
     app.appendChild(hi);
+    if (FROM_MEMORY) app.appendChild(el('p', {class: 'muted', style: 'margin:-2px 0 6px;font-size:13px'}, [
+      'Not ' + s.name.split(' ')[0] + '? ', el('button', {class: 'quiet', text: 'Pick your name', onclick: forgetMe})]));
     app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update Notion and the shared calendar.'}));
 
     if (s.incoming && s.incoming.length){
@@ -307,6 +324,8 @@
 
     app.appendChild(el('footer', {}, [
       'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas on Notion'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
+      'This browser remembers your page, so the tea links in calendar events and group emails open it directly. ',
+      el('button', {class: 'quiet', text: 'Forget me on this browser', onclick: forgetMe}), ' ',
       el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave})
     ]));
   }
@@ -525,13 +544,17 @@
     .then(function(res){ if (res.ok && res.result) document.getElementById('icon').href = res.result; })
     .catch(function(){});
 
-  if (SWAP) renderSwapAnswer();
-  else if (CONFIRM) renderConfirm();
-  else if (LEAVE && TOKEN) renderLeave();
-  else if (LEAVE && KEY) renderLeaveLanding();
-  else if (TOKEN) load();
-  else if (KEY) renderLanding();
-  else renderNoKey();
+  function route(){
+    if (SWAP) renderSwapAnswer();
+    else if (CONFIRM) renderConfirm();
+    else if (LEAVE && TOKEN) renderLeave();
+    else if (LEAVE && KEY) renderLeaveLanding();
+    else if (TOKEN) load();
+    else if (!LEAVE && remembered()){ TOKEN = remembered(); FROM_MEMORY = true; load(); }
+    else if (KEY) renderLanding();
+    else renderNoKey();
+  }
+  route();
 </script>
 </body>
 </html>
