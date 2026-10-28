@@ -68,6 +68,14 @@ sees.
    Every edit goes into the automation log, so an undo button can build on it. If two people edit the same row,
    the second save is refused when the row changed since it was loaded. Rough effort: slot editor about a day,
    people editor half a day, rules small.
+   - **Near-live updates (polling).** Apps Script cannot push to an open page (no websockets), and GitHub Pages
+     only serves the files, so the editor asks instead: while it is open and the tab is visible, the page calls a
+     cheap `api_version` every ~15 seconds. It returns a change counter (Script Properties or CacheService) that
+     every write bumps: the tea page, the hourly sync, Cron Jobs and, after the store switch, an installable
+     onEdit trigger on the Sheet. When the counter has moved, the page fetches the rows changed since its version
+     and redraws them; an open form keeps what the person typed and shows that the row changed underneath. The
+     poll reads neither Notion nor the Sheet, so a few organisers editing at once stay far inside the free Apps
+     Script quotas. Saves still go through the stale-row check above. About half a day on top of the editors.
 2. **Sign in with Google**, so organisers needn't keep a personal link. The page gets a Google ID token (Google
    Identity Services; an OAuth client under gatsby.teabot allowing the github.io origin; scopes openid and email
    only, so no app verification), the bot verifies it and opens that person's page. Most registered addresses are
@@ -75,9 +83,11 @@ sees.
    identity-sheet column). About half a day, plus a quarter of an hour in Cloud Console.
 3. **Then the store switch** described below (Target, Migration plan).
 
-Not carried over from Notion: free-form views and filters, comments, page history, live co-editing. The member
-guides stay on Notion (they need no API) or move to Google Docs shown on github.io; rebuilding Notion's page
-editor is not worth it.
+Not carried over from Notion: free-form views and filters, comments, and keystroke-level co-editing on the tea
+page (it updates within seconds instead; true real-time would need a service such as Firebase, not worth it for
+a rota). After the store switch, Google Sheets brings back live co-editing and version history for anyone who
+edits the Sheet directly. The member guides stay on Notion (they need no API) or move to Google Docs shown on
+github.io; rebuilding Notion's page editor is not worth it.
 
 ### What Notion holds today
 | Notion | Used for | Constants sheet |
