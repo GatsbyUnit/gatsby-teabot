@@ -57,7 +57,9 @@ new person can see their tools. Work through it together with the person you tak
   logins and their 2FA. Organisers rarely need them; the tea tsar does.
 - **Mailing lists:** TNJC: owner of the gatsby-tnjc Google Group. The unit-wide list and access to the calendar
   for members are run by the unit's admin, not the bot.
-- **Code (only whoever maintains the bot):** the GatsbyUnit GitHub organisation, and the steps in the README.
+- **Code (only whoever maintains the bot):** Admin on the GitHub repo GatsbyUnit/gatsby-teabot, given by the
+  outgoing maintainer (repo Settings → Collaborators and teams → Add people, role Admin; if nobody with admin is
+  left, a GatsbyUnit owner can do it). Then the steps in the README.
 
 **3. Learn the routine (first weeks)**
 - Read Everyday and Scheduling above; for members' questions, point them to the Notion guides.
@@ -69,6 +71,7 @@ new person can see their tools. Work through it together with the person you tak
 
 **4. Before the outgoing person leaves**
 - Hand over open items: tentative slots not yet finalised, anything on the Mismatches tab, unanswered emails.
+- Outgoing maintainer: make the new one Admin on the GitHub repo (see Access) before you remove yourself.
 - If they leave Gatsby altogether, they can use "Leave the tea system" on their tea page (or untick Active on
   their Notion page) once their slots are handed over.
 - New tea tsar: change the bot accounts' passwords and 2FA, and rotate the Notion token if the outgoing tsar had
