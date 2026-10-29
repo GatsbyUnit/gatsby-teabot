@@ -343,7 +343,7 @@ function send_personal_link(person_id, subject, make_blocks){
   return 'Sent to ' + mask_email(row.email) + '. Check your inbox (and spam).';
 }
 
-// "jan.bauer@ucl.ac.uk" -> "ja•••r@u•••.ac.uk"
+// "ada.lovelace@ucl.ac.uk" -> "ad•••e@u•••.ac.uk"
 function mask_email(email){
   var at = String(email).lastIndexOf('@');
   if (at < 1) return '•••';
