@@ -323,7 +323,7 @@
     app.appendChild(emailCard(s));
 
     app.appendChild(el('footer', {}, [
-      'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas on Notion'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
+      'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
       'This browser remembers your page, so the tea links in calendar events and group emails open it directly. ',
       el('button', {class: 'quiet', text: 'Forget me on this browser', onclick: forgetMe}), ' ',
       el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave})

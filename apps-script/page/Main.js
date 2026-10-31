@@ -68,7 +68,7 @@ function api_site_edit_page(token, slug, ops){ return TeaBot.api_site_edit_page(
 function api_site_save_slot(token, slot){ return TeaBot.api_site_save_slot(token, slot); }
 function api_site_save_person(token, person){ return TeaBot.api_site_save_person(token, person); }
 function api_site_save_rule(token, rule){ return TeaBot.api_site_save_rule(token, rule); }
-function api_site_save_coffee_duty(token, duty){ return TeaBot.api_site_save_coffee_duty(token, duty); }
+function api_site_import_pages(token, pages, replace){ return TeaBot.api_site_import_pages(token, pages, replace); }
 
 // run once from the editor after creating the project, to grant it the bot's permissions. (The page's
 // address is the PAGE_URL setting in the Automation tab of the constants sheet.)

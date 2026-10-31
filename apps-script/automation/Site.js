@@ -1,6 +1,10 @@
-// Server side of the Gatsby Rotas site (site/rotas/ on GitHub Pages): the members' pages and the rota views,
-// read live from Notion, and editing for the tsars, written straight back into Notion. Notion stays the
-// source; the site shows it, so the two cannot drift apart.
+// Server side of the Gatsby Rotas site (site/rotas/ on GitHub Pages): the members' pages (guides, toolbox) and
+// the rota views, with editing for the tsars.
+//
+// The pages live here now, no longer on Notion: one row per page in the "Gatsby Rotas pages" sheet in the bot's
+// Drive (made on first use; its version history is the pages' history). They were imported once from the
+// published Notion site. The rota data (schedule, people, rota rules) still comes live from the Notion
+// databases, and edits to it are written back there.
 //
 // Signing in: the visitor picks their name and gets a link by email (?signin=<code>, valid for an hour).
 // Opening it hands the browser the unit key (PAGE_KEY) and the person's tea-page token, which it keeps for
@@ -8,38 +12,21 @@
 // opens the pages; the token says who is asking, which decides what they may edit.
 
 const SITE = {
-  // Notion pages shown on the site (normalised id -> slug). Their subpages stay on Notion.
-  pages: {
-    'e3f4410c97a74e1784b67521e91f4dab': 'home',
-    '2444835e8eab46fa9a7c792877e09620': 'tea-system',
-    '931a171f12c64142a466c952d3994532': 'tnjc',
-    '556a292407ac488e91ef3b70a69768ce': 'mljc',
-    'cb2adc1a95294900a825b366d65b369b': 'coffee',
-    'f8f2d7cf80544059ab354525ec3b7b4f': 'away-dates',
-    '7fb927c4b1d34b40b847256bd680cddc': 'talk-title',
-    '29a2c61888664740b1ebdd872b7cab11': 'change-presenter'
-  },
-  // linked database views inside those pages -> the site's own views
-  views: {
-    '0acde385337e4550bdb181c27fe525b1': 'schedule',
-    'a1c0ef91b43e4ecc8f18ec908e547c36': 'people',
-    '13409d62cb7a419a90b82e46c3fc9b0c': 'rota-rules',
-    'ea0a3044c5b34e8b80460c58985c0600': 'coffee-duties'
-  },
-  coffee_duties_db: '85959555eca741878ba550e95de76439',
+  slugs: ['home', 'tea-system', 'tnjc', 'mljc', 'coffee', 'away-dates', 'talk-title', 'change-presenter'],
+  views: ['schedule', 'people', 'rota-rules'],
   notion_site: 'https://gcnu.notion.site',
   history_days: 400,
   rule_order: ['Faculty', 'Postdoc', 'PhD student', 'PhD student: joint', 'Staff', 'CRS', 'Visitor'],
-  link_ttl: 3600
+  link_ttl: 3600,
+  cell: 45000  // a sheet cell holds 50,000 characters; longer pages continue in the next cells
 };
 
-// Notion block type <-> the site's block type
-const SITE_TYPES = {
-  paragraph: 'p', heading_1: 'h1', heading_2: 'h2', heading_3: 'h3', bulleted_list_item: 'ul',
-  numbered_list_item: 'ol', to_do: 'todo', toggle: 'toggle', quote: 'quote', callout: 'callout', code: 'code'
-};
-const NOTION_TYPES = Object.keys(SITE_TYPES).reduce(function(o, k){ o[SITE_TYPES[k]] = k; return o; }, {});
-const SITE_CONTAINERS = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'toggle', 'quote', 'callout', 'columns', 'column', 'table', 'group'];
+// what the pages are made of (see renderBlock in site/rotas/app.js)
+const SITE_BLOCK_TYPES = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'toggle', 'quote', 'callout', 'code', 'hr', 'columns',
+  'column', 'table', 'image', 'bookmark', 'page', 'view', 'group'];
+const SITE_TEXT_TYPES = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'toggle', 'quote', 'callout', 'code'];
+const SITE_NEW_TYPES = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'toggle', 'quote'];
+const SITE_CONTAINERS = ['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'toggle', 'quote', 'callout', 'columns', 'column', 'group'];
 
 function site_url(settings){
   return page_url(settings).replace(/\/?$/, '/') + 'rotas/';
@@ -102,20 +89,19 @@ function site_session(row, constants){
 }
 
 // What the holder of this token may change on the site. Tsars are the tea tsar (admin_email, everything)
-// and the rota organisers (their rota's slots and membership; pages for all of them).
+// and the rota organisers (the pages, their rota's slots and membership).
 function site_rights(token, constants){
   var me = token ? identity_for_token(String(token), constants) : null;
   var email = me ? me.email.toLowerCase() : '';
-  var none = {person: me ? me.id : '', pages: false, rules: false, people: [], slots: [], coffee_duties: false, add_people: false};
-  if (!email) return none;
+  var r = {person: me ? me.id : '', pages: false, rules: false, people: [], slots: [], add_people: false, tea_tsar: false};
+  if (!email) return r;
   var is = function(key){ return String(constants[key] || '').toLowerCase() === email; };
   if (is('admin_email')){
-    return {person: me.id, pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), coffee_duties: true, add_people: true};
+    return {person: me.id, pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true};
   }
-  var r = {person: me.id, pages: false, rules: false, people: [], slots: [], coffee_duties: false, add_people: false};
   if (is('tnjc_admin_email')){ r.slots.push('TNJC'); r.people.push('TNJC', 'CSNJC'); }
   if (is('mljc_admin_email')){ r.slots.push('MLJC'); r.people.push('MLJC'); }
-  if (is('coffee_admin_email')){ r.slots.push('Coffee Cleaning'); r.people.push('Coffee'); r.coffee_duties = true; }
+  if (is('coffee_admin_email')){ r.slots.push('Coffee Cleaning'); r.people.push('Coffee'); }
   r.pages = r.slots.length > 0;
   return r;
 }
@@ -130,15 +116,15 @@ function api_site_bundle(key, token){
   if (!me && (!settings.PAGE_KEY || String(key || '') !== settings.PAGE_KEY)) return null;
   return {
     generated: new Date().toISOString(),
-    pages: site_pages(constants),
+    pages: site_pages(),
     data: site_data(constants),
     me: me ? site_rights(token, constants) : null
   };
 }
 
-// CacheService keeps at most 100 KB per entry: bigger values go in numbered pieces
+// CacheService keeps at most 100 KB per entry: bigger values go in numbered pieces, as ASCII (it counts bytes)
 function cache_put_big(key, value, seconds){
-  var s = JSON.stringify(value).replace(/[\u007f-\uffff]/g, function(c){ return '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4); });
+  var s = JSON.stringify(value).replace(/[\u007f-￿]/g, function(c){ return '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4); });
   var parts = {}, n = 0;
   for (var i = 0; i < s.length; i += 90000) parts[key + ':' + n++] = s.slice(i, i + 90000);
   parts[key] = String(n);
@@ -162,182 +148,220 @@ function cache_get_big(key){
 
 function site_forget(what){
   var cache = CacheService.getScriptCache();
-  if (what === 'pages' || what === 'all') cache.remove('site:pages:fresh');
-  if (what === 'data' || what === 'all'){ cache.remove('site:data'); cache.remove(PEOPLE_CACHE_KEY); }
+  if (what === 'pages') cache.remove('site:pages');
+  if (what === 'data'){ cache.remove('site:data'); cache.remove(PEOPLE_CACHE_KEY); }
 }
 
-// Several Notion GETs at once, three at a time (Notion allows about three requests a second).
-function notion_get_all(paths, constants){
-  var out = [];
-  for (var i = 0; i < paths.length; i += 3){
-    var batch = paths.slice(i, i + 3);
-    var responses = UrlFetchApp.fetchAll(batch.map(function(p){
-      return {url: 'https://api.notion.com/v1/' + p, method: 'get', muteHttpExceptions: true,
-              headers: {'Authorization': 'Bearer ' + constants['notion_token'], 'Notion-Version': NOTION_VERSION}};
-    }));
-    responses.forEach(function(res, j){
-      var code = res.getResponseCode();
-      if (code === 200) out.push(JSON.parse(res.getContentText()));
-      else if (code === 429 || code >= 500) out.push(notion_request('get', batch[j], null, constants));  // retries
-      else out.push({error: code, message: res.getContentText().slice(0, 300)});
-    });
+// ---- the pages ----
+
+const SITE_PAGES_HEADER = ['Page', 'Notion id', 'Title', 'Icon', 'Saved', 'Saved by', 'Content (JSON; edit on the site, not here)'];
+
+function site_pages_sheet(){
+  var id = PropertiesService.getScriptProperties().getProperty('SITE_PAGES_SHEET_ID');
+  if (id) return SpreadsheetApp.openById(id).getSheets()[0];
+  var ss = SpreadsheetApp.create('Gatsby Rotas pages');
+  var sheet = ss.getSheets()[0].setName('Pages');
+  sheet.appendRow(SITE_PAGES_HEADER);
+  sheet.setFrozenRows(1);
+  set_setting('SITE_PAGES_SHEET_ID', ss.getId());
+  return sheet;
+}
+
+// {slug: {id, slug, title, icon, saved, by, blocks}}, from the sheet (cached for five minutes)
+function site_pages(fresh){
+  if (!fresh){
+    var cached = cache_get_big('site:pages');
+    if (cached) return cached;
   }
-  return out;
-}
-
-// The pages, rebuilt only where Notion says they changed (each page's last_edited_time), checked at most every
-// five minutes. A page Notion will not show the bot (not shared with the integration) comes back as {error}.
-// force: a slug to read afresh in any case (just edited).
-function site_pages(constants, force){
-  var cache = CacheService.getScriptCache();
-  var stored = cache_get_big('site:pages') || {};
-  if (force) delete stored[force];
-  if (!force && cache.get('site:pages:fresh') && Object.keys(stored).length) return stored;
-  var ids = Object.keys(SITE.pages);
-  var metas = notion_get_all(ids.map(function(id){ return 'pages/' + id; }), constants);
+  var sheet = site_pages_sheet();
+  var last = sheet.getLastRow(), width = sheet.getLastColumn();
   var out = {};
-  ids.forEach(function(id, i){
-    var slug = SITE.pages[id], meta = metas[i];
-    if (meta.error){
-      out[slug] = {id: id, slug: slug, error: meta.error === 404 ? 'The bot cannot see this Notion page. Share it with the bot\'s Notion connection.' : 'Notion answered ' + meta.error + '.'};
-      return;
-    }
-    // Notion rounds last_edited_time to the minute, so pages are also read afresh every hour
-    var old = stored[slug];
-    if (old && !old.error && old.edited === meta.last_edited_time && Date.now() - old.built < 3600e3){ out[slug] = old; return; }
-    try {
-      out[slug] = {id: id, slug: slug, title: rich_plain(meta.properties && meta.properties.title && meta.properties.title.title),
-                   icon: meta.icon && meta.icon.type === 'emoji' ? meta.icon.emoji : '', edited: meta.last_edited_time,
-                   built: Date.now(), blocks: read_site_blocks(id, constants)};
-    } catch (e) {
-      out[slug] = old && !old.error ? old : {id: id, slug: slug, error: String(e.message || e)};
-    }
-  });
-  cache_put_big('site:pages', out, 21600);
-  cache.put('site:pages:fresh', '1', 300);
+  if (last > 1){
+    sheet.getRange(2, 1, last - 1, width).getValues().forEach(function(r){
+      if (!r[0]) return;
+      var json = r.slice(6).join('');
+      out[r[0]] = {id: String(r[1]), slug: String(r[0]), title: String(r[2]), icon: String(r[3]),
+                   saved: r[4] instanceof Date ? r[4].toISOString() : String(r[4] || ''), by: String(r[5] || ''),
+                   blocks: json ? JSON.parse(json) : []};
+    });
+  }
+  cache_put_big('site:pages', out, 300);
   return out;
 }
 
-function rich_plain(rt){
-  return (rt || []).map(function(t){ return t.plain_text; }).join('');
+function save_site_page(sheet, page, by){
+  var json = JSON.stringify(page.blocks || []);
+  var cells = [];
+  for (var i = 0; i < json.length; i += SITE.cell) cells.push(json.slice(i, i + SITE.cell));
+  var slugs = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().map(function(r){ return r[0]; }) : [];
+  var at = slugs.indexOf(page.slug);
+  var row = at >= 0 ? at + 2 : sheet.getLastRow() + 1;
+  var width = Math.max(sheet.getLastColumn(), 6 + cells.length);
+  if (width > 6) sheet.getRange(row, 7, 1, width - 6).clearContent();
+  // plain text, so Sheets never reads the JSON as a formula or a number
+  sheet.getRange(row, 1, 1, 6 + cells.length).setNumberFormat('@')
+    .setValues([[page.slug, page.id || '', page.title || '', page.icon || '', new Date().toISOString(), by].concat(cells)]);
 }
 
-// All blocks under a page, level by level (children of several blocks fetched together).
-function read_site_blocks(page_id, constants){
-  var root = {children: null};
-  var pending = [{id: page_id, node: root, cursor: null}];
-  while (pending.length){
-    var batch = pending.splice(0, pending.length);
-    var paths = batch.map(function(p){ return 'blocks/' + p.id + '/children?page_size=100' + (p.cursor ? '&start_cursor=' + p.cursor : ''); });
-    var results = notion_get_all(paths, constants);
-    results.forEach(function(res, i){
-      var p = batch[i];
-      if (res.error) throw new Error('Notion would not show the blocks of ' + p.id + ' (' + res.error + ')');
-      p.node.children = (p.node.children || []).concat(res.results.filter(function(b){ return !b.archived && !b.in_trash; }).map(function(b){
-        var node = to_site_block(b);
-        if (b.has_children && SITE_CONTAINERS.indexOf(node.type) >= 0){
-          node.children = [];
-          pending.push({id: normalise_id(b.id), node: node, cursor: null});
-        }
-        return node;
-      }));
-      if (res.has_more) pending.push({id: p.id, node: p.node, cursor: res.next_cursor});
+// A tsar's edits to one page, applied in order:
+//   {op: 'update', id, rt, checked?}             new text for a block
+//   {op: 'cells', id, cells: [rt, …]}            new text for a table row
+//   {op: 'insert', tmp, parent, after, type, rt}   a new block under parent (the page or a block), right after
+//                                                 `after`, or first when after is empty; parent and after may
+//                                                 name an earlier insert's tmp
+//   {op: 'delete', id}
+//   {op: 'title', title}
+// Returns the page as it is now.
+function api_site_edit_page(token, slug, ops){
+  var ed = site_editor(token, function(r){ return r.pages; });
+  if (!Array.isArray(ops) || ops.length > 300) throw new Error('Too many changes at once: please save in smaller steps.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var page = site_pages(true)[slug];
+    if (!page) throw new Error('Unknown page.');
+    apply_site_ops(page, ops, function(){ return Utilities.getUuid().replace(/-/g, ''); });
+    save_site_page(site_pages_sheet(), page, site_name(ed));
+    site_forget('pages');
+  } finally {
+    lock.releaseLock();
+  }
+  log_site_edit(ed, 'page ' + slug + ': ' + ops.length + ' change' + (ops.length === 1 ? '' : 's'));
+  return site_pages()[slug];
+}
+
+function apply_site_ops(page, ops, new_id){
+  var index = {};
+  var walk = function(list){
+    list.forEach(function(b){
+      index[b.id] = {block: b, list: list};
+      (b.rows || []).forEach(function(r){ index[r.id] = {block: r, list: b.rows, row: true}; });
+      if (b.children) walk(b.children);
     });
-  }
-  return finish_site_blocks(root.children || []);
-}
-
-// tables keep their rows as cells, not as blocks
-function finish_site_blocks(blocks){
-  return blocks.map(function(b){
-    if (b.type === 'table'){
-      b.rows = (b.children || []).map(function(r){ return {id: r.id, cells: r.cells || []}; });
-      delete b.children;
-    } else if (b.children){
-      b.children = finish_site_blocks(b.children);
+  };
+  walk(page.blocks);
+  var made = {};
+  var find = function(id){
+    id = made[id] || String(id || '');
+    if (!index[id]) throw new Error('That part of the page has changed or gone. Reload and try again.');
+    return index[id];
+  };
+  var forget = function(b){ delete index[b.id]; (b.rows || []).forEach(forget); (b.children || []).forEach(forget); };
+  ops.forEach(function(op){
+    if (op.op === 'title'){
+      var title = String(op.title || '').trim();
+      if (!title) throw new Error('A page needs a title.');
+      page.title = title.slice(0, 200);
+    } else if (op.op === 'update'){
+      var hit = find(op.id);
+      if (hit.row || SITE_TEXT_TYPES.indexOf(hit.block.type) < 0) throw new Error('This part of the page cannot be edited here.');
+      hit.block.rt = clean_site_rich(op.rt);
+      if (hit.block.type === 'todo') hit.block.checked = !!op.checked;
+    } else if (op.op === 'cells'){
+      var row = find(op.id);
+      if (!row.row) throw new Error('Not a table row.');
+      row.block.cells = (op.cells || []).slice(0, 20).map(clean_site_rich);
+    } else if (op.op === 'delete'){
+      var gone = find(op.id);
+      gone.list.splice(gone.list.indexOf(gone.block), 1);
+      forget(gone.block);
+    } else if (op.op === 'insert'){
+      if (SITE_NEW_TYPES.indexOf(op.type) < 0) throw new Error('Unknown kind of block: ' + op.type);
+      var parent = made[op.parent] || String(op.parent || '');
+      var list;
+      if (parent === page.id) list = page.blocks;
+      else {
+        var p = find(parent);
+        if (p.row || SITE_CONTAINERS.indexOf(p.block.type) < 0) throw new Error('Blocks cannot go there.');
+        list = p.block.children = p.block.children || [];
+      }
+      var block = {id: new_id(), type: op.type, rt: clean_site_rich(op.rt)};
+      if (op.type === 'todo') block.checked = false;
+      if (op.type === 'toggle') block.children = [];
+      var at = 0;
+      if (op.after){
+        var a = find(op.after);
+        at = list.indexOf(a.block) + 1;
+        if (!at) throw new Error('That part of the page has changed. Reload and try again.');
+      }
+      list.splice(at, 0, block);
+      index[block.id] = {block: block, list: list};
+      made[op.tmp] = block.id;
+    } else {
+      throw new Error('Unknown change: ' + op.op);
     }
-    return b;
   });
+  return page;
 }
 
-// One Notion block -> the site's compact form: {id, type, rt (rich text), ...}
-function to_site_block(b){
-  var id = normalise_id(b.id), t = b.type, v = b[t] || {};
-  if (SITE_TYPES[t]){
-    var out = {id: id, type: SITE_TYPES[t], rt: to_site_rich(v.rich_text)};
-    if (/^heading_/.test(t) && v.is_toggleable) out.toggle = true;
-    if (t === 'to_do') out.checked = !!v.checked;
-    if (t === 'callout') out.icon = v.icon && v.icon.type === 'emoji' ? v.icon.emoji : '';
-    if (v.color && v.color !== 'default') out.color = v.color;
-    return out;
-  }
-  if (t === 'divider') return {id: id, type: 'hr'};
-  if (t === 'column_list') return {id: id, type: 'columns'};
-  if (t === 'column') return {id: id, type: 'column'};
-  if (t === 'table') return {id: id, type: 'table', header: !!v.has_column_header};
-  if (t === 'table_row') return {id: id, type: 'row', cells: (v.cells || []).map(to_site_rich)};
-  if (t === 'image'){
-    var src = v.type === 'external' ? v.external.url : site_image_url(v.file.url, id);
-    return {id: id, type: 'image', url: src, caption: to_site_rich(v.caption)};
-  }
-  if (t === 'bookmark' || t === 'embed' || t === 'link_preview') return {id: id, type: 'bookmark', url: v.url, caption: to_site_rich(v.caption)};
-  if (t === 'child_page') return {id: id, type: 'page', page: id, title: v.title};
-  if (t === 'link_to_page') return {id: id, type: 'page', page: normalise_id(v.page_id || v.database_id || '')};
-  if (t === 'synced_block') return {id: id, type: 'group'};
-  if (SITE.views[id]) return {id: id, type: 'view', view: SITE.views[id]};
-  return {id: id, type: 'unsupported', what: t};
-}
-
-// Files Notion hosts come with addresses that expire after an hour; the published site's image proxy
-// signs them afresh on every request.
-function site_image_url(url, block_id){
-  return SITE.notion_site + '/image/' + encodeURIComponent(String(url).split('?')[0]) + '?table=block&id=' + hyphenate_id(block_id) + '&cache=v2';
-}
-
-// Notion rich text -> [{text, b, i, s, u, code, href, page, color}] (only the marks that are set)
-function to_site_rich(rich){
-  return (rich || []).map(function(r){
-    var a = r.annotations || {}, o = {text: r.plain_text};
-    if (a.bold) o.b = true;
-    if (a.italic) o.i = true;
-    if (a.strikethrough) o.s = true;
-    if (a.underline) o.u = true;
-    if (a.code) o.code = true;
-    if (a.color && a.color !== 'default') o.color = a.color;
-    if (r.type === 'mention' && r.mention.type === 'page') o.page = normalise_id(r.mention.page.id);
-    else if (r.type === 'equation'){ o.text = r.equation.expression; o.code = true; }
-    else if (r.href) o.href = r.href;
+// rich text as the site writes it: [{text, b, i, s, u, code, color, href | page}], nothing else
+function clean_site_rich(rt){
+  return (Array.isArray(rt) ? rt : []).slice(0, 300).map(function(r){
+    r = r || {};
+    var o = {text: String(r.text == null ? '' : r.text).slice(0, 5000)};
+    ['b', 'i', 's', 'u', 'code'].forEach(function(k){ if (r[k]) o[k] = true; });
+    if (r.color && /^(gray|brown|orange|yellow|green|blue|purple|pink|red)(_background)?$/.test(r.color)) o.color = r.color;
+    if (r.page && /^[0-9a-f]{32}$/.test(r.page)) o.page = r.page;
+    else if (r.href && /^(https?:\/\/|mailto:|\/[0-9a-f]{32}|#)/i.test(String(r.href))) o.href = String(r.href).slice(0, 2000);
     return o;
-  });
+  }).filter(function(o){ return o.text; });
 }
 
-// ...and back, for writing
-function to_notion_rich(rt){
-  var out = [];
-  (rt || []).forEach(function(o){
-    var annotations = {bold: !!o.b, italic: !!o.i, strikethrough: !!o.s, underline: !!o.u, code: !!o.code, color: o.color || 'default'};
-    if (o.page && /^[0-9a-f]{32}$/.test(o.page)){
-      out.push({type: 'mention', mention: {page: {id: hyphenate_id(o.page)}}, annotations: annotations});
-      return;
+// a whole page, as imported: only the kinds of block the site knows, with only their own fields
+function clean_site_blocks(blocks, depth){
+  if ((depth || 0) > 12) throw new Error('Pages nest too deeply.');
+  return (Array.isArray(blocks) ? blocks : []).filter(function(b){ return b && SITE_BLOCK_TYPES.indexOf(b.type) >= 0; }).map(function(b){
+    var o = {id: /^[0-9a-z-]{1,40}$/i.test(String(b.id)) ? String(b.id) : Utilities.getUuid().replace(/-/g, ''), type: b.type};
+    if (SITE_TEXT_TYPES.indexOf(b.type) >= 0) o.rt = clean_site_rich(b.rt);
+    if (b.toggle) o.toggle = true;
+    if (b.type === 'todo') o.checked = !!b.checked;
+    if (b.type === 'callout') o.icon = String(b.icon || '').slice(0, 8);
+    if (b.type === 'table'){
+      o.header = !!b.header;
+      o.rows = (b.rows || []).slice(0, 200).map(function(r){ return {id: String(r.id), cells: (r.cells || []).slice(0, 20).map(clean_site_rich)}; });
     }
-    var text = String(o.text || '');
-    var href = o.href ? notion_href(o.href) : null;
-    for (var i = 0; i < text.length; i += 1900){
-      out.push({type: 'text', text: {content: text.slice(i, i + 1900), link: href ? {url: href} : null}, annotations: annotations});
+    if (b.type === 'image' || b.type === 'bookmark'){
+      var url = String(b.url || '');
+      if (!/^(https:\/\/|img\/[\w.-]+$)/.test(url)) return null;
+      o.url = url;
+      o.caption = clean_site_rich(b.caption);
     }
-  });
-  return out.slice(0, 100);
+    if (b.type === 'page'){ o.page = /^[0-9a-f]{32}$/.test(b.page) ? b.page : ''; if (b.title) o.title = String(b.title).slice(0, 200); }
+    if (b.type === 'view'){
+      if (SITE.views.indexOf(b.view) < 0) return null;
+      o.view = b.view;
+    }
+    if (b.children && SITE_CONTAINERS.indexOf(b.type) >= 0) o.children = clean_site_blocks(b.children, (depth || 0) + 1);
+    return o;
+  }).filter(Boolean);
 }
 
-// Notion's own links come as "/<page id>#<block id>": the API wants a full address back
-function notion_href(href){
-  href = String(href);
-  if (/^\/[0-9a-f]{32}/.test(href)) return 'https://www.notion.so' + href;
-  if (!/^(https?:|mailto:)/i.test(href)) throw new Error('Links need a full address (https://…): ' + href);
-  return href;
+// The pages, all at once: the one-off move from Notion (any tsar, while there are none yet), or a restore
+// (tea tsar, replace = true). pages: {slug: {id, title, icon, blocks}}.
+function api_site_import_pages(token, pages, replace){
+  var ed = site_editor(token, function(r){ return r.pages; });
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = site_pages_sheet();
+    var have = site_pages(true);
+    if (Object.keys(have).length && !(replace && ed.rights.tea_tsar)) throw new Error('The pages are already here; only the tea tsar can replace them all.');
+    var slugs = Object.keys(pages || {}).filter(function(s){ return SITE.slugs.indexOf(s) >= 0; });
+    if (!slugs.length) throw new Error('No pages to import.');
+    slugs.forEach(function(slug){
+      var p = pages[slug];
+      save_site_page(sheet, {slug: slug, id: String(p.id || ''), title: String(p.title || slug).slice(0, 200),
+                             icon: String(p.icon || '').slice(0, 8), blocks: clean_site_blocks(p.blocks)}, site_name(ed));
+    });
+    site_forget('pages');
+  } finally {
+    lock.releaseLock();
+  }
+  log_site_edit(ed, 'imported ' + slugs.length + ' pages');
+  return Object.keys(site_pages());
 }
 
-// ---- the rota data ----
+// ---- the rota data (Notion) ----
 
 function site_data(constants){
   var cached = cache_get_big('site:data');
@@ -350,24 +374,16 @@ function site_data(constants){
   var rules_db = constants['notion_rota_rules_db_id'];
   var rules = notion_query(rules_db, null, null, constants).map(site_rule)
     .sort(function(a, b){ return rule_rank(a.position) - rule_rank(b.position); });
-  var duties = [], frequencies = [];
-  try {
-    duties = notion_query(SITE.coffee_duties_db, null, null, constants).map(site_coffee_duty)
-      .sort(function(a, b){ return a.n - b.n; });
-    var freq = notion_get_database(SITE.coffee_duties_db, constants).properties['Frequency'];
-    frequencies = freq && freq.select ? freq.select.options.map(function(o){ return o.name; }) : [];
-  } catch (e) { Logger.log('coffee duties: ' + e); }
   var people_db = notion_get_database(constants['notion_people_db_id'], constants);
   var rules_schema = notion_get_database(rules_db, constants).properties;
   var options = function(prop){ return prop && prop.select ? prop.select.options.map(function(o){ return o.name; }) : []; };
   var data = {
     generated: new Date().toISOString(),
-    schedule: schedule, people: people, rota_rules: rules, coffee_duties: duties,
+    schedule: schedule, people: people, rota_rules: rules,
     options: {
       types: ALL_TYPES, presenter_types: PRESENTER_TYPES, tea_types: TEA_TYPES, guest_types: GUEST_TYPES,
       positions: options(people_db.properties['Position']),
-      rules: {research: options(rules_schema['Research Duty']), tea_talk: options(rules_schema['Tea Talk Duty']), tea: options(rules_schema['Tea Duty'])},
-      frequencies: frequencies
+      rules: {research: options(rules_schema['Research Duty']), tea_talk: options(rules_schema['Tea Talk Duty']), tea: options(rules_schema['Tea Duty'])}
     }
   };
   cache_put_big('site:data', data, 300);
@@ -417,19 +433,21 @@ function site_person(page){
     excluded: [['research', 'Excluded from research talk'], ['tea_talk', 'Excluded from tea talk'], ['tea', 'Excluded from tea']]
       .filter(function(x){ return box(x[1]); }).map(function(x){ return x[0]; }),
     joined: join ? join.start : null,
-    photo: photo[0], photo_alt: photo[1]
+    photo: photo[0], photo_alt: photo.slice(1)
   };
 }
 
-// People's photos are their Notion page icons. Through the published site's image proxy (small, and signed
-// afresh for uploaded files). Resized copies on ucl.ac.uk go stale; photo_alt is the original upload.
+// People's photos are their Notion page icons: first through the published Notion site's image proxy (small;
+// gone once that site is unpublished), then straight from where they are. Resized copies on ucl.ac.uk go
+// stale, so their original upload comes last. Uploaded icons have addresses that work for an hour.
 function site_photo(page){
   var icon = page.icon;
-  if (!icon || icon.type === 'emoji') return [null, null];
-  var url = icon.type === 'external' ? icon.external.url : icon.file.url.split('?')[0];
-  var proxy = function(u){ return SITE.notion_site + '/image/' + encodeURIComponent(u) + '?table=block&id=' + page.id + '&width=240&cache=v2'; };
-  var original = icon.type === 'external' && /\/styles\/[^\/]+\/public\//.test(url) ? url.replace(/\/styles\/[^\/]+\/public\//, '/').split('?')[0] : null;
-  return [proxy(url), original ? proxy(original) : null];
+  if (!icon || icon.type === 'emoji') return [null];
+  var direct = icon.type === 'external' ? icon.external.url : icon.file.url;
+  var bare = direct.split('?')[0];
+  var out = [SITE.notion_site + '/image/' + encodeURIComponent(icon.type === 'external' ? direct : bare) + '?table=block&id=' + page.id + '&width=240&cache=v2', direct];
+  if (icon.type === 'external' && /\/styles\/[^\/]+\/public\//.test(bare)) out.push(bare.replace(/\/styles\/[^\/]+\/public\//, '/'));
+  return out;
 }
 
 function site_rule(page){
@@ -437,14 +455,7 @@ function site_rule(page){
   return {id: normalise_id(page.id), position: plain_text(p['Type']), research: sel('Research Duty'), tea_talk: sel('Tea Talk Duty'), tea: sel('Tea Duty')};
 }
 
-function site_coffee_duty(page){
-  var p = page.properties;
-  return {id: normalise_id(page.id), n: Number(plain_text(p['ID'])) || 0,
-          frequency: p['Frequency'] && p['Frequency'].select ? p['Frequency'].select.name : '',
-          content: plain_text(p['Content'])};
-}
-
-// ---- editing (tsars) ----
+// ---- editing the rota data (tsars) ----
 
 function site_editor(token, need){
   var constants = get_global_constants();
@@ -454,76 +465,9 @@ function site_editor(token, need){
   return {constants: constants, rights: rights};
 }
 
-// Applies a tsar's edits to one page, in order:
-//   {op: 'update', id, rt, checked?}            new text for a block (same type)
-//   {op: 'cells', id, cells: [rt, …]}           new text for a table row
-//   {op: 'insert', tmp, parent, after, type, rt}  a new block; parent/after may name an earlier tmp
-//   {op: 'delete', id}
-//   {op: 'title', title}                        the page's own title
-// Every block must belong to that page. Returns the page as it is now.
-function api_site_edit_page(token, slug, ops){
-  var ed = site_editor(token, function(r){ return r.pages; });
-  var constants = ed.constants;
-  var page_id = Object.keys(SITE.pages).filter(function(id){ return SITE.pages[id] === slug; })[0];
-  if (!page_id) throw new Error('Unknown page.');
-  if (!Array.isArray(ops) || ops.length > 200) throw new Error('Too many changes at once: please save in smaller steps.');
-  var known = {}, fresh = false;
-  var learn = function(blocks){
-    known = {};
-    known[page_id] = 'page';
-    (function walk(list){ list.forEach(function(b){
-      known[b.id] = b.type;
-      (b.rows || []).forEach(function(r){ known[r.id] = 'row'; });
-      if (b.children) walk(b.children);
-    }); })(blocks || []);
-  };
-  learn((site_pages(constants)[slug] || {}).blocks);
-  var made = {};
-  var resolve = function(id){
-    id = String(id || '');
-    if (made[id]) return made[id];
-    if (!known[normalise_id(id)] && !fresh){ learn(read_site_blocks(page_id, constants)); fresh = true; }
-    if (!known[normalise_id(id)]) throw new Error('That block is not on this page any more. Reload and try again.');
-    return normalise_id(id);
-  };
-  ops.forEach(function(op){
-    if (op.op === 'title'){
-      notion_request('patch', 'pages/' + page_id, {properties: {title: {title: chunk_text(String(op.title || '').trim())}}}, constants);
-    } else if (op.op === 'update'){
-      var id = resolve(op.id), type = NOTION_TYPES[known[id]];
-      if (!type) throw new Error('This block cannot be edited here.');
-      var body = {};
-      body[type] = {rich_text: to_notion_rich(op.rt)};
-      if (type === 'to_do') body[type].checked = !!op.checked;
-      notion_request('patch', 'blocks/' + id, body, constants);
-    } else if (op.op === 'cells'){
-      var row = resolve(op.id);
-      if (known[row] !== 'row') throw new Error('Not a table row.');
-      notion_request('patch', 'blocks/' + row, {table_row: {cells: (op.cells || []).map(to_notion_rich)}}, constants);
-    } else if (op.op === 'insert'){
-      var ntype = NOTION_TYPES[op.type];
-      if (!ntype || ntype === 'code') throw new Error('Unknown kind of block: ' + op.type);
-      var block = {object: 'block', type: ntype};
-      block[ntype] = {rich_text: to_notion_rich(op.rt)};
-      var req = {children: [block]};
-      if (op.after) req.after = hyphenate_id(resolve(op.after));
-      var results = notion_request('patch', 'blocks/' + resolve(op.parent) + '/children', req, constants).results || [];
-      var created = results.filter(function(b){ return b.type === ntype; });
-      // with "after", Notion may answer with the parent's children; the new block is the one right after it
-      var after = req.after ? normalise_id(req.after) : null;
-      var idx = after ? results.map(function(b){ return normalise_id(b.id); }).indexOf(after) : -1;
-      var mine = idx >= 0 && results[idx + 1] ? results[idx + 1] : created[created.length - 1];
-      if (!mine) throw new Error('Notion did not confirm the new block. Reload the page to see what was saved.');
-      made[op.tmp] = normalise_id(mine.id);
-      known[made[op.tmp]] = op.type;
-    } else if (op.op === 'delete'){
-      notion_request('delete', 'blocks/' + resolve(op.id), null, constants);
-    } else {
-      throw new Error('Unknown change: ' + op.op);
-    }
-  });
-  log_site_edit(ed, 'page ' + slug + ': ' + ops.length + ' change' + (ops.length === 1 ? '' : 's'));
-  return site_pages(constants, slug)[slug];
+function site_name(ed){
+  var p = load_people(ed.constants)[ed.rights.person];
+  return p ? p.name : ed.rights.person;
 }
 
 // A slot, new (no id) or changed: {id?, type, title, start, end, presenter: [ids], tea: [ids], guest,
@@ -621,22 +565,9 @@ function api_site_save_rule(token, rule){
   return site_rule(page);
 }
 
-// A coffee cleaning duty's text and how often (coffee tsar, tea tsar)
-function api_site_save_coffee_duty(token, duty){
-  var ed = site_editor(token, function(r){ return r.coffee_duties; });
-  var props = {'Content': {rich_text: chunk_text(String(duty.content || '').slice(0, 2000))}};
-  if (duty.frequency) props['Frequency'] = {select: {name: String(duty.frequency)}};
-  var page = notion_patch_page(hyphenate_id(duty.id), props, ed.constants);
-  site_forget('data');
-  log_site_edit(ed, 'coffee duty ' + duty.id);
-  return site_coffee_duty(page);
-}
-
 // in the bot's log sheet, so edits made on the site can be traced
 function log_site_edit(ed, what){
   try {
-    var people = load_people(ed.constants);
-    var who = people[ed.rights.person] ? people[ed.rights.person].name : ed.rights.person;
-    ensure_log_sheet().getSheetByName(LOG_TAB).appendRow([new Date(), 'site edit', 'live', '', '', who, what]);
+    ensure_log_sheet().getSheetByName(LOG_TAB).appendRow([new Date(), 'site edit', 'live', '', '', site_name(ed), what]);
   } catch (e) { Logger.log('site edit log: ' + e); }
 }

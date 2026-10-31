@@ -5,9 +5,8 @@ coffee cleaning and external seminars. It runs as Google Apps Script under the s
 (gatsby.teabot@gmail.com), with no server of its own.
 
 What to read where (each topic lives in one place only):
-- **Unit members:** the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/), which shows the
-  Gatsby Rotas pages on Notion (gcnu.notion.site) live: rules, guides, the schedule, and how to swap, add a title or
-  set away dates.
+- **Unit members:** the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/): rules, guides,
+  the schedule, and how to swap, add a title or set away dates. (It replaced the Gatsby Rotas pages on Notion.)
 - **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
   yearly jobs, handing over.
 - **New organiser or tea tsar:** the handover guide at the end of the [handbook](docs/handbook.md#handing-over-a-guide-for-new-organisers-and-tea-tsars).
@@ -31,12 +30,14 @@ copied back. The [handbook](docs/handbook.md) explains each part.
   Script web pages don't open for people signed in to several Google accounts. Its address is public, so without the
   personal code or the unit key (`PAGE_KEY`) in the link it only offers to email your link to your registered address.
 - `site/rotas/`: the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/): the member guides and
-  the rota views, read live from Notion by `apps-script/automation/Site.js`, so Notion and the site never differ.
-  Members sign in by picking their name and opening the link the bot emails them (valid for an hour); the browser
-  then keeps the unit key and their tea-page token for six months (the tea page's own memory of them works too).
-  Tsars edit pages (in place), slots, people, rota rules and coffee duties there; the bot writes each change
-  straight into Notion and notes it in the log sheet. Static files only, like the tea page; `edit.js` loads only
-  for tsars. Developed against a local stand-in for `Site.js` that is not part of this repo.
+  the rota views, served by `apps-script/automation/Site.js`. The guides live in the "Gatsby Rotas pages" sheet in
+  the bot's Drive (one row per page; moved off Notion on 2026-10-31); the schedule, people and rota rules are
+  read live from the Notion databases. Members sign in by picking their name and opening the link the bot emails
+  them (valid for an hour); the browser then keeps the unit key and their tea-page token for six months (the tea
+  page's own memory of them works too). Tsars edit the pages in place and slots, people and rota rules in small
+  forms; rota changes are written straight into Notion, and every edit is noted in the log sheet. Static files
+  only, like the tea page; `edit.js` loads only for tsars. Developed against a local stand-in for `Site.js` that
+  is not part of this repo.
 - `apps-script/page/`: "Gatsby Tea Page", the tea page's back end (web app): `doPost` with thin `api_*` wrappers,
   and a `doGet` that points old links to the new address. It uses the automation as the library `TeaBot`,
   because a web page can call every top-level function of its own project; a test makes sure it exposes

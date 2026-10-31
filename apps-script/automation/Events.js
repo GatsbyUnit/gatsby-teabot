@@ -11,13 +11,13 @@ const TENTATIVE_TAGS = {
 // rota -> organiser constant, group list constant, email subject and text (as in the old finalizing scripts)
 const ROTAS = {
   'TNJC': {admin: 'tnjc_admin_email', list: 'tnjc_email', label: 'TNJC', subject: 'TNJC schedule updated',
-           text: 'The TNJC schedule has been updated. You may view it on the Notion Page or through the gatsby.tea Google Calendar.'},
+           text: 'The TNJC schedule has been updated. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'},
   'MLJC': {admin: 'mljc_admin_email', list: 'mljc_email', label: 'MLJC', subject: 'MLJC schedule updated',
-           text: 'The MLJC schedule has been updated. You may view it on the Notion Page or through the gatsby.tea Google Calendar.'},
+           text: 'The MLJC schedule has been updated. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'},
   'Coffee Cleaning': {admin: 'coffee_admin_email', list: 'coffee_email', label: 'Coffee cleaning', subject: 'Coffee cleaning rota updated',
-           text: 'The coffee cleaning rota has been updated. You may view it on the Notion Page or through the gatsby.tea Google Calendar.'},
+           text: 'The coffee cleaning rota has been updated. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'},
   'talks': {admin: 'admin_email', list: 'unit_wide_email', label: 'Research / tea talks', subject: 'Tea schedule updated',
-           text: 'The tea talk schedule has been updated for the next month and the research talk schedule for the month after. You may view it on the Notion Page or through the gatsby.tea Google Calendar.'}
+           text: 'The tea talk schedule has been updated for the next month and the research talk schedule for the month after. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'}
 };
 
 // talks carry the unit's Zoom link as their location too, where calendar apps show it (and a join button)

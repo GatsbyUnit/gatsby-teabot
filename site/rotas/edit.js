@@ -1,6 +1,6 @@
 // Editing for the tsars, loaded only for them. Pages are edited in place: click any text, type, format it with
-// the bar at the top, and save; slots, people, the rota rules and the coffee duties have small forms where
-// they are shown. Every change goes to the tea bot, which writes it into Notion (apps-script/automation/Site.js).
+// the bar at the top, and save; slots, people and the rota rules have small forms where they are shown. The tea
+// bot keeps the pages and writes the rota changes into Notion (apps-script/automation/Site.js).
 'use strict';
 (function () {
   const R = window.Rotas;
@@ -32,7 +32,7 @@
     ['ol', 'Numbered list'], ['todo', 'To-do'], ['quote', 'Quote'], ['toggle', 'Toggle'],
   ];
   const TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'ul', 'ol', 'todo', 'quote', 'callout', 'toggle']);
-  // block elements that hold other blocks, and so are a parent in Notion
+  // block elements that hold other blocks, and so are a parent
   const CONTAINER = 'details[data-id],details[data-new],li[data-id],li[data-new],blockquote[data-id],aside[data-id],section.column[data-id]';
 
   let editor = null; // the page being edited: {slug, article, before: Map, title, tmp}
@@ -141,14 +141,14 @@
       <button type="button" class="icon-button" data-delete title="Delete this block">🗑 Delete</button>
       <span class="grow"></span><span class="status" aria-live="polite"></span>
       <button type="button" class="edit-button" data-cancel>Cancel</button>
-      <button type="button" class="edit-button primary" data-save>Save to Notion</button>
+      <button type="button" class="edit-button primary" data-save>Save</button>
       <span class="link-box" hidden><input type="url" placeholder="https://…" aria-label="Link address">
         <button type="button" class="edit-button small" data-link-ok>Apply</button>
         <button type="button" class="edit-button small" data-unlink>Remove link</button></span>`;
     article.before(bar);
     const hint = document.createElement('p');
     hint.className = 'edit-hint';
-    hint.textContent = 'Click any text to change it. Enter starts a new block of the same kind, Shift+Enter a new line. Nothing reaches Notion until you save.';
+    hint.textContent = 'Click any text to change it. Enter starts a new block of the same kind, Shift+Enter a new line. Nothing changes for others until you save.';
     bar.after(hint);
     editor.bar = bar;
     editor.hint = hint;
@@ -367,7 +367,7 @@
     return all[all.indexOf(el) - 1] || null;
   }
 
-  // Notion cannot change a block's kind: the old one goes, a new one with the same text takes its place
+  // a block changing kind: the old one goes, a new one with the same text takes its place
   function changeKind(type) {
     const c = current();
     if (!c || typeOf(c.block) === type) return;
@@ -443,7 +443,7 @@
 
   // ---- saving ----
 
-  // the Notion parent of a block element: the block around it, or the page
+  // the parent of a block element: the block around it, or the page
   function parentOf(el) {
     let p = el.parentElement;
     while (p && p !== editor.article) {
@@ -454,7 +454,7 @@
     return R.bundle().pages[editor.slug].id;
   }
 
-  // the block right before it under the same parent (Notion inserts "after" a block)
+  // the block right before it under the same parent (none: it goes first)
   function afterOf(el, parent, order) {
     const i = order.indexOf(el);
     for (let j = i - 1; j >= 0; j--) {
@@ -498,12 +498,12 @@
     if (!ops.length) { toast('Nothing has changed.'); return stopEditing(); }
     const button = $('[data-save]', editor.bar);
     button.disabled = true;
-    status('Saving to Notion…');
+    status('Saving…');
     try {
       const page = await R.api('api_site_edit_page', token(), editor.slug, ops);
       const b = R.bundle();
       R.keep({ ...b, pages: { ...b.pages, [editor.slug]: page } });
-      toast('Saved to Notion.');
+      toast('Saved.');
       stopEditing();
     } catch (err) {
       button.disabled = false;
@@ -571,7 +571,7 @@
         ${allDay ? `<label class="check"><input type="checkbox" name="water_filter"${s.water_filter ? ' checked' : ''}> Water filter week</label>` : ''}
       </div>
       ${allDay ? '' : `<label>Description<textarea name="description" placeholder="Abstract, paper, room…">${esc(s.description || '')}</textarea></label>`}
-      <div class="actions"><button type="submit" class="edit-button primary">Save to Notion</button>
+      <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div>
     </form>`;
   }
@@ -635,7 +635,7 @@
         } catch (x) {
           err.textContent = x.message;
           button.disabled = false;
-          button.textContent = 'Save to Notion';
+          button.textContent = 'Save';
         }
       });
       $('[data-form-cancel]', fm).addEventListener('click', close);
@@ -707,7 +707,7 @@
       <div class="row">${mine.map((r) => `<label class="check"><input type="checkbox" name="rota" value="${r}"${(p.rotas || []).includes(r) ? ' checked' : ''}> ${r}</label>`).join('')}</div>
       ${all ? `<div class="row"><span class="muted">Exempt from</span>${EXEMPT.map(([k, l]) => `<label class="check"><input type="checkbox" name="excluded" value="${k}"${(p.excluded || []).includes(k) ? ' checked' : ''}> ${l}</label>`).join('')}</div>
         <label class="check"><input type="checkbox" name="active"${p.active || !p.id ? ' checked' : ''}> On the rotas (active)</label>` : ''}
-      <div class="actions"><button type="submit" class="edit-button primary">Save to Notion</button>
+      <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div>
     </form>`;
   }
@@ -738,7 +738,7 @@
       } catch (x) {
         err.textContent = x.message;
         button.disabled = false;
-        button.textContent = 'Save to Notion';
+        button.textContent = 'Save';
       }
     });
     $('input, select', form)?.focus();
@@ -759,7 +759,7 @@
   });
 
   // =====================================================================================================
-  // Rota rules and coffee duties
+  // Rota rules
   // =====================================================================================================
 
   if (me.rules) {
@@ -784,32 +784,4 @@
     });
   }
 
-  if (me.coffee_duties) {
-    R.hooks.dutyButton = (x) => ` <button type="button" class="icon-button" data-edit-duty="${x.id}" title="Edit" aria-label="Edit this duty">✎</button>`;
-    document.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-edit-duty]');
-      if (!b) return;
-      const duty = R.bundle().data.coffee_duties.find((x) => x.id === b.dataset.editDuty);
-      const li = b.closest('li');
-      const freq = opts().frequencies || [];
-      li.hidden = true;
-      li.insertAdjacentHTML('afterend', `<li class="form-host"><form class="edit-form">
-        <label>Duty<textarea name="content">${esc(duty.content)}</textarea></label>
-        <label>How often<select name="frequency">${freq.map((f) => `<option${f === duty.frequency ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
-        <div class="actions"><button type="submit" class="edit-button primary">Save to Notion</button>
-          <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div></form></li>`);
-      const host = li.nextElementSibling;
-      const form = $('form', host);
-      $('[data-form-cancel]', form).addEventListener('click', () => { host.remove(); li.hidden = false; });
-      form.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        try {
-          const saved = await R.api('api_site_save_coffee_duty', token(), { id: duty.id, content: form.content.value, frequency: form.frequency.value });
-          putItem('coffee_duties', saved);
-          toast('Saved to Notion.');
-        } catch (x) { $('.error', form).textContent = x.message; }
-      });
-      form.content.focus();
-    });
-  }
 })();

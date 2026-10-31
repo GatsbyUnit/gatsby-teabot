@@ -35,7 +35,7 @@ const SETTINGS = [
 ];
 
 // managed by the script itself, kept in Script Properties
-const MACHINE_KEYS = ['LOG_SHEET_ID', 'SWAP_FORM_ID', 'LAST_BACKUP_ID'];
+const MACHINE_KEYS = ['LOG_SHEET_ID', 'SWAP_FORM_ID', 'LAST_BACKUP_ID', 'SITE_PAGES_SHEET_ID'];
 
 var settings_cache = null;
 

@@ -314,41 +314,65 @@ t('other jobs email on the first failure', () => { var m = []; send_mail = funct
 t('errors go to the TNJC organiser with the tea tsar in cc', () => { var m = []; send_mail = function(to, subj, b, c, o){ m.push([to, o && o.cc]); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'lena@x', admin_email: 'tsar@x'}); assert.deepStrictEqual(m[0], ['lena@x', 'tsar@x']); });
 // the Gatsby Rotas site (Site.js)
 var SITE_PAGE = '2444835e8eab46fa9a7c792877e09620';
-t('site: Notion rich text -> marks, links and page mentions', () => {
-  var rt = to_site_rich([
-    {type: 'text', plain_text: 'Hi ', annotations: {bold: true, color: 'default'}, href: null},
-    {type: 'text', plain_text: 'there', annotations: {italic: true, color: 'red'}, href: 'https://x.org'},
-    {type: 'mention', plain_text: 'Lena Weber', mention: {type: 'page', page: {id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}}, annotations: {}, href: 'https://www.notion.so/aaa'}]);
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(rt)), [{text: 'Hi ', b: true}, {text: 'there', i: true, color: 'red', href: 'https://x.org'}, {text: 'Lena Weber', page: 'aaaaaaaabbbbccccddddeeeeeeeeeeee'}]);
+function site_page(){ return {id: SITE_PAGE, slug: 'tea-system', title: 'Tea', blocks: [
+  {id: 'b1', type: 'p', rt: [{text: 'one'}]},
+  {id: 't1', type: 'toggle', rt: [{text: 'FAQ'}], children: [{id: 'c1', type: 'p', rt: [{text: 'inside'}]}]},
+  {id: 'tb', type: 'table', rows: [{id: 'r1', cells: [[{text: 'x'}]]}]},
+  {id: 'v1', type: 'view', view: 'schedule'}]}; }
+t('site: rich text keeps only what the site writes (no script links, no odd fields)', () => {
+  var rt = clean_site_rich([{text: 'a', b: true, onclick: 'x'}, {text: 'b', href: 'javascript:alert(1)'}, {text: 'c', href: '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d'},
+                            {text: 'd', page: 'not-an-id'}, {text: ''}, {text: 'e', color: 'red; background:url(x)'}, {text: 'f', color: 'blue_background'}]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(rt)), [{text: 'a', b: true}, {text: 'b'}, {text: 'c', href: '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d'},
+                                                          {text: 'd'}, {text: 'e'}, {text: 'f', color: 'blue_background'}]);
 });
-t('site: rich text back to Notion (mentions, Notion links, long text, empty pieces)', () => {
-  var out = to_notion_rich([{text: 'a', b: true, href: '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d'}, {text: 'x', page: 'aaaaaaaabbbbccccddddeeeeeeeeeeee'}, {text: ''}, {text: new Array(4001).join('z')}]);
-  assert.strictEqual(out[0].text.link.url, 'https://www.notion.so/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d');
-  assert.strictEqual(out[0].annotations.bold, true);
-  assert.strictEqual(out[1].type, 'mention');
-  assert.strictEqual(out[1].mention.page.id, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-  assert.strictEqual(out.length, 2 + 3);  // nothing for the empty piece, 4000 characters in three
-  assert.throws(() => to_notion_rich([{text: 'a', href: 'javascript:alert(1)'}]));
+t('site: page edits apply in order; new blocks follow new blocks or go first', () => {
+  var n = 0, page = site_page();
+  apply_site_ops(page, [
+    {op: 'update', id: 'b1', rt: [{text: 'ONE', b: true}]},
+    {op: 'insert', tmp: 'new1', parent: SITE_PAGE, after: 'b1', type: 'ul', rt: [{text: 'li 1'}]},
+    {op: 'insert', tmp: 'new2', parent: SITE_PAGE, after: 'new1', type: 'ul', rt: [{text: 'li 2'}]},
+    {op: 'insert', tmp: 'new3', parent: 't1', after: null, type: 'p', rt: [{text: 'first inside'}]},
+    {op: 'insert', tmp: 'new4', parent: SITE_PAGE, after: '', type: 'h1', rt: [{text: 'Top'}]},
+    {op: 'cells', id: 'r1', cells: [[{text: 'y'}]]},
+    {op: 'title', title: 'Tea, again'},
+    {op: 'delete', id: 'c1'}
+  ], () => 'id' + (++n));
+  assert.deepStrictEqual(page.blocks.map(b => b.id), ['id4', 'b1', 'id1', 'id2', 't1', 'tb', 'v1']);
+  assert.strictEqual(page.blocks[1].rt[0].b, true);
+  assert.deepStrictEqual(page.blocks[4].children.map(b => b.id), ['id3']);
+  assert.strictEqual(page.blocks[5].rows[0].cells[0][0].text, 'y');
+  assert.strictEqual(page.title, 'Tea, again');
 });
-t('site: blocks (toggle heading, uploaded image, linked database view, page link)', () => {
-  var h = to_site_block({id: '11111111-1111-1111-1111-111111111111', type: 'heading_2', has_children: true, heading_2: {rich_text: [], is_toggleable: true, color: 'default'}});
-  assert.strictEqual(h.type, 'h2'); assert.strictEqual(h.toggle, true);
-  var img = to_site_block({id: '22222222-2222-2222-2222-222222222222', type: 'image', image: {type: 'file', file: {url: 'https://prod-files-secure.s3.amazonaws.com/a/b/c.png?X-Amz=1'}, caption: []}});
-  assert.ok(img.url.indexOf('https://gcnu.notion.site/image/https%3A%2F%2Fprod-files-secure.s3.amazonaws.com%2Fa%2Fb%2Fc.png?table=block&id=22222222-2222-2222-2222-222222222222') === 0);
-  assert.strictEqual(to_site_block({id: '0acde385-337e-4550-bdb1-81c27fe525b1', type: 'child_database', child_database: {title: ''}}).view, 'schedule');
-  assert.strictEqual(to_site_block({id: '0acde385-337e-4550-bdb1-81c27fe525b1', type: 'unsupported', unsupported: {}}).view, 'schedule');
-  assert.strictEqual(to_site_block({id: '33333333-3333-3333-3333-333333333333', type: 'link_to_page', link_to_page: {type: 'page_id', page_id: 'cb2adc1a-9529-4900-a825-b366d65b369b'}}).page, 'cb2adc1a95294900a825b366d65b369b');
+t('site: edits to what is gone, views or unknown kinds are refused', () => {
+  assert.throws(() => apply_site_ops(site_page(), [{op: 'delete', id: 'c1'}, {op: 'update', id: 'c1', rt: []}], () => 'x'), /changed or gone/);
+  assert.throws(() => apply_site_ops(site_page(), [{op: 'update', id: 'v1', rt: []}], () => 'x'), /cannot be edited/);
+  assert.throws(() => apply_site_ops(site_page(), [{op: 'insert', tmp: 'n', parent: SITE_PAGE, type: 'image'}], () => 'x'), /Unknown kind/);
+  assert.throws(() => apply_site_ops(site_page(), [{op: 'insert', tmp: 'n', parent: 'v1', type: 'p'}], () => 'x'), /cannot go there/);
+  assert.throws(() => apply_site_ops(site_page(), [{op: 'title', title: '  '}], () => 'x'), /title/);
+});
+t('site: imported pages keep only known blocks and safe addresses', () => {
+  var saved = Utilities.getUuid; Utilities.getUuid = () => '0000-1111';
+  try {
+    var out = clean_site_blocks([
+      {id: 'a', type: 'p', rt: [{text: 'hi'}], extra: 1},
+      {id: 'b', type: 'image', url: 'javascript:x'}, {id: 'c', type: 'image', url: 'img/timer.png', caption: []},
+      {id: 'd', type: 'view', view: 'coffee-duties'}, {id: 'e', type: 'script'},
+      {id: 'f', type: 'toggle', toggle: true, rt: [], children: [{id: 'g', type: 'p', rt: []}]}]);
+    assert.deepStrictEqual(out.map(b => b.id), ['a', 'c', 'f']);
+    assert.strictEqual('extra' in out[0], false);
+    assert.strictEqual(out[2].children[0].id, 'g');
+  } finally { Utilities.getUuid = saved; }
 });
 var site_saved = {};
 function site_stubs(email){
-  site_saved = {gc: get_global_constants, idt: identity_for_token, sp: site_pages, nr: notion_request, np: notion_patch_page, gp: notion_get_page, lp: load_people, ls: ensure_log_sheet, pe: site_person};
+  site_saved = {gc: get_global_constants, idt: identity_for_token, nr: notion_request, np: notion_patch_page, gp: notion_get_page, lp: load_people, ls: ensure_log_sheet, pe: site_person};
   get_global_constants = () => ({admin_email: 'tsar@x', tnjc_admin_email: 'tnjc@x', mljc_admin_email: 'mljc@x', coffee_admin_email: 'coffee@x', notion_talk_db_id: 'db', notion_people_db_id: 'pdb'});
   identity_for_token = (tok) => (tok === 'tok' ? {id: 'p1', email: email} : null);
   load_people = () => ({p1: {id: 'p1', name: 'Lena Weber', active: true}, b: {id: 'b', name: 'Nikolai Petrov', active: true}});
   ensure_log_sheet = () => { throw new Error('no sheet in tests'); };
 }
 function site_restore(){
-  get_global_constants = site_saved.gc; identity_for_token = site_saved.idt; site_pages = site_saved.sp; notion_request = site_saved.nr;
+  get_global_constants = site_saved.gc; identity_for_token = site_saved.idt; notion_request = site_saved.nr;
   notion_patch_page = site_saved.np; notion_get_page = site_saved.gp; load_people = site_saved.lp; ensure_log_sheet = site_saved.ls; site_person = site_saved.pe;
 }
 t('site: who may edit what', () => {
@@ -356,7 +380,7 @@ t('site: who may edit what', () => {
   try {
     var c = get_global_constants();
     var tea = site_rights('tok', c);
-    assert.ok(tea.pages && tea.rules && tea.add_people && tea.people[0] === 'all' && tea.slots.length === ALL_TYPES.length);
+    assert.ok(tea.pages && tea.rules && tea.add_people && tea.tea_tsar && tea.people[0] === 'all' && tea.slots.length === ALL_TYPES.length);
     identity_for_token = () => ({id: 'p1', email: 'tnjc@x'});
     var tnjc = site_rights('tok', c);
     assert.deepStrictEqual(JSON.parse(JSON.stringify([tnjc.pages, tnjc.rules, tnjc.slots, tnjc.people])), [true, false, ['TNJC'], ['TNJC', 'CSNJC']]);
@@ -366,39 +390,6 @@ t('site: who may edit what', () => {
     assert.strictEqual(site_rights('', c).person, '');
   } finally { site_restore(); }
 });
-t('site: page edits are applied in order, new blocks can follow new blocks, foreign blocks are refused', () => {
-  site_stubs('tsar@x');
-  var calls = [];
-  try {
-    site_pages = function(){ return {'tea-system': {id: SITE_PAGE, blocks: [{id: 'b1', type: 'p', rt: []}, {id: 't1', type: 'table', rows: [{id: 'r1', cells: []}]}]}}; };
-    notion_request = function(m, path, body){
-      calls.push([m, path, body]);
-      if (/children$/.test(path)) return {results: [{id: body.after || 'x', type: 'paragraph'}, {id: ('a' + calls.length).padEnd(32, '0'), type: body.children[0].type}]};
-      return {};
-    };
-    api_site_edit_page('tok', 'tea-system', [
-      {op: 'update', id: 'b1', rt: [{text: 'Hello', b: true}]},
-      {op: 'insert', tmp: 'new1', parent: SITE_PAGE, after: 'b1', type: 'ul', rt: [{text: 'one'}]},
-      {op: 'insert', tmp: 'new2', parent: SITE_PAGE, after: 'new1', type: 'ul', rt: [{text: 'two'}]},
-      {op: 'cells', id: 'r1', cells: [[{text: 'c'}]]},
-      {op: 'title', title: 'New title'},
-      {op: 'delete', id: 'b1'}
-    ]);
-    assert.deepStrictEqual(calls.map(c => c[0] + ' ' + c[1]), ['patch blocks/b1', 'patch blocks/' + SITE_PAGE + '/children', 'patch blocks/' + SITE_PAGE + '/children',
-      'patch blocks/r1', 'patch pages/' + SITE_PAGE, 'delete blocks/b1']);
-    assert.strictEqual(calls[0][2].paragraph.rich_text[0].annotations.bold, true);
-    assert.strictEqual(calls[1][2].children[0].type, 'bulleted_list_item');
-    assert.strictEqual(calls[2][2].after, hyphenate_id('a2'.padEnd(32, '0')));  // the block made by the first insert
-    read_site_blocks_saved = read_site_blocks;
-    read_site_blocks = function(){ return []; };
-    assert.throws(() => api_site_edit_page('tok', 'tea-system', [{op: 'delete', id: 'ffffffffffffffffffffffffffffffff'}]), /not on this page/);
-    read_site_blocks = read_site_blocks_saved;
-    assert.throws(() => api_site_edit_page('tok', 'nowhere', []), /Unknown page/);
-    identity_for_token = () => ({id: 'p1', email: 'someone@x'});
-    assert.throws(() => api_site_edit_page('tok', 'tea-system', []), /Only the tsars/);
-  } finally { site_restore(); }
-});
-var read_site_blocks_saved;
 t('site: a rota tsar can only tick their own rota on people, and only edit their own slots', () => {
   site_stubs('tnjc@x');
   var patched = null;
@@ -413,6 +404,25 @@ t('site: a rota tsar can only tick their own rota on people, and only edit their
     notion_get_page = function(){ return {id: 's1', properties: {Type: {select: {name: 'MLJC'}}}}; };
     assert.throws(() => api_site_save_slot('tok', {id: 's1', type: 'TNJC', start: '2026-11-02'}), /MLJC tsar/);
   } finally { site_restore(); }
+});
+t('site: the pages are imported once; only the tea tsar may replace them', () => {
+  site_stubs('tnjc@x');
+  var saved_lock = LockService, saved_sheet = site_pages_sheet, saved_pages = site_pages, saved_save = save_site_page, written = [];
+  LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
+  site_pages_sheet = () => ({});
+  save_site_page = (sheet, page) => written.push(page.slug);
+  try {
+    site_pages = () => ({});
+    api_site_import_pages('tok', {home: {id: 'h', title: 'Home', blocks: []}, nonsense: {blocks: []}});
+    assert.deepStrictEqual(written, ['home']);
+    site_pages = () => ({home: {}});
+    assert.throws(() => api_site_import_pages('tok', {home: {blocks: []}}, true), /only the tea tsar/);
+    identity_for_token = () => ({id: 'p1', email: 'tsar@x'});
+    api_site_import_pages('tok', {home: {blocks: []}}, true);
+    assert.deepStrictEqual(written, ['home', 'home']);
+  } finally {
+    LockService = saved_lock; site_pages_sheet = saved_sheet; site_pages = saved_pages; save_site_page = saved_save; site_restore();
+  }
 });
 t('site: dates for Notion', () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(site_notion_date('2026-11-02', '2026-11-06'))), {start: '2026-11-02', end: '2026-11-06'});

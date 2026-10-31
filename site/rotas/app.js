@@ -1,6 +1,6 @@
 // Gatsby Rotas: the unit's talk, tea and coffee rotas and the guides to them, at site/rotas/ next to the tea
-// page. Pages and rota data come live from Notion through the tea bot (apps-script/automation/Site.js); tsars
-// edit them here (edit.js) and the bot writes their changes straight into Notion. No build step.
+// page. The tea bot (apps-script/automation/Site.js) keeps the pages and reads the rota data live from Notion;
+// tsars edit both here (edit.js). No build step.
 'use strict';
 
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -134,11 +134,14 @@ function loadData() {
     cleanTitle: s.title.replace(/\[[^\]]*tentative\]/ig, '').trim(),
   })).sort((a, b) => a.startDate - b.startDate);
   const pageIds = new Map(Object.values(bundle.pages).map((p) => [p.id, p.slug]));
-  return (data = { ...d, slots, peopleById: people, pageIds });
+  const blockPages = new Map();
+  const walk = (blocks, slug) => (blocks || []).forEach((b) => { blockPages.set(b.id, slug); walk(b.children, slug); });
+  Object.values(bundle.pages).forEach((p) => walk(p.blocks, p.slug));
+  return (data = { ...d, slots, peopleById: people, pageIds, blockPages });
 }
 
 const can = {
-  any: () => !!(bundle?.me && (bundle.me.pages || bundle.me.rules || bundle.me.people.length || bundle.me.slots.length || bundle.me.coffee_duties)),
+  any: () => !!(bundle?.me && (bundle.me.pages || bundle.me.rules || bundle.me.people.length || bundle.me.slots.length)),
 };
 
 const fmt = (opts) => new Intl.DateTimeFormat('en-GB', { timeZone: CONFIG.timeZone, ...opts });
@@ -160,7 +163,7 @@ function mondayOf(key) {
 }
 const keyDate = (key) => new Date(key + 'T12:00:00Z');
 
-// ---------- Notion content ----------
+// ---------- page content ----------
 
 // A Notion address -> where it goes here: our pages and people stay on the site, other pages open on Notion.
 function resolveHref(url) {
@@ -175,6 +178,7 @@ function resolveHref(url) {
 function targetHref(id, anchor = '') {
   const d = loadData();
   if (d.pageIds.has(id)) return pageHref(d.pageIds.get(id), anchor);
+  if (d.blockPages.has(id)) return pageHref(d.blockPages.get(id), id);
   if (d.peopleById.has(id)) return personHref(id);
   return '';
 }
@@ -278,14 +282,15 @@ function initials(name) {
 
 // A person's photo in a round frame; without one (or when it fails to load), their initials.
 function avatar(p, size = '') {
-  if (p.photo) return `<span class="avatar ${size}"><img src="${esc(p.photo)}" data-alt="${esc(p.photo_alt || '')}" data-initials="${esc(initials(p.name))}" alt="" loading="lazy" decoding="async"></span>`;
+  if (p.photo) return `<span class="avatar ${size}"><img src="${esc(p.photo)}" data-alt="${esc([].concat(p.photo_alt || []).join(' '))}" data-initials="${esc(initials(p.name))}" alt="" loading="lazy" decoding="async"></span>`;
   return `<span class="avatar avatar-mono ${size}" aria-hidden="true">${esc(initials(p.name))}</span>`;
 }
 
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (img.tagName !== 'IMG' || !img.parentElement?.classList.contains('avatar')) return;
-  if (img.dataset.alt) { img.src = img.dataset.alt; img.dataset.alt = ''; return; }
+  const next = (img.dataset.alt || '').split(' ').filter(Boolean);
+  if (next.length) { img.dataset.alt = next.slice(1).join(' '); img.src = next[0]; return; }
   const box = img.parentElement;
   box.classList.add('avatar-mono');
   box.textContent = img.dataset.initials || '';
@@ -375,7 +380,6 @@ const VIEWS = {
   schedule: scheduleView,
   people: peopleView,
   'rota-rules': rotaRulesView,
-  'coffee-duties': coffeeDutiesView,
 };
 
 function nextUpView(el, d) {
@@ -600,25 +604,6 @@ function rotaRulesView(el) {
 // plain text from a Notion text property: line breaks kept, addresses made into links
 const linkify = (text) => esc(text).replace(/https?:\/\/[^\s<]+[^\s<.,;:)]/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g, '<br>');
 
-const FREQUENCY = (f) => /^daily/i.test(f) ? 'Every day' : f.replace(/\s*\(.*\)\s*$/, '');
-
-function coffeeDutiesView(el) {
-  const draw = () => {
-    const d = loadData();
-    const groups = new Map();
-    for (const duty of d.coffee_duties || []) {
-      if (!groups.has(duty.frequency)) groups.set(duty.frequency, []);
-      groups.get(duty.frequency).push(duty);
-    }
-    el.innerHTML = [...groups].map(([f, list]) => `<h4 class="duty-group">${esc(FREQUENCY(f))}</h4>
-      ${/\(.*\)/.test(f) ? `<p class="hint">${esc(f.match(/\((.*)\)/)[1].replace(/^./, (c) => c.toUpperCase()))}.</p>` : ''}
-      <ol class="duties">${list.map((x) => `<li data-duty="${x.id}">${linkify(x.content)}${hooks.dutyButton ? hooks.dutyButton(x) : ''}</li>`).join('')}</ol>`).join('')
-      || '<p class="empty">The list of coffee duties could not be read from Notion.</p>';
-  };
-  el.redraw = draw;
-  draw();
-}
-
 function redrawViews() {
   data = null;
   document.querySelectorAll('[data-view]').forEach((v) => v.redraw?.());
@@ -635,7 +620,7 @@ function renderNav(active) {
 async function renderPage(slug) {
   const main = $('#main');
   await loadBundle();
-  const page = bundle.pages[slug];
+  const page = bundle.pages[slug] || (slug === 'home' && { id: '', slug, title: 'Gatsby Rotas', error: 'The pages are being moved here from Notion.' });
   if (!page) return notFound();
   document.title = slug === 'home' ? 'Gatsby Rotas' : `${page.title || slug} · Gatsby Rotas`;
   main.className = `page page-${slug}`;
@@ -643,11 +628,11 @@ async function renderPage(slug) {
   let blocks = page.error ? [] : page.blocks;
   if (page.error) {
     if (slug !== 'home') {
-      main.innerHTML = `<article class="prose"><p class="empty">${esc(page.error)} Meanwhile it is on <a href="${CONFIG.notionSite}${page.id}">Notion</a>.</p></article>`;
+      main.innerHTML = `<article class="prose"><p class="empty">${esc(page.error)}</p></article>`;
       footerMeta();
       return;
     }
-    blocks = [{ id: 'page-error', type: 'p', rt: [{ text: `The guides cannot be shown here yet (${page.error}) They are on Notion meanwhile.`, color: 'gray' }] }];
+    blocks = [{ id: 'page-error', type: 'p', rt: [{ text: page.error, color: 'gray' }] }];
   }
   if (slug === 'home') {
     // "Next up" is the site's own; it goes above the first heading.
@@ -720,9 +705,8 @@ function footerMeta() {
   const teaLink = s?.token ? `${CONFIG.teaPage}?t=${s.token}` : CONFIG.teaPage;
   const who = !s ? '' : s.person && s.name ? `Signed in as <a href="${personHref(s.person)}">${esc(s.name)}</a>` : 'Signed in on this browser';
   el.innerHTML = [
-    generated && `Live from Notion, ${F.stamp.format(new Date(generated))}`,
+    generated && `Updated ${F.stamp.format(new Date(generated))}`,
     `<a href="${esc(teaLink)}">Tea page</a>`,
-    `<a href="${CONFIG.notionSite}" target="_blank" rel="noopener">On Notion</a>`,
     who, s && '<button type="button" class="link-button" data-sign-out>Sign out</button>',
   ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
 }
