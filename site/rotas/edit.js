@@ -572,7 +572,9 @@
       </div>
       ${allDay ? '' : `<label>Description<textarea name="description" placeholder="Abstract, paper, room…">${esc(s.description || '')}</textarea></label>`}
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
-        <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div>
+        <button type="button" class="edit-button" data-form-cancel>Cancel</button>
+        ${s.id ? '<button type="button" class="edit-button" data-slot-delete title="For slots not needed. A finalised talk is better cancelled: set its title to Cancelled.">Remove slot</button>' : ''}
+        <span class="error" role="alert"></span></div>
     </form>`;
   }
 
@@ -639,6 +641,18 @@
         }
       });
       $('[data-form-cancel]', fm).addEventListener('click', close);
+      $('[data-slot-delete]', fm)?.addEventListener('click', async (e) => {
+        const b = e.currentTarget;
+        if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Remove it for good?'; return; }
+        b.disabled = true;
+        try {
+          await R.api('api_site_delete_slot', token(), s.id);
+          const bb = R.bundle();
+          R.keep({ ...bb, data: { ...bb.data, schedule: bb.data.schedule.filter((x) => x.id !== s.id) } });
+          R.redrawViews();
+          toast('Slot removed.');
+        } catch (x) { $('.error', fm).textContent = x.message; b.disabled = false; }
+      });
       fm.addEventListener('click', (e) => {
         const more = e.target.closest('[data-more]');
         if (more) more.insertAdjacentHTML('beforebegin', personSelect('', more.dataset.more));

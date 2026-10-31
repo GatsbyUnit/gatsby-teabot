@@ -519,6 +519,18 @@ function api_site_save_slot(token, slot){
   return site_slot(page);
 }
 
+// Removes a slot (as deleting its row in Notion did): for slots not needed, before they are finalised. A
+// finalised talk is better cancelled (title "Cancelled"), which keeps the calendar and the rota in step.
+function api_site_delete_slot(token, id){
+  var ed = site_editor(token);
+  var current = site_slot(notion_get_page(hyphenate_id(id), ed.constants));
+  if (ed.rights.slots.indexOf(current.type) < 0) throw new Error('Only the ' + current.type + ' tsar or the tea tsar can remove this slot.');
+  notion_request('patch', 'pages/' + hyphenate_id(id), {archived: true}, ed.constants);
+  site_forget('data');
+  log_site_edit(ed, 'removed ' + current.type + ' slot ' + current.start);
+  return true;
+}
+
 function site_notion_date(start, end){
   var day = /^\d{4}-\d{2}-\d{2}$/, minute = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
   var conv = function(s){

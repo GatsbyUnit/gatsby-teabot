@@ -23,7 +23,9 @@ copied back. The [handbook](docs/handbook.md) explains each part.
 
 ## Layout
 - `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ Notion sync, scheduling and
-  finalising, emails, organiser reminders, and everything behind the tea page. Settings are described at the top
+  finalising, emails, organiser reminders, and everything behind the tea page. All rota data goes through
+  `notion_request` (`Notion.js`), which `Store.js` can answer from the bot's own "Gatsby Rotas data" sheet
+  instead of Notion (setting `STORE`; the move is described in docs/next-steps.md). Settings are described at the top
   of `Config.js`, one-off admin functions in `Setup.js`.
 - `site/`: the tea page itself, a static page on GitHub Pages (https://gatsbyunit.github.io/gatsby-teabot/),
   published by `.github/workflows/pages.yml` whenever it changes. It is not served by Apps Script because Apps

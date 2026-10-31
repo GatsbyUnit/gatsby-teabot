@@ -138,6 +138,25 @@ Most code works with row objects, not Notion pages, so the change is fairly cont
   was left out of the 2026 go-live to keep it small.
 - `tests/run.js` fakes Notion responses; give it a fake sheet store instead.
 
+### Status (2026-10-31): the store is built, the switch is not made yet
+`apps-script/automation/Store.js` is the sheet store: the "Gatsby Rotas data" sheet in the bot's Drive, one tab
+per database (same columns, Notion page IDs as the ID column), answering the same Notion API calls the code
+already makes, so nothing else changed. Settings `STORE` (`notion` | `sheet`) and `NOTION_MIRROR` in the
+Automation tab. The guides already left Notion (the "Gatsby Rotas pages" sheet, see `Site.js`). Steps:
+1. Run `store_import_from_notion()` in the automation's editor: copies all three databases, history included.
+   From then on every change the bot writes to Notion is copied into the sheet too.
+2. Run `store_check()`: lists every field where Notion and the sheet differ (hand edits made in Notion directly
+   are the expected ones; run the import again to pick them up).
+3. Switch the Cron Jobs to the store: their four request helpers call `TeaBot.store_fetch` instead of
+   `UrlFetchApp.fetch` (add the TeaBot library to their manifest; someone must open the project once and allow
+   the new permissions, or their triggers stop). Not done yet, on purpose: it is only needed for the switch.
+4. Ask organisers to stop editing the Notion databases (the site has editors for slots, people and rules),
+   run the import once more, and set `STORE` to `sheet`. With `NOTION_MIRROR` = TRUE every change still goes to
+   Notion first, so `STORE` = `notion` switches back without losing anything.
+5. After a term: `NOTION_MIRROR` = FALSE, revoke the Notion token, archive the databases.
+
+The original plan, for reference:
+
 ### Migration plan
 1. Run `backup_all()` (`Backup.js`). It already copies the Schedule and People databases into a spreadsheet,
    which is the starting import. Import all history, not only future slots: the scheduler's fairness queue

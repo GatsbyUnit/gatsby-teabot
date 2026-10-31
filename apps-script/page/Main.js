@@ -66,6 +66,7 @@ function api_site_sign_in_token(token){ return TeaBot.api_site_sign_in_token(tok
 function api_site_bundle(key, token){ return TeaBot.api_site_bundle(key, token); }
 function api_site_edit_page(token, slug, ops){ return TeaBot.api_site_edit_page(token, slug, ops); }
 function api_site_save_slot(token, slot){ return TeaBot.api_site_save_slot(token, slot); }
+function api_site_delete_slot(token, id){ return TeaBot.api_site_delete_slot(token, id); }
 function api_site_save_person(token, person){ return TeaBot.api_site_save_person(token, person); }
 function api_site_save_rule(token, rule){ return TeaBot.api_site_save_rule(token, rule); }
 function api_site_import_pages(token, pages, replace){ return TeaBot.api_site_import_pages(token, pages, replace); }

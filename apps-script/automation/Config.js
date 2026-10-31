@@ -31,11 +31,13 @@ const SETTINGS = [
   ['HANDBOOK_URL', '', 'Link to the organiser handbook, included in reminder emails.'],
   ['PAGE_URL', '', 'Address of the tea page (GitHub Pages: https://gatsbyunit.github.io/gatsby-teabot/; also read by the reminder emails of the old Cron Jobs).'],
   ['PAGE_KEY', '', 'Unit key in the general tea-page link (calendar events, emails to several people); without it, the page shows nothing to someone who only knows its public address. Any random letters and digits. Changing it breaks the general links already sent; the calendar events get the new one within the hour.'],
+  ['STORE', 'notion', 'Where the rota data (Schedule, People, Rota rules) is read from: notion, or sheet (the bot\'s "Gatsby Rotas data" sheet, made by store_import_from_notion(); see Store.js). Switching back to notion is safe while NOTION_MIRROR is TRUE.'],
+  ['NOTION_MIRROR', 'TRUE', 'With STORE = sheet: also write every change to Notion (first), so Notion stays complete and switching back is possible. Set to FALSE once Notion is retired.'],
   ['FAVICON_URL', '', 'Optional browser-tab icon of the tea page: an image address ending in .png (a Drive image shared by link: https://lh3.googleusercontent.com/d/<file id>#.png). Kept here rather than in the public repo.']
 ];
 
 // managed by the script itself, kept in Script Properties
-const MACHINE_KEYS = ['LOG_SHEET_ID', 'SWAP_FORM_ID', 'LAST_BACKUP_ID', 'SITE_PAGES_SHEET_ID'];
+const MACHINE_KEYS = ['LOG_SHEET_ID', 'SWAP_FORM_ID', 'LAST_BACKUP_ID', 'SITE_PAGES_SHEET_ID', 'STORE_SHEET_ID'];
 
 var settings_cache = null;
 

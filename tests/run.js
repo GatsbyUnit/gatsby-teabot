@@ -39,7 +39,9 @@ var Utilities = {
 `;
 const tests = `
 var results = [];
-var real_notion_request = notion_request;
+var real_notion_request = notion_http;
+// the real Notion helpers, before tests below replace some of them
+var REAL = {notion_request: notion_request, notion_patch_page: notion_patch_page, notion_get_page: notion_get_page, notion_query: notion_query, to_row: to_row};
 function t(name, fn){ try { fn(); results.push('ok   ' + name); } catch (e) { results.push('FAIL ' + name + ': ' + e.message); } }
 
 var people = {
@@ -425,6 +427,168 @@ t('site: the pages are imported once; only the tea tsar may replace them', () =>
   } finally {
     LockService = saved_lock; site_pages_sheet = saved_sheet; site_pages = saved_pages; save_site_page = saved_save; site_restore();
   }
+});
+// the rota data sheet (Store.js)
+function FakeSheet(name){ this.name = name; this.cells = []; }
+FakeSheet.prototype.getLastRow = function(){ return this.cells.length; };
+FakeSheet.prototype.getLastColumn = function(){ return this.cells.reduce((m, r) => Math.max(m, r.length), 0); };
+FakeSheet.prototype.getRange = function(r, c, nr, nc){
+  var sh = this; nr = nr || 1; nc = nc || 1;
+  var range = {
+    getValues: () => { var out = []; for (var i = 0; i < nr; i++){ var row = []; for (var j = 0; j < nc; j++) row.push(((sh.cells[r - 1 + i] || [])[c - 1 + j]) ?? ''); out.push(row); } return out; },
+    setValues: (v) => { v.forEach((row, i) => { var t = sh.cells[r - 1 + i] = sh.cells[r - 1 + i] || []; row.forEach((x, j) => { t[c - 1 + j] = String(x); }); }); return range; },
+    setValue: (x) => range.setValues([[x]]),
+    setNumberFormat: () => range
+  };
+  return range;
+};
+FakeSheet.prototype.clear = function(){ this.cells = []; };
+FakeSheet.prototype.clearContents = function(){ this.cells = []; };
+FakeSheet.prototype.setFrozenRows = function(){};
+function FakeBook(){ this.tabs = [new FakeSheet('Sheet1')]; }
+FakeBook.prototype.getSheetByName = function(n){ return this.tabs.filter(t => t.name === n)[0] || null; };
+FakeBook.prototype.insertSheet = function(n){ var t = new FakeSheet(n); this.tabs.push(t); return t; };
+FakeBook.prototype.getSheets = function(){ return this.tabs; };
+FakeBook.prototype.deleteSheet = function(t){ this.tabs = this.tabs.filter(x => x !== t); };
+FakeBook.prototype.getId = function(){ return 'book'; };
+
+var STORE_DBS = {notion_talk_db_id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', notion_people_db_id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', notion_rota_rules_db_id: 'cccccccccccccccccccccccccccccccc'};
+function rt(t){ return [{type: 'text', text: {content: t}, plain_text: t}]; }
+function slot_page(id, start, type, presenter, title){
+  return {object: 'page', id: id, parent: {type: 'database_id', database_id: STORE_DBS.notion_talk_db_id}, created_time: '2026-01-01T00:00:00.000Z', last_edited_time: '2026-01-01T00:00:00.000Z', icon: null,
+          properties: {Title: {type: 'title', title: rt(title || '')}, Date: {type: 'date', date: {start: start, end: null}}, Type: {type: 'select', select: {name: type}},
+                       Presenter: {type: 'relation', relation: presenter.map(x => ({id: x}))}, Tea: {type: 'relation', relation: []}, CSNJC: {type: 'checkbox', checkbox: false},
+                       'Presenter Text': {type: 'formula', formula: {string: 'x'}}}};
+}
+var STORE_NOTION = {
+  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: {schema: {Title: {id: 'title', type: 'title'}, Date: {id: 'd', type: 'date'}, Type: {id: 't', type: 'select', select: {options: [{name: 'TNJC'}, {name: 'MLJC'}]}},
+                                              Presenter: {id: 'p', type: 'relation'}, Tea: {id: 'e', type: 'relation'}, CSNJC: {id: 'c', type: 'checkbox'}, 'Presenter Text': {id: 'f', type: 'formula'}},
+                                     pages: [slot_page('11111111111111111111111111111111', '2026-11-10T13:30:00.000+00:00', 'TNJC', ['dddddddddddddddddddddddddddddddd']),
+                                             slot_page('22222222222222222222222222222222', '2026-11-17T13:30:00.000+00:00', 'TNJC', ['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'], 'Spikes'),
+                                             slot_page('33333333333333333333333333333333', '2026-06-01T23:30:00.000+00:00', 'MLJC', [])]},
+  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: {schema: {Name: {id: 'title', type: 'title'}, Active: {id: 'a', type: 'checkbox'}}, pages: []},
+  cccccccccccccccccccccccccccccccc: {schema: {Type: {id: 'title', type: 'title'}}, pages: []}
+};
+var store_saved = {};
+function store_stubs(mode, mirror){
+  store_saved = {gc: get_global_constants, gs: get_settings, nh: notion_http, est: ensure_settings_tabs, ss: SpreadsheetApp, ss2: set_setting,
+                 nr: notion_request, np: notion_patch_page, gp: notion_get_page, nq: notion_query, tr: to_row};
+  notion_request = REAL.notion_request; notion_patch_page = REAL.notion_patch_page; notion_get_page = REAL.notion_get_page; notion_query = REAL.notion_query; to_row = REAL.to_row;
+  var book = new FakeBook(), calls = [];
+  SpreadsheetApp = {openById: (id) => book, create: () => book};
+  __props.STORE_SHEET_ID = '';
+  delete __props.STORE_SHEET_ID;
+  set_setting = (k, v) => { __props[k] = v; };
+  ensure_settings_tabs = () => {};
+  get_global_constants = () => Object.assign({notion_token: 't'}, STORE_DBS);
+  get_settings = () => ({STORE: mode, NOTION_MIRROR: mirror ? 'TRUE' : 'FALSE'});
+  notion_http = function(method, path, body){
+    calls.push(method + ' ' + path);
+    var m;
+    if (method === 'get' && (m = path.match(/^databases\\/(\\w+)$/))) return {properties: STORE_NOTION[m[1]].schema};
+    if (method === 'post' && (m = path.match(/^databases\\/(\\w+)\\/query$/))) return {results: STORE_NOTION[m[1]].pages, has_more: false};
+    if (method === 'patch' && (m = path.match(/^pages\\/([\\w-]+)$/))){ var pg = JSON.parse(JSON.stringify(STORE_NOTION.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pages[0])); Object.assign(pg.properties, body.properties); return pg; }
+    if (method === 'post' && path === 'pages') return Object.assign(slot_page('44444444444444444444444444444444', body.properties.Date.date.start, 'MLJC', []), {});
+    throw new Error('unexpected ' + method + ' ' + path);
+  };
+  store_cache = null;
+  return {book: book, calls: calls};
+}
+function store_restore(){
+  get_global_constants = store_saved.gc; get_settings = store_saved.gs; notion_http = store_saved.nh; ensure_settings_tabs = store_saved.est;
+  SpreadsheetApp = store_saved.ss; set_setting = store_saved.ss2; store_cache = null; delete __props.STORE_SHEET_ID;
+  notion_request = store_saved.nr; notion_patch_page = store_saved.np; notion_get_page = store_saved.gp; notion_query = store_saved.nq; to_row = store_saved.tr;
+}
+t('store: the import copies every row and field, leaving formulas behind', () => {
+  var st = store_stubs('notion', false);
+  try {
+    store_import_from_notion();
+    var tab = st.book.getSheetByName('Schedule').cells;
+    assert.deepStrictEqual(tab[0], ['id', 'archived', 'created', 'edited', 'icon', 'Title', 'Date', 'Date end', 'Type', 'Presenter', 'Tea', 'CSNJC']);
+    assert.strictEqual(tab.length, 4);
+    assert.strictEqual(tab[2][5], 'Spikes');
+    assert.strictEqual(tab[1][9], 'dddddddddddddddddddddddddddddddd');
+    assert.strictEqual(st.book.getSheetByName('Sheet1'), null);
+  } finally { store_restore(); }
+});
+t('store: queries answered from the sheet, in Notion\\'s format (filters, sorts, paging)', () => {
+  var st = store_stubs('notion', false);
+  try {
+    store_import_from_notion();
+    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'FALSE'});
+    store_cache = null;
+    var c = get_global_constants();
+    var ids = (f, sorts) => notion_query(STORE_DBS.notion_talk_db_id, f, sorts, c).map(p => normalise_id(p.id).slice(0, 1));
+    assert.deepStrictEqual(ids({property: 'Date', date: {on_or_after: '2026-11-17'}}), ['2']);
+    assert.deepStrictEqual(ids({property: 'Date', date: {equals: '2026-06-02'}}), ['3']);  // 23:30 UTC is the next day in London
+    assert.deepStrictEqual(ids({and: [{property: 'Type', select: {equals: 'TNJC'}}, {or: [{property: 'Presenter', relation: {contains: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'}}, {property: 'Title', title: {equals: 'nothing'}}]}]}), ['2']);
+    assert.deepStrictEqual(ids(null, [{property: 'Date', direction: 'descending'}]), ['2', '1', '3']);
+    var last = notion_request('post', 'databases/' + STORE_DBS.notion_talk_db_id + '/query', {filter: {property: 'Type', select: {equals: 'TNJC'}}, sorts: [{property: 'Date', direction: 'descending'}], page_size: 1}, c);
+    assert.strictEqual(last.results.length, 1); assert.strictEqual(last.has_more, true);
+    var row = to_row(notion_get_page('22222222222222222222222222222222', c));
+    assert.deepStrictEqual([row.title, row.type, row.presenter_ids[0], row.start.toISOString()], ['Spikes', 'TNJC', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', '2026-11-17T13:30:00.000Z']);
+    assert.strictEqual(st.calls.filter(x => /query/.test(x)).length, 3);  // only the import asked Notion
+  } finally { store_restore(); }
+});
+t('store: changes in the sheet (Notion left alone without the mirror); archived rows drop out', () => {
+  var st = store_stubs('notion', false);
+  try {
+    store_import_from_notion();
+    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'FALSE'});
+    store_cache = null;
+    var c = get_global_constants(), before = st.calls.length;
+    notion_patch_page('11111111-1111-1111-1111-111111111111', {Title: {title: [{text: {content: 'New title'}}]}, Tea: {relation: [{id: 'ffffffff-ffff-ffff-ffff-ffffffffffff'}]}}, c);
+    var made = notion_request('post', 'pages', {parent: {database_id: STORE_DBS.notion_talk_db_id}, properties: {Type: {select: {name: 'MLJC'}}, Date: {date: {start: '2026-12-01'}}}}, c);
+    notion_request('patch', 'pages/22222222222222222222222222222222', {archived: true}, c);
+    assert.strictEqual(st.calls.length, before);
+    store_cache = null;  // as the next run sees it
+    var rows = notion_query(STORE_DBS.notion_talk_db_id, null, [{property: 'Date', direction: 'ascending'}], c).map(to_row);
+    assert.deepStrictEqual(rows.map(r => r.id.slice(0, 1)), ['3', '1', normalise_id(made.id).slice(0, 1)]);
+    assert.strictEqual(rows[1].title, 'New title');
+    assert.deepStrictEqual(rows[1].tea_ids, ['ffffffffffffffffffffffffffffffff']);
+  } finally { store_restore(); }
+});
+t('store: with Notion as the store its changes are copied into the sheet; mirrored the other way round too', () => {
+  var st = store_stubs('notion', false);
+  try {
+    store_import_from_notion();
+    store_cache = null;
+    var c = get_global_constants();
+    notion_patch_page('11111111111111111111111111111111', {Title: {title: rt('Copied')}}, c);
+    store_cache = null;
+    assert.strictEqual(st.book.getSheetByName('Schedule').cells[1][5], 'Copied');
+    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'TRUE'});
+    store_cache = null;
+    var made = notion_request('post', 'pages', {parent: {database_id: STORE_DBS.notion_talk_db_id}, properties: {Date: {date: {start: '2026-12-08T13:30:00+00:00'}}}}, c);
+    assert.strictEqual(normalise_id(made.id), '44444444444444444444444444444444');  // Notion's id, so both agree
+    assert.ok(st.calls.indexOf('post pages') >= 0);
+    assert.strictEqual(st.book.getSheetByName('Schedule').cells.length, 5);
+  } finally { store_restore(); }
+});
+t('store: the Cron Jobs get Notion-like answers from the sheet', () => {
+  var st = store_stubs('notion', false);
+  try {
+    store_import_from_notion();
+    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'FALSE'});
+    store_cache = null;
+    var res = store_fetch('https://api.notion.com/v1/databases/' + STORE_DBS.notion_talk_db_id + '/query', {method: 'post', payload: JSON.stringify({filter: {property: 'Date', date: {on_or_before: '2026-11-10'}}})});
+    assert.strictEqual(res.getResponseCode(), 200);
+    var body = JSON.parse(res.getContentText());
+    assert.deepStrictEqual(body.results.map(p => p.properties.Type.select.name).sort(), ['MLJC', 'TNJC']);
+    assert.strictEqual(body.results[0].properties.Title.title.length >= 0, true);
+    assert.strictEqual(store_fetch('https://api.notion.com/v1/pages/99999999999999999999999999999999', {method: 'get'}).getResponseCode(), 500);
+  } finally { store_restore(); }
+});
+t('store: the check finds what differs', () => {
+  var st = store_stubs('notion', false);
+  try {
+    store_import_from_notion();
+    st.book.getSheetByName('Schedule').cells[2][5] = 'Changed by hand';
+    store_cache = null;
+    var diffs = store_check();
+    assert.strictEqual(diffs.length, 1);
+    assert.ok(/Title: Notion "Spikes", sheet "Changed by hand"/.test(diffs[0]));
+  } finally { store_restore(); }
 });
 t('site: dates for Notion', () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(site_notion_date('2026-11-02', '2026-11-06'))), {start: '2026-11-02', end: '2026-11-06'});
