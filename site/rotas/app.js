@@ -639,12 +639,16 @@ async function renderPage(slug) {
   if (!page) return notFound();
   document.title = slug === 'home' ? 'Gatsby Rotas' : `${page.title || slug} · Gatsby Rotas`;
   main.className = `page page-${slug}`;
+  // a page the bot cannot read: say so, and on the home page still show the rota views
+  let blocks = page.error ? [] : page.blocks;
   if (page.error) {
-    main.innerHTML = `<article class="prose"><p class="empty">${esc(page.error)}</p></article>`;
-    footerMeta();
-    return;
+    if (slug !== 'home') {
+      main.innerHTML = `<article class="prose"><p class="empty">${esc(page.error)} Meanwhile it is on <a href="${CONFIG.notionSite}${page.id}">Notion</a>.</p></article>`;
+      footerMeta();
+      return;
+    }
+    blocks = [{ id: 'page-error', type: 'p', rt: [{ text: `The guides cannot be shown here yet (${page.error}) They are on Notion meanwhile.`, color: 'gray' }] }];
   }
-  let blocks = page.blocks;
   if (slug === 'home') {
     // "Next up" is the site's own; it goes above the first heading.
     const at = Math.max(0, blocks.findIndex((b) => /^h[123]$/.test(b.type)));
