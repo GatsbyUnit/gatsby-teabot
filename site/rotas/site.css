@@ -373,7 +373,8 @@ details.toggle > summary:hover { color: var(--accent); }
 /* ---------- small screens ---------- */
 
 @media (max-width: 760px) {
-  .site-head-inner { flex-direction: column; align-items: stretch; gap: .3rem; padding-bottom: .35rem; }
+  .site-head-inner { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: .3rem; padding-bottom: .35rem; }
+  .nav { min-width: 0; }
   .nav ul { overflow-x: auto; scrollbar-width: none; margin-inline: -1rem; padding-inline: .5rem; }
   .nav ul::-webkit-scrollbar { display: none; }
   .page { padding-top: 1.5rem; }
@@ -425,6 +426,7 @@ details.toggle > summary:hover { color: var(--accent); }
 .nc-green_background { background: rgba(15, 123, 108, .14); } .nc-blue_background { background: rgba(11, 110, 153, .14); }
 .nc-purple_background { background: rgba(105, 64, 165, .14); } .nc-pink_background { background: rgba(173, 26, 114, .12); }
 .nc-red_background { background: rgba(224, 62, 62, .13); }
+.block-colour[class*="_background"] { padding: .35rem .6rem; border-radius: var(--radius-sm); }
 .view-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 
 /* ---------- editing (tsars) ---------- */

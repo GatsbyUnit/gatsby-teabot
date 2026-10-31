@@ -324,6 +324,8 @@ t('site: rich text keeps only what the site writes (no script links, no odd fiel
                             {text: 'd', page: 'not-an-id'}, {text: ''}, {text: 'e', color: 'red; background:url(x)'}, {text: 'f', color: 'blue_background'}]);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(rt)), [{text: 'a', b: true}, {text: 'b'}, {text: 'c', href: '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d'},
                                                           {text: 'd'}, {text: 'e'}, {text: 'f', color: 'blue_background'}]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(clean_site_rich([{text: 'g', href: '/p/674394b3dd0d4e1aa44b36ea49bf5aaa?pvs=25'}, {text: 'h', color: 'teal'}]))),
+                         [{text: 'g', href: '/674394b3dd0d4e1aa44b36ea49bf5aaa'}, {text: 'h', color: 'green'}]);
 });
 t('site: page edits apply in order; new blocks follow new blocks or go first', () => {
   var n = 0, page = site_page();

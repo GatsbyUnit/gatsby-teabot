@@ -204,7 +204,7 @@ function save_site_page(sheet, page, by){
 }
 
 // A tsar's edits to one page, applied in order:
-//   {op: 'update', id, rt, checked?}             new text for a block
+//   {op: 'update', id, rt, checked?, color?}     new text for a block (and its colour)
 //   {op: 'cells', id, cells: [rt, …]}            new text for a table row
 //   {op: 'insert', tmp, parent, after, type, rt}   a new block under parent (the page or a block), right after
 //                                                 `after`, or first when after is empty; parent and after may
@@ -257,6 +257,7 @@ function apply_site_ops(page, ops, new_id){
       if (hit.row || SITE_TEXT_TYPES.indexOf(hit.block.type) < 0) throw new Error('This part of the page cannot be edited here.');
       hit.block.rt = clean_site_rich(op.rt);
       if (hit.block.type === 'todo') hit.block.checked = !!op.checked;
+      if ('color' in op){ if (site_color(op.color)) hit.block.color = site_color(op.color); else delete hit.block.color; }
     } else if (op.op === 'cells'){
       var row = find(op.id);
       if (!row.row) throw new Error('Not a table row.');
@@ -294,15 +295,23 @@ function apply_site_ops(page, ops, new_id){
   return page;
 }
 
-// rich text as the site writes it: [{text, b, i, s, u, code, color, href | page}], nothing else
+// Notion's colour names (its older "teal" is green)
+function site_color(c){
+  c = String(c || '').replace(/^teal/, 'green');
+  return /^(gray|brown|orange|yellow|green|blue|purple|pink|red)(_background)?$/.test(c) ? c : '';
+}
+
+// rich text as the site writes it: [{text, b, i, s, u, code, color, href | page}], nothing else. Links to
+// Notion pages ("/p/<id>?pvs=25") are kept as "/<id>", which the site turns into its own page or person links.
 function clean_site_rich(rt){
   return (Array.isArray(rt) ? rt : []).slice(0, 300).map(function(r){
     r = r || {};
     var o = {text: String(r.text == null ? '' : r.text).slice(0, 5000)};
     ['b', 'i', 's', 'u', 'code'].forEach(function(k){ if (r[k]) o[k] = true; });
-    if (r.color && /^(gray|brown|orange|yellow|green|blue|purple|pink|red)(_background)?$/.test(r.color)) o.color = r.color;
+    if (site_color(r.color)) o.color = site_color(r.color);
+    var href = String(r.href || '').replace(/^\/(?:p\/)?([0-9a-f]{32})(?:\?[^#]*)?(#[\w-]*)?$/, '/$1$2');
     if (r.page && /^[0-9a-f]{32}$/.test(r.page)) o.page = r.page;
-    else if (r.href && /^(https?:\/\/|mailto:|\/[0-9a-f]{32}|#)/i.test(String(r.href))) o.href = String(r.href).slice(0, 2000);
+    else if (href && /^(https?:\/\/|mailto:|\/[0-9a-f]{32}|#)/i.test(href)) o.href = href.slice(0, 2000);
     return o;
   }).filter(function(o){ return o.text; });
 }
@@ -314,6 +323,7 @@ function clean_site_blocks(blocks, depth){
     var o = {id: /^[0-9a-z-]{1,40}$/i.test(String(b.id)) ? String(b.id) : Utilities.getUuid().replace(/-/g, ''), type: b.type};
     if (SITE_TEXT_TYPES.indexOf(b.type) >= 0) o.rt = clean_site_rich(b.rt);
     if (b.toggle) o.toggle = true;
+    if (site_color(b.color)) o.color = site_color(b.color);
     if (b.type === 'todo') o.checked = !!b.checked;
     if (b.type === 'callout') o.icon = String(b.icon || '').slice(0, 8);
     if (b.type === 'table'){

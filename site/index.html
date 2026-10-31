@@ -5,56 +5,67 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<title>Gatsby tea</title>
+<title>Tea page · Gatsby Rotas</title>
 <link id="icon" rel="icon" href="data:,">
+<link rel="stylesheet" href="rotas/site.css?v=4">
 <style>
-  :root {
-    --bg: #f7f7f5; --card: #ffffff; --text: #1f2328; --muted: #656d76; --line: #d8dee4;
-    --accent: #1a73e8; --accent-text: #ffffff; --ok: #1a7f37; --err: #cf222e; --chip: #eef2f6;
+  /* The tea page in the Gatsby Rotas design (rotas/site.css); what follows is only for its own parts. */
+  main#app { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
+  #app h1 { margin: 0 0 .35rem; font: 700 clamp(1.6rem, 4vw, 2.1rem)/1.2 var(--font-head); letter-spacing: -.015em; }
+  #app h2 { margin: 2rem 0 .6rem; font: 650 1.2rem/1.3 var(--font-head); letter-spacing: -.01em; }
+  #app p { margin: 0 0 .6rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .9rem 1.05rem; margin: 0 0 .6rem; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .chip { display: inline-flex; align-items: center; padding: .25rem .45rem; border-radius: 4px; background: var(--surface-2); color: var(--text-2); font: 500 .78rem/1 var(--font-ui); }
+  .when { font-weight: 650; }
+  .title { margin-top: .25rem; }
+  #app button, #app .btn {
+    display: inline-flex; align-items: center; padding: .5rem .85rem; cursor: pointer; text-decoration: none;
+    font: 500 .9rem/1.2 var(--font-ui); color: var(--text); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #161a1f; --card: #1f252c; --text: #e6edf3; --muted: #9aa5b1; --line: #313a44;
-      --accent: #5b9cf5; --accent-text: #0d1117; --ok: #3fb950; --err: #f85149; --chip: #2a323b;
-    }
+  #app button:hover, #app .btn:hover { border-color: var(--muted); }
+  #app button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  #app button.danger { background: var(--t-leaving); border-color: var(--t-leaving); color: #fff; }
+  #app button.quiet { border: 0; background: none; padding: 0; color: var(--muted); font-size: .85rem; text-decoration: underline; text-underline-offset: .18em; }
+  #app button:disabled { opacity: .55; cursor: default; }
+  #app input, #app select, #app textarea {
+    width: 100%; padding: .5rem .7rem; font: inherit; font-size: .95rem; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  h2 { font-size: 16px; margin: 28px 0 10px; }
-  p { margin: 0 0 10px; }
-  .muted { color: var(--muted); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 0 0 10px; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 1px 10px; font-size: 13px; }
-  .when { font-weight: 600; }
-  .title { margin-top: 4px; }
-  button, .btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-  button.danger { background: var(--err); border-color: var(--err); color: #ffffff; }
-  button.quiet { border: none; background: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: 13px; }
-  .warn { border-left: 3px solid var(--err); padding-left: 10px; }
-  button:disabled { opacity: .5; cursor: default; }
-  input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; width: 100%; }
-  textarea { min-height: 90px; }
-  label { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 3px; }
-  .panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
-  .msg { margin-top: 8px; font-size: 14px; }
-  .msg.ok { color: var(--ok); }
-  .msg.err { color: var(--err); }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .hidden { display: none; }
-  a { color: var(--accent); }
-  footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+  #app :is(input, select, textarea):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+  #app input[type=checkbox] { width: auto; }
+  #app textarea { min-height: 6rem; }
+  #app label { display: block; margin: .6rem 0 .25rem; font: 500 .82rem/1.3 var(--font-ui); color: var(--muted); }
+  .panel { margin-top: .7rem; padding-top: .7rem; border-top: 1px dashed var(--line); }
+  .msg { margin-top: .5rem; font-size: .92rem; }
+  .msg.ok { color: var(--accent); }
+  .msg.err { color: var(--t-leaving); }
+  .warn { border-left: 3px solid var(--t-leaving); padding-left: .7rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .hidden { display: none !important; }
+  #app footer { margin-top: 2rem; font-size: .85rem; color: var(--muted); }
   .scroll { overflow-x: auto; }
-  table.rotas { border-collapse: collapse; width: 100%; font-size: 13px; }
-  table.rotas th, table.rotas td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+  table.rotas { border-collapse: collapse; width: 100%; font-size: .85rem; }
+  table.rotas th, table.rotas td { padding: .35rem .5rem; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
   table.rotas th:first-child, table.rotas td:first-child { text-align: left; }
   table.rotas th { font-weight: 600; color: var(--muted); }
 </style>
 </head>
 <body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="rotas/"><img id="brand-icon" src="data:," alt="" width="22" height="22" hidden>Gatsby Rotas</a>
+    <nav class="nav" aria-label="Pages"><ul>
+      <li><a href="rotas/">Rotas</a></li>
+      <li><a href="rotas/?p=tea-system">Tea System</a></li>
+      <li><a href="rotas/?p=tnjc">TNJC</a></li>
+      <li><a href="rotas/?p=mljc">MLJC</a></li>
+      <li><a href="rotas/?p=coffee">Coffee</a></li>
+      <li><a href="./" aria-current="page">My tea page</a></li>
+    </ul></nav>
+  </div>
+</header>
 <main id="app"><p class="muted">Loading…</p></main>
 
 <script>
@@ -541,7 +552,13 @@
   // the tab icon is a setting (FAVICON_URL in the constants sheet); without it the tab has none
   fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: 'api_page_icon', args: []}), credentials: 'omit'})
     .then(function(r){ return r.json(); })
-    .then(function(res){ if (res.ok && res.result) document.getElementById('icon').href = res.result; })
+    .then(function(res){
+      if (!res.ok || !res.result) return;
+      document.getElementById('icon').href = res.result;
+      var img = document.getElementById('brand-icon');
+      img.src = res.result;
+      img.hidden = false;
+    })
     .catch(function(){});
 
   function route(){

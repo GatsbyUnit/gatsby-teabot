@@ -74,6 +74,8 @@ function remember({ key = '', token = '', person = '', name = '' }) {
   memorySession = { key, token, person, name, until: new Date(Date.now() + CONFIG.rememberDays * 864e5).toISOString() };
   store.set(SESSION, memorySession);
   store.drop(CACHE);
+  // one site: "My tea page" then opens this person's page without a code in the address
+  if (token) { try { localStorage.setItem(TEA_PAGE_MEMORY, token); } catch { /* fine */ } }
 }
 
 function forget() {
@@ -230,7 +232,7 @@ function renderBlocks(blocks) {
 const HEADING = { h1: 'h2', h2: 'h3', h3: 'h4' };
 
 function renderBlock(b) {
-  const at = `id="${b.id}" data-id="${b.id}" data-type="${b.type}"`;
+  const at = `id="${b.id}" data-id="${b.id}" data-type="${b.type}"${b.color && COLOURS.test(b.color) ? ` class="nc-${b.color} block-colour"` : ''}`;
   const kids = b.children?.length ? renderBlocks(b.children) : '';
   const text = rich(b.rt);
   switch (b.type) {
@@ -613,7 +615,8 @@ function redrawViews() {
 
 function renderNav(active) {
   $('#nav').innerHTML = NAV.map((n) =>
-    `<li><a href="${pageHref(n.slug)}"${n.slug === active ? ' aria-current="page"' : ''}>${n.label}</a></li>`).join('');
+    `<li><a href="${pageHref(n.slug)}"${n.slug === active ? ' aria-current="page"' : ''}>${n.label}</a></li>`).join('')
+    + `<li><a href="${CONFIG.teaPage}">My tea page</a></li>`;
   $('[data-home]').setAttribute('href', pageHref('home'));
 }
 
@@ -677,7 +680,7 @@ async function renderPerson(id) {
     !p.active && '<div><dt>Status</dt><dd>No longer on the rotas</dd></div>',
   ].filter(Boolean).join('');
   const s = session();
-  const teaLink = s?.token && s.person === id ? `${CONFIG.teaPage}?t=${s.token}` : CONFIG.teaPage;
+  const teaLink = CONFIG.teaPage;
   main.innerHTML = `<header class="page-head person-head">${avatar(p, 'avatar-xl')}
       <div><p class="crumbs"><a href="${pageHref('home')}">Gatsby Rotas</a> › <a href="${pageHref('home', 'v-people')}">People</a></p>
       <h1>${esc(p.name)}</h1></div>${hooks.personButton ? `<div class="person-tools">${hooks.personButton(p, true)}</div>` : ''}</header>
@@ -702,7 +705,7 @@ function footerMeta() {
   const el = $('#footer-meta');
   const s = session();
   const generated = bundle?.data?.generated;
-  const teaLink = s?.token ? `${CONFIG.teaPage}?t=${s.token}` : CONFIG.teaPage;
+  const teaLink = CONFIG.teaPage;
   const who = !s ? '' : s.person && s.name ? `Signed in as <a href="${personHref(s.person)}">${esc(s.name)}</a>` : 'Signed in on this browser';
   el.innerHTML = [
     generated && `Updated ${F.stamp.format(new Date(generated))}`,
