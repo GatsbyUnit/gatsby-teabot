@@ -58,6 +58,17 @@ function api_leave_info(token){ return TeaBot.api_leave_info(token); }
 function api_leave(token){ return TeaBot.api_leave(token); }
 function api_leave_by_name(key, person_id){ return TeaBot.api_leave_by_name(key, person_id); }
 function api_rotas(token){ return TeaBot.api_rotas(token); }
+// the Gatsby Rotas site (site/rotas/)
+function api_site_people(){ return TeaBot.api_site_people(); }
+function api_site_request_link(person_id){ return TeaBot.api_site_request_link(person_id); }
+function api_site_sign_in(code){ return TeaBot.api_site_sign_in(code); }
+function api_site_sign_in_token(token){ return TeaBot.api_site_sign_in_token(token); }
+function api_site_bundle(key, token){ return TeaBot.api_site_bundle(key, token); }
+function api_site_edit_page(token, slug, ops){ return TeaBot.api_site_edit_page(token, slug, ops); }
+function api_site_save_slot(token, slot){ return TeaBot.api_site_save_slot(token, slot); }
+function api_site_save_person(token, person){ return TeaBot.api_site_save_person(token, person); }
+function api_site_save_rule(token, rule){ return TeaBot.api_site_save_rule(token, rule); }
+function api_site_save_coffee_duty(token, duty){ return TeaBot.api_site_save_coffee_duty(token, duty); }
 
 // run once from the editor after creating the project, to grant it the bot's permissions. (The page's
 // address is the PAGE_URL setting in the Automation tab of the constants sheet.)

@@ -55,7 +55,12 @@ whoever later decides to make the system Google-only.
 It is not worth it for tidiness alone. The data layer of both Apps Script projects has to be rewritten, and the
 fairness history must survive the move intact.
 
-### Recommended path: move the editing first (agreed 2026-10-27, not started)
+### Recommended path: move the editing first (agreed 2026-10-27, under way)
+Done since (2026-10-31): the Gatsby Rotas site (`site/rotas/`, `Site.js`) shows the member pages and rota views
+live from Notion and lets tsars edit pages, slots, people, rota rules and coffee duties, written back into Notion.
+Still open from the list below: eligibility-filtered dropdowns, the stale-row check, the edit log as an undo,
+polling, and Google sign-in (the site signs people in by an emailed link instead).
+
 Rather than moving the data first, move what organisers still edit in Notion by hand onto the tea page, while
 Notion stays the store. Once nobody edits Notion directly, switching the store to a Sheet changes nothing anyone
 sees.
@@ -87,7 +92,8 @@ Not carried over from Notion: free-form views and filters, comments, and keystro
 page (it updates within seconds instead; true real-time would need a service such as Firebase, not worth it for
 a rota). After the store switch, Google Sheets brings back live co-editing and version history for anyone who
 edits the Sheet directly. The member guides stay on Notion (they need no API) or move to Google Docs shown on
-github.io; rebuilding Notion's page editor is not worth it.
+github.io. (The Gatsby Rotas site now edits Notion pages in place for the simple blocks: text, headings, lists,
+toggles, quotes, tables' text; layout, images and views stay Notion's.)
 
 ### What Notion holds today
 | Notion | Used for | Constants sheet |

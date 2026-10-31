@@ -312,6 +312,125 @@ t('hourly sync emails only after 3 failures in a row', () => { var m = []; send_
 t('other jobs email on the first failure', () => { var m = []; send_mail = function(to, subj){ m.push(subj); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'a'}); assert.strictEqual(m.length, 1); });
 // error mails
 t('errors go to the TNJC organiser with the tea tsar in cc', () => { var m = []; send_mail = function(to, subj, b, c, o){ m.push([to, o && o.cc]); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'lena@x', admin_email: 'tsar@x'}); assert.deepStrictEqual(m[0], ['lena@x', 'tsar@x']); });
+// the Gatsby Rotas site (Site.js)
+var SITE_PAGE = '2444835e8eab46fa9a7c792877e09620';
+t('site: Notion rich text -> marks, links and page mentions', () => {
+  var rt = to_site_rich([
+    {type: 'text', plain_text: 'Hi ', annotations: {bold: true, color: 'default'}, href: null},
+    {type: 'text', plain_text: 'there', annotations: {italic: true, color: 'red'}, href: 'https://x.org'},
+    {type: 'mention', plain_text: 'Lena Weber', mention: {type: 'page', page: {id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'}}, annotations: {}, href: 'https://www.notion.so/aaa'}]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(rt)), [{text: 'Hi ', b: true}, {text: 'there', i: true, color: 'red', href: 'https://x.org'}, {text: 'Lena Weber', page: 'aaaaaaaabbbbccccddddeeeeeeeeeeee'}]);
+});
+t('site: rich text back to Notion (mentions, Notion links, long text, empty pieces)', () => {
+  var out = to_notion_rich([{text: 'a', b: true, href: '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d'}, {text: 'x', page: 'aaaaaaaabbbbccccddddeeeeeeeeeeee'}, {text: ''}, {text: new Array(4001).join('z')}]);
+  assert.strictEqual(out[0].text.link.url, 'https://www.notion.so/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d');
+  assert.strictEqual(out[0].annotations.bold, true);
+  assert.strictEqual(out[1].type, 'mention');
+  assert.strictEqual(out[1].mention.page.id, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+  assert.strictEqual(out.length, 2 + 3);  // nothing for the empty piece, 4000 characters in three
+  assert.throws(() => to_notion_rich([{text: 'a', href: 'javascript:alert(1)'}]));
+});
+t('site: blocks (toggle heading, uploaded image, linked database view, page link)', () => {
+  var h = to_site_block({id: '11111111-1111-1111-1111-111111111111', type: 'heading_2', has_children: true, heading_2: {rich_text: [], is_toggleable: true, color: 'default'}});
+  assert.strictEqual(h.type, 'h2'); assert.strictEqual(h.toggle, true);
+  var img = to_site_block({id: '22222222-2222-2222-2222-222222222222', type: 'image', image: {type: 'file', file: {url: 'https://prod-files-secure.s3.amazonaws.com/a/b/c.png?X-Amz=1'}, caption: []}});
+  assert.ok(img.url.indexOf('https://gcnu.notion.site/image/https%3A%2F%2Fprod-files-secure.s3.amazonaws.com%2Fa%2Fb%2Fc.png?table=block&id=22222222-2222-2222-2222-222222222222') === 0);
+  assert.strictEqual(to_site_block({id: '0acde385-337e-4550-bdb1-81c27fe525b1', type: 'child_database', child_database: {title: ''}}).view, 'schedule');
+  assert.strictEqual(to_site_block({id: '0acde385-337e-4550-bdb1-81c27fe525b1', type: 'unsupported', unsupported: {}}).view, 'schedule');
+  assert.strictEqual(to_site_block({id: '33333333-3333-3333-3333-333333333333', type: 'link_to_page', link_to_page: {type: 'page_id', page_id: 'cb2adc1a-9529-4900-a825-b366d65b369b'}}).page, 'cb2adc1a95294900a825b366d65b369b');
+});
+var site_saved = {};
+function site_stubs(email){
+  site_saved = {gc: get_global_constants, idt: identity_for_token, sp: site_pages, nr: notion_request, np: notion_patch_page, gp: notion_get_page, lp: load_people, ls: ensure_log_sheet, pe: site_person};
+  get_global_constants = () => ({admin_email: 'tsar@x', tnjc_admin_email: 'tnjc@x', mljc_admin_email: 'mljc@x', coffee_admin_email: 'coffee@x', notion_talk_db_id: 'db', notion_people_db_id: 'pdb'});
+  identity_for_token = (tok) => (tok === 'tok' ? {id: 'p1', email: email} : null);
+  load_people = () => ({p1: {id: 'p1', name: 'Lena Weber', active: true}, b: {id: 'b', name: 'Nikolai Petrov', active: true}});
+  ensure_log_sheet = () => { throw new Error('no sheet in tests'); };
+}
+function site_restore(){
+  get_global_constants = site_saved.gc; identity_for_token = site_saved.idt; site_pages = site_saved.sp; notion_request = site_saved.nr;
+  notion_patch_page = site_saved.np; notion_get_page = site_saved.gp; load_people = site_saved.lp; ensure_log_sheet = site_saved.ls; site_person = site_saved.pe;
+}
+t('site: who may edit what', () => {
+  site_stubs('Tsar@x');
+  try {
+    var c = get_global_constants();
+    var tea = site_rights('tok', c);
+    assert.ok(tea.pages && tea.rules && tea.add_people && tea.people[0] === 'all' && tea.slots.length === ALL_TYPES.length);
+    identity_for_token = () => ({id: 'p1', email: 'tnjc@x'});
+    var tnjc = site_rights('tok', c);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify([tnjc.pages, tnjc.rules, tnjc.slots, tnjc.people])), [true, false, ['TNJC'], ['TNJC', 'CSNJC']]);
+    identity_for_token = () => ({id: 'p1', email: 'someone@x'});
+    var none = site_rights('tok', c);
+    assert.ok(!none.pages && !none.slots.length && !none.people.length);
+    assert.strictEqual(site_rights('', c).person, '');
+  } finally { site_restore(); }
+});
+t('site: page edits are applied in order, new blocks can follow new blocks, foreign blocks are refused', () => {
+  site_stubs('tsar@x');
+  var calls = [];
+  try {
+    site_pages = function(){ return {'tea-system': {id: SITE_PAGE, blocks: [{id: 'b1', type: 'p', rt: []}, {id: 't1', type: 'table', rows: [{id: 'r1', cells: []}]}]}}; };
+    notion_request = function(m, path, body){
+      calls.push([m, path, body]);
+      if (/children$/.test(path)) return {results: [{id: body.after || 'x', type: 'paragraph'}, {id: ('a' + calls.length).padEnd(32, '0'), type: body.children[0].type}]};
+      return {};
+    };
+    api_site_edit_page('tok', 'tea-system', [
+      {op: 'update', id: 'b1', rt: [{text: 'Hello', b: true}]},
+      {op: 'insert', tmp: 'new1', parent: SITE_PAGE, after: 'b1', type: 'ul', rt: [{text: 'one'}]},
+      {op: 'insert', tmp: 'new2', parent: SITE_PAGE, after: 'new1', type: 'ul', rt: [{text: 'two'}]},
+      {op: 'cells', id: 'r1', cells: [[{text: 'c'}]]},
+      {op: 'title', title: 'New title'},
+      {op: 'delete', id: 'b1'}
+    ]);
+    assert.deepStrictEqual(calls.map(c => c[0] + ' ' + c[1]), ['patch blocks/b1', 'patch blocks/' + SITE_PAGE + '/children', 'patch blocks/' + SITE_PAGE + '/children',
+      'patch blocks/r1', 'patch pages/' + SITE_PAGE, 'delete blocks/b1']);
+    assert.strictEqual(calls[0][2].paragraph.rich_text[0].annotations.bold, true);
+    assert.strictEqual(calls[1][2].children[0].type, 'bulleted_list_item');
+    assert.strictEqual(calls[2][2].after, hyphenate_id('a2'.padEnd(32, '0')));  // the block made by the first insert
+    read_site_blocks_saved = read_site_blocks;
+    read_site_blocks = function(){ return []; };
+    assert.throws(() => api_site_edit_page('tok', 'tea-system', [{op: 'delete', id: 'ffffffffffffffffffffffffffffffff'}]), /not on this page/);
+    read_site_blocks = read_site_blocks_saved;
+    assert.throws(() => api_site_edit_page('tok', 'nowhere', []), /Unknown page/);
+    identity_for_token = () => ({id: 'p1', email: 'someone@x'});
+    assert.throws(() => api_site_edit_page('tok', 'tea-system', []), /Only the tsars/);
+  } finally { site_restore(); }
+});
+var read_site_blocks_saved;
+t('site: a rota tsar can only tick their own rota on people, and only edit their own slots', () => {
+  site_stubs('tnjc@x');
+  var patched = null;
+  try {
+    notion_patch_page = function(id, props){ patched = props; return {id: id, properties: {}}; };
+    site_person = function(page){ return page; };
+    api_site_save_person('tok', {id: 'p2', name: 'X', rotas: ['TNJC', 'MLJC'], active: false, excluded: ['tea']});
+    assert.deepStrictEqual(Object.keys(patched).sort(), ['CSNJC', 'TNJC']);
+    assert.strictEqual(patched.TNJC.checkbox, true);
+    assert.throws(() => api_site_save_person('tok', {name: 'New'}), /tea tsar/);
+    assert.throws(() => api_site_save_slot('tok', {type: 'MLJC', start: '2026-11-02'}), /MLJC tsar/);
+    notion_get_page = function(){ return {id: 's1', properties: {Type: {select: {name: 'MLJC'}}}}; };
+    assert.throws(() => api_site_save_slot('tok', {id: 's1', type: 'TNJC', start: '2026-11-02'}), /MLJC tsar/);
+  } finally { site_restore(); }
+});
+t('site: dates for Notion', () => {
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(site_notion_date('2026-11-02', '2026-11-06'))), {start: '2026-11-02', end: '2026-11-06'});
+  assert.throws(() => site_notion_date('', null), /date/);
+  assert.throws(() => site_notion_date('2026-11-02', 'soon'), /end time/);
+});
+t('site: big values go into the cache in pieces, ASCII only', () => {
+  var store = {};
+  var saved = CacheService;
+  CacheService = {getScriptCache: () => ({putAll: (o) => Object.assign(store, o), get: (k) => store[k] || null, getAll: (ks) => { var o = {}; ks.forEach(k => { if (k in store) o[k] = store[k]; }); return o; }})};
+  try {
+    var v = {s: new Array(200001).join('é')};
+    cache_put_big('k', v, 60);
+    assert.strictEqual(store.k, '14');
+    assert.ok(Object.keys(store).every(k => k === 'k' || /^[\x00-\x7f]*$/.test(store[k])));
+    assert.deepStrictEqual(cache_get_big('k'), v);
+  } finally { CacheService = saved; }
+});
 results.join('\\n');
 `;
 // SECURITY: a web page can call every top-level function of its project, so the page project may only

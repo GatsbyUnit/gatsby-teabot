@@ -24,6 +24,30 @@ repeating it. How the code is deployed is in the [README](../README.md).
 - **Pause the bot:** set `DRY_RUN` to `TRUE` in the Automation tab. Nothing else is needed.
 - **Something odd:** the bot emails the rota organiser (or the tea tsar, if it can't tell who a name refers to). Errors in the bot itself go to the TNJC organiser with the tea tsar in cc. Everything it does is in the "Gatsby Tea Automation log" sheet in gatsby.teabot's Drive, with open calendar/Notion differences on its Mismatches tab.
 
+## The Gatsby Rotas site
+https://gatsbyunit.github.io/gatsby-teabot/rotas/ shows the Notion pages (Gatsby Rotas, Gatsby Tea System, the
+TNJC and MLJC guides, the Coffee Rulebook, the three toolbox pages) and the rota views, live from Notion: whatever
+you change on either side shows on the other within minutes. Members sign in by picking their name; the bot
+emails a link that works for an hour, and their browser then remembers them for six months. Anyone who has used
+their tea page on the same browser is signed in already.
+
+**Editing (tsars).** Signed in as the tea tsar or a rota organiser, you see ✎ buttons:
+- **Pages:** "Edit this page", then click any text and type. The bar at the top makes text bold, italic, struck
+  through or a link, changes the kind of block (text, headings, lists, to-do, quote, toggle), adds a block below
+  or deletes one. Enter starts a new block, Shift+Enter a new line. "Save to Notion" writes the changes into the
+  Notion page at once; nothing is saved before. Not editable here (use Notion): images, columns and their layout,
+  database views, moving blocks around, colours (kept on text you don't touch).
+- **Slots** (✎ on a slot, "＋ Add a slot"): day and time, title, presenter(s), tea, guest speaker, CSNJC, water
+  filter, description. Saved into Notion; the calendar and invitations follow within the hour, exactly as for an
+  edit made in Notion. Rota organisers edit their own rota's slots; the tea tsar all of them.
+- **People** (✎ on a card or a person's page): the tea tsar edits everything and adds people; rota organisers
+  tick or untick their own rota (TNJC also CSNJC). Searching the people list shows inactive people too, so you can
+  bring someone back.
+- **Rota rules** (tea tsar) and **coffee duties** (coffee organiser, tea tsar): pick or type, saved at once.
+
+Every edit is a line in the automation log sheet (job "site edit", with who did it). If a page says the bot
+cannot see it, share that page with the bot's Notion connection (in Notion: ••• → Connections).
+
 ## Scheduling
 When: as promised to members in the Notion guides (Gatsby Tea System, TNJC Guide, MLJC Guide). The bot also
 reminds you on Mondays when a rota's schedule is about to run out. In the Organiser section of your tea page:
