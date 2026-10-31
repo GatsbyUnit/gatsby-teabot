@@ -47,6 +47,9 @@ months. Anyone who has used their tea page on the same browser is signed in alre
   tick or untick their own rota (TNJC also CSNJC). Searching the people list shows inactive people too, so you can
   bring someone back.
 - **Rota rules** (tea tsar): pick from the list, saved at once. The coffee duties are text on the Coffee page.
+- **Photos:** in a person's ✎ form, "Photo" (any picture; it is cut to a small square) or "No photo". Everyone
+  signed in can change their own photo on their page ("Change my photo"). Photos are kept in the Photos tab of
+  the "Gatsby Rotas pages" sheet; people without one there still show their Notion page icon.
 
 Every edit is a line in the automation log sheet (job "site edit", with who did it).
 
