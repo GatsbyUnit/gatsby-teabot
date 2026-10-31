@@ -7,7 +7,7 @@
 <meta name="referrer" content="no-referrer">
 <title>Tea page · Gatsby Rotas</title>
 <link id="icon" rel="icon" href="data:,">
-<link rel="stylesheet" href="rotas/site.css?v=4">
+<link rel="stylesheet" href="rotas/site.css?v=8">
 <style>
   /* The tea page in the Gatsby Rotas design (rotas/site.css); what follows is only for its own parts. */
   main#app { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
@@ -64,6 +64,7 @@
       <li><a href="rotas/?p=coffee">Coffee</a></li>
       <li><a href="./" aria-current="page">My tea page</a></li>
     </ul></nav>
+    <a class="account" id="account" hidden></a>
   </div>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
@@ -298,8 +299,29 @@
   }
   function forgetMe(){ forget(); location.href = location.pathname + (KEY ? '?k=' + encodeURIComponent(KEY) : ''); }
 
+  // top right: whose page this is; with the site's photo and a link to their page there when this browser has them
+  function showAccount(name){
+    var a = document.getElementById('account');
+    var site = null, photo = '';
+    try {
+      site = JSON.parse(localStorage.getItem('gatsby-rotas') || 'null');
+      if (site && site.token === TOKEN && site.person){
+        var ph = (JSON.parse(localStorage.getItem('gatsby-rotas-photos') || 'null') || {}).photos || {};
+        photo = ph[site.person] && ph[site.person] !== 'none' ? ph[site.person] : '';
+      } else site = null;
+    } catch (e) { site = null; }
+    a.innerHTML = '';
+    a.appendChild(photo ? el('span', {class: 'avatar avatar-xs'}, [el('img', {src: photo, alt: ''})])
+      : el('span', {class: 'avatar avatar-xs avatar-mono', text: name.split(' ').map(function(w){ return w.charAt(0); }).filter(Boolean).slice(0, 1).concat(name.split(' ').length > 1 ? [name.split(' ').pop().charAt(0)] : []).join('').toUpperCase()}));
+    a.appendChild(el('span', {class: 'account-name', text: name}));
+    a.title = 'Signed in as ' + name;
+    a.href = site ? 'rotas/?person=' + site.person : './';
+    a.hidden = false;
+  }
+
   function render(s){
     app.innerHTML = '';
+    showAccount(s.name);
     var hi = el('h1', {text: 'Hi ' + (s.badge ? s.badge.label + ' ' : '') + s.name.split(' ')[0]});
     if (s.badge){
       hi.style.cssText = 'display:flex;align-items:center;gap:10px';

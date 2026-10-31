@@ -517,8 +517,11 @@
   // =====================================================================================================
 
   const mayEditSlot = (type) => me.slots.includes(type);
+  // tsars edit their rota's slots; presenters add the title of their own talk (as on the tea page)
   R.hooks.slotButton = (s) => mayEditSlot(s.type)
-    ? `<button type="button" class="icon-button" data-edit-slot="${s.id}" title="Edit this slot" aria-label="Edit this slot">✎</button>` : '';
+    ? `<button type="button" class="icon-button" data-edit-slot="${s.id}" title="Edit this slot" aria-label="Edit this slot">✎</button>`
+    : s.presenter.includes(me.person) && !s.tentative && !s.cancelled && s.startDate > Date.now() - 864e5
+      ? `<button type="button" class="icon-button" data-edit-title="${s.id}" title="Add or change your talk title">✎ ${s.cleanTitle ? 'Edit title' : 'Add title'}</button>` : '';
   R.hooks.scheduleBar = () => me.slots.length ? '<button type="button" class="edit-button" data-add-slot>＋ Add a slot</button>' : '';
 
   const opts = () => R.loadData().options || {};
@@ -686,6 +689,42 @@
       if (!list) { list = document.createElement('ol'); list.className = 'slots'; body.prepend(list); }
       openSlotForm(list, { type: me.slots[0], presenter: [], tea: [] }, false);
     }
+  });
+
+  // your own talk: title and description (the tea page's api_title, which also updates the calendar)
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-edit-title]');
+    if (!b) return;
+    const s = R.bundle().data.schedule.find((x) => x.id === b.dataset.editTitle);
+    const li = b.closest('.slot');
+    if (!s || !li) return;
+    document.querySelectorAll('[data-title-form]').forEach((x) => x.closest('.form-host')?.remove());
+    li.hidden = true;
+    li.insertAdjacentHTML('afterend', `<li class="form-host"><form class="edit-form" data-title-form>
+      <label>Talk title<input class="title-input" name="title" value="${esc(s.title.replace(/\[[^\]]*tentative\]/ig, '').trim())}" placeholder="Title of your talk"></label>
+      <label>Description${s.type === 'TNJC' || s.type === 'MLJC' ? ' (for journal clubs, include the paper link)' : ''}<textarea name="description" placeholder="Abstract, paper link, …">${esc(s.description || '')}</textarea></label>
+      <div class="actions"><button type="submit" class="edit-button primary">Save</button>
+        <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div></form></li>`);
+    const host = li.nextElementSibling;
+    const form = $('form', host);
+    $('[data-form-cancel]', form).addEventListener('click', () => { host.remove(); li.hidden = false; });
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const button = $('[type=submit]', form);
+      button.disabled = true;
+      button.textContent = 'Saving…';
+      try {
+        const title = form.title.value.trim(), description = form.description.value.trim();
+        const msg = await R.api('api_title', token(), s.id, title, description);
+        putItem('schedule', { ...s, title, description });
+        toast(msg);
+      } catch (x) {
+        $('.error', form).textContent = x.message;
+        button.disabled = false;
+        button.textContent = 'Save';
+      }
+    });
+    form.title.focus();
   });
 
   // a saved item replaces its old copy (or joins the list), and every view shows it

@@ -637,6 +637,18 @@ function redrawViews() {
 
 // ---------- pages ----------
 
+// top right: who this browser is signed in as (a link to their page)
+function renderAccount() {
+  const el = $('#account');
+  const s = session();
+  const p = s?.person && bundle && loadData().peopleById.get(s.person);
+  el.hidden = !p;
+  if (!p) return;
+  el.href = personHref(p.id);
+  el.title = `Signed in as ${p.name}`;
+  el.innerHTML = `${avatar(p, 'avatar-xs')}<span class="account-name">${esc(p.name)}</span>`;
+}
+
 function renderNav(active) {
   $('#nav').innerHTML = NAV.map((n) =>
     `<li><a href="${pageHref(n.slug)}"${n.slug === active ? ' aria-current="page"' : ''}>${n.label}</a></li>`).join('')
@@ -880,6 +892,7 @@ api('api_page_icon').then((url) => {
   try {
     await loadBundle();
     await loadPhotos();
+    renderAccount();
     // edit.js: tsars edit the site; everyone signed in by name can change their own photo
     if (bundle.me) await loadScript(`edit.js?v=${document.querySelector('script[src^="app.js"]')?.src.split('v=')[1] || ''}`);
     await route();
@@ -893,6 +906,6 @@ api('api_page_icon').then((url) => {
 // for edit.js
 window.Rotas = {
   CONFIG, TYPES, api, session, hooks, esc, rich, plain, renderBlocks, loadData, keep, redrawViews, route,
-  setPhoto: (id, uri, version) => { photos = { ...photos, [id]: uri || 'none' }; if (bundle) bundle.photos_version = version; store.set(PHOTOS, { version, photos }); },
+  setPhoto: (id, uri, version) => { photos = { ...photos, [id]: uri || 'none' }; if (bundle) bundle.photos_version = version; store.set(PHOTOS, { version, photos }); renderAccount(); },
   bundle: () => bundle, mountViews, footerMeta, avatar, personHref, pageHref, initials,
 };

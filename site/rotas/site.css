@@ -108,7 +108,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .nav a:hover { color: var(--text); background: var(--surface-2); }
 .nav a[aria-current="page"] { color: var(--text); background: var(--surface-2); }
-.signed-out .nav { display: none; }
+.signed-out .nav, .signed-out .account { display: none; }
+.account {
+  margin-left: auto; display: inline-flex; align-items: center; gap: .1rem; min-width: 0;
+  font: 500 .88rem/1.2 var(--font-ui); color: var(--text-2); text-decoration: none;
+  padding: .25rem .5rem .25rem .3rem; border-radius: 999px;
+}
+.account:hover { background: var(--surface-2); color: var(--text); }
+.account .avatar { margin-right: .4em; vertical-align: 0; }
+.account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- page ---------- */
 
@@ -374,6 +382,8 @@ details.toggle > summary:hover { color: var(--accent); }
 
 @media (max-width: 760px) {
   .site-head-inner { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: .3rem; padding-bottom: .35rem; }
+  .site-head-inner { position: relative; }
+  .account { position: absolute; top: .45rem; right: .75rem; max-width: 50%; }
   .nav { min-width: 0; }
   .nav ul { overflow-x: auto; scrollbar-width: none; margin-inline: -1rem; padding-inline: .5rem; }
   .nav ul::-webkit-scrollbar { display: none; }
