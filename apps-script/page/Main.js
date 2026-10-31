@@ -70,6 +70,9 @@ function api_site_delete_slot(token, id){ return TeaBot.api_site_delete_slot(tok
 function api_site_save_person(token, person){ return TeaBot.api_site_save_person(token, person); }
 function api_site_save_rule(token, rule){ return TeaBot.api_site_save_rule(token, rule); }
 function api_site_import_pages(token, pages, replace){ return TeaBot.api_site_import_pages(token, pages, replace); }
+function api_site_photos(key, token){ return TeaBot.api_site_photos(key, token); }
+function api_site_import_photos(token, photos, replace){ return TeaBot.api_site_import_photos(token, photos, replace); }
+function api_site_save_photo(token, person_id, uri){ return TeaBot.api_site_save_photo(token, person_id, uri); }
 
 // run once from the editor after creating the project, to grant it the bot's permissions. (The page's
 // address is the PAGE_URL setting in the Automation tab of the constants sheet.)

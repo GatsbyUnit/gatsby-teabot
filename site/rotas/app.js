@@ -282,9 +282,33 @@ function initials(name) {
   return [words[0], words.length > 1 && words[words.length - 1]].filter(Boolean).map((w) => Array.from(w)[0]).join('').toUpperCase();
 }
 
+// People's photos: the bot keeps them (api_site_photos), fetched again only when their version changes; until a
+// person has one there, their Notion page icon. 'none': no photo.
+const PHOTOS = 'gatsby-rotas-photos';
+let photos = {};
+
+async function loadPhotos() {
+  const version = bundle?.photos_version || '';
+  const cached = store.get(PHOTOS);
+  if (cached && cached.version === version) { photos = cached.photos || {}; return; }
+  if (!version) { photos = {}; return; }
+  const s = session();
+  try {
+    const got = await api('api_site_photos', s.key, s.token);
+    if (got) { photos = got.photos || {}; store.set(PHOTOS, got); }
+  } catch { photos = cached?.photos || {}; }
+}
+
+function photoOf(p) {
+  const own = photos[p.id];
+  if (own === 'none') return null;
+  return own ? { src: own, alt: [] } : p.photo ? { src: p.photo, alt: [].concat(p.photo_alt || []) } : null;
+}
+
 // A person's photo in a round frame; without one (or when it fails to load), their initials.
 function avatar(p, size = '') {
-  if (p.photo) return `<span class="avatar ${size}"><img src="${esc(p.photo)}" data-alt="${esc([].concat(p.photo_alt || []).join(' '))}" data-initials="${esc(initials(p.name))}" alt="" loading="lazy" decoding="async"></span>`;
+  const ph = photoOf(p);
+  if (ph) return `<span class="avatar ${size}"><img src="${esc(ph.src)}" data-alt="${esc(ph.alt.join(' '))}" data-initials="${esc(initials(p.name))}" alt="" loading="lazy" decoding="async"></span>`;
   return `<span class="avatar avatar-mono ${size}" aria-hidden="true">${esc(initials(p.name))}</span>`;
 }
 
@@ -302,7 +326,7 @@ function personLinks(ids, d, faces = false) {
   return ids.map((id) => {
     const p = d.peopleById.get(id);
     if (!p) return '<span class="muted">someone</span>';
-    return faces && p.photo ? `<a class="face-link" href="${personHref(id)}">${avatar(p, 'avatar-xs')}${esc(p.name)}</a>`
+    return faces && photoOf(p) ? `<a class="face-link" href="${personHref(id)}">${avatar(p, 'avatar-xs')}${esc(p.name)}</a>`
       : `<a href="${personHref(id)}">${esc(p.name)}</a>`;
   }).join(', ');
 }
@@ -396,7 +420,7 @@ function nextUpView(el, d) {
   const headline = next.cleanTitle || !speaker ? slotTitle(next) : speaker;
   const subline = next.cleanTitle || !speaker ? slotPeople(next, d)
     : `<span class="tba">Title to be announced</span>${next.tea.length ? `<span class="who"><span class="role">Tea</span> ${personLinks(next.tea, d, true)}</span>` : ''}`;
-  const portraits = next.guest ? '' : next.presenter.map((id) => d.peopleById.get(id)).filter((p) => p?.photo)
+  const portraits = next.guest ? '' : next.presenter.map((id) => d.peopleById.get(id)).filter((p) => p && photoOf(p))
     .map((p) => `<a href="${personHref(p.id)}" aria-hidden="true" tabindex="-1">${avatar(p, 'avatar-lg')}</a>`).join('');
   el.innerHTML = `
     <div class="next-up">
@@ -855,7 +879,9 @@ api('api_page_icon').then((url) => {
   footerMeta();
   try {
     await loadBundle();
-    if (can.any()) await loadScript(`edit.js?v=${document.querySelector('script[src^="app.js"]')?.src.split('v=')[1] || ''}`);
+    await loadPhotos();
+    // edit.js: tsars edit the site; everyone signed in by name can change their own photo
+    if (bundle.me) await loadScript(`edit.js?v=${document.querySelector('script[src^="app.js"]')?.src.split('v=')[1] || ''}`);
     await route();
   } catch (err) {
     if (err instanceof SignedOut) return signInPage({ notice: 'Please sign in again.' });
@@ -867,5 +893,6 @@ api('api_page_icon').then((url) => {
 // for edit.js
 window.Rotas = {
   CONFIG, TYPES, api, session, hooks, esc, rich, plain, renderBlocks, loadData, keep, redrawViews, route,
+  setPhoto: (id, uri, version) => { photos = { ...photos, [id]: uri || 'none' }; if (bundle) bundle.photos_version = version; store.set(PHOTOS, { version, photos }); },
   bundle: () => bundle, mountViews, footerMeta, avatar, personHref, pageHref, initials,
 };

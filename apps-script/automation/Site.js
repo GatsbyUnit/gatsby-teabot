@@ -108,18 +108,26 @@ function site_rights(token, constants){
 
 // ---- what the site shows ----
 
-// {pages, data, me}; null without the unit key or a valid token
+// {pages, data, me, photos_version}; null without the unit key or a valid token
 function api_site_bundle(key, token){
   var constants = get_global_constants();
-  var settings = get_settings();
-  var me = token ? identity_for_token(String(token), constants) : null;
-  if (!me && (!settings.PAGE_KEY || String(key || '') !== settings.PAGE_KEY)) return null;
+  var me = site_visitor(key, token, constants);
+  if (!me) return null;
   return {
     generated: new Date().toISOString(),
     pages: site_pages(),
     data: site_data(constants),
-    me: me ? site_rights(token, constants) : null
+    me: me.identity ? site_rights(token, constants) : null,
+    photos_version: site_photos_version()
   };
+}
+
+// who may look: a member's token, or the unit key ({identity} or {key: true}); null for anyone else
+function site_visitor(key, token, constants){
+  var settings = get_settings();
+  var identity = token ? identity_for_token(String(token), constants) : null;
+  if (identity) return {identity: identity};
+  return settings.PAGE_KEY && String(key || '') === settings.PAGE_KEY ? {key: true} : null;
 }
 
 // CacheService keeps at most 100 KB per entry: bigger values go in numbered pieces, as ASCII (it counts bytes)
@@ -369,6 +377,97 @@ function api_site_import_pages(token, pages, replace){
   }
   log_site_edit(ed, 'imported ' + slugs.length + ' pages');
   return Object.keys(site_pages());
+}
+
+// ---- photos ----
+// People's photos live with the pages (Photos tab of the pages sheet): small square JPEGs as data addresses, one
+// row per person, brought over from their Notion page icons on 2026-10-31. Tsars can change anyone's, everyone
+// their own. "none" means no photo (not even the Notion one). The bundle only carries a version number; the
+// browser fetches the photos when it changes and keeps them.
+
+const SITE_PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
+
+function site_photos_tab(){
+  var ss = site_pages_sheet().getParent();
+  var tab = ss.getSheetByName('Photos');
+  if (tab) return tab;
+  tab = ss.insertSheet('Photos');
+  tab.appendRow(['Person id', 'Photo (data address)', 'Saved', 'Saved by']);
+  tab.setFrozenRows(1);
+  return tab;
+}
+
+function site_photos_version(){
+  return PropertiesService.getScriptProperties().getProperty('SITE_PHOTOS_VERSION') || '';
+}
+
+function site_photos_changed(){
+  PropertiesService.getScriptProperties().setProperty('SITE_PHOTOS_VERSION', String(Date.now()));
+  CacheService.getScriptCache().remove('site:photos');
+}
+
+// {version, photos: {person id: data address | 'none'}}
+function api_site_photos(key, token){
+  if (!site_visitor(key, token, get_global_constants())) return null;
+  var cached = cache_get_big('site:photos');
+  if (cached && cached.version === site_photos_version()) return cached;
+  var tab = site_photos_tab(), photos = {};
+  if (tab.getLastRow() > 1){
+    tab.getRange(2, 1, tab.getLastRow() - 1, 2).getValues().forEach(function(r){ if (r[0]) photos[String(r[0])] = String(r[1] || 'none'); });
+  }
+  var out = {version: site_photos_version(), photos: photos};
+  cache_put_big('site:photos', out, 21600);
+  return out;
+}
+
+function site_photo_ok(uri){
+  return typeof uri === 'string' && uri.length <= 60000 && SITE_PHOTO_RE.test(uri);
+}
+
+// all photos at once: the move from Notion (any tsar while there are none), or a restore (tea tsar)
+function api_site_import_photos(token, photos, replace){
+  var ed = site_editor(token, function(r){ return r.pages; });
+  var people = load_people(ed.constants), by = site_name(ed), now = new Date().toISOString();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var tab = site_photos_tab();
+    if (tab.getLastRow() > 1 && !(replace && ed.rights.tea_tsar)) throw new Error('The photos are already here; only the tea tsar can replace them all.');
+    var rows = Object.keys(photos || {}).filter(function(id){ return people[normalise_id(id)] && site_photo_ok(photos[id]); })
+      .map(function(id){ return [normalise_id(id), photos[id], now, by]; });
+    if (tab.getLastRow() > 1) tab.getRange(2, 1, tab.getLastRow() - 1, 4).clearContent();
+    if (rows.length) tab.getRange(2, 1, rows.length, 4).setNumberFormat('@').setValues(rows);
+    site_photos_changed();
+  } finally {
+    lock.releaseLock();
+  }
+  log_site_edit(ed, 'imported ' + rows.length + ' photos');
+  return rows.length;
+}
+
+// one person's photo ('' = none); by a tsar, or by the person themself
+function api_site_save_photo(token, person_id, uri){
+  var constants = get_global_constants();
+  var ed = {constants: constants, rights: site_rights(token, constants)};
+  var id = normalise_id(String(person_id || ''));
+  if (!ed.rights.person) throw new Error('Please sign in again.');
+  if (ed.rights.person !== id && !ed.rights.people.length) throw new Error('Only the tsars can change other people\'s photos.');
+  if (!load_people(constants)[id]) throw new Error('Unknown person.');
+  if (uri && !site_photo_ok(uri)) throw new Error('That photo could not be read. Please pick a JPEG or PNG.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var tab = site_photos_tab();
+    var ids = tab.getLastRow() > 1 ? tab.getRange(2, 1, tab.getLastRow() - 1, 1).getValues().map(function(r){ return String(r[0]); }) : [];
+    var at = ids.indexOf(id);
+    var row = at >= 0 ? at + 2 : tab.getLastRow() + 1;
+    tab.getRange(row, 1, 1, 4).setNumberFormat('@').setValues([[id, uri || 'none', new Date().toISOString(), site_name(ed)]]);
+    site_photos_changed();
+  } finally {
+    lock.releaseLock();
+  }
+  log_site_edit(ed, (uri ? 'new photo for ' : 'removed the photo of ') + id);
+  return site_photos_version();
 }
 
 // ---- the rota data (Notion) ----

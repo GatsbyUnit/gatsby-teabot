@@ -487,6 +487,8 @@ details.toggle > summary:hover { color: var(--accent); }
 .edit-form .title-input { font-size: 1.05rem !important; font-weight: 600; }
 .edit-form .actions { display: flex; align-items: center; gap: .5rem; }
 .edit-form .actions .error { color: var(--t-leaving); font-size: .88rem; }
+.photo-row { align-items: center; }
+.photo-pick { flex: 0 1 auto !important; }
 .pickers { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
 .pickers select { width: auto !important; min-width: 12rem; }
 .rule-select { padding: .25rem .4rem; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); font-size: .85rem; }

@@ -590,6 +590,27 @@ t('store: the check finds what differs', () => {
     assert.ok(/Title: Notion "Spikes", sheet "Changed by hand"/.test(diffs[0]));
   } finally { store_restore(); }
 });
+t('site: photos are small data images; people change their own, tsars anyone\\'s', () => {
+  assert.ok(site_photo_ok('data:image/jpeg;base64,/9j/4AAQ=='));
+  assert.ok(!site_photo_ok('data:image/svg+xml;base64,PHN2Zz4='));
+  assert.ok(!site_photo_ok('https://example.org/x.jpg'));
+  site_stubs('someone@x');
+  var saved = {tab: site_photos_tab, lock: LockService}, tab = new FakeSheet('Photos');
+  tab.cells = [['Person id', 'Photo', 'Saved', 'Saved by']];
+  site_photos_tab = () => tab;
+  LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
+  try {
+    identity_for_token = () => ({id: 'p1', email: 'someone@x'});
+    api_site_save_photo('tok', 'p1', 'data:image/jpeg;base64,AAAA');
+    assert.deepStrictEqual(tab.cells[1].slice(0, 2), ['p1', 'data:image/jpeg;base64,AAAA']);
+    api_site_save_photo('tok', 'p1', '');
+    assert.deepStrictEqual(tab.cells[1].slice(0, 2), ['p1', 'none']);
+    assert.throws(() => api_site_save_photo('tok', 'b', 'data:image/jpeg;base64,AAAA'), /tsars/);
+    identity_for_token = () => ({id: 'p1', email: 'tnjc@x'});
+    api_site_save_photo('tok', 'b', 'data:image/jpeg;base64,BBBB');
+    assert.deepStrictEqual(tab.cells[2].slice(0, 2), ['b', 'data:image/jpeg;base64,BBBB']);
+  } finally { site_photos_tab = saved.tab; LockService = saved.lock; site_restore(); }
+});
 t('site: dates for Notion', () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(site_notion_date('2026-11-02', '2026-11-06'))), {start: '2026-11-02', end: '2026-11-06'});
   assert.throws(() => site_notion_date('', null), /date/);

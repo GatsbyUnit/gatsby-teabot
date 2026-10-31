@@ -707,18 +707,37 @@
   const EXEMPT = [['research', 'Research talks'], ['tea_talk', 'Tea talks'], ['tea', 'Tea']];
   const all = me.people.includes('all');
 
-  R.hooks.personButton = (p, big) => me.people.length
-    ? `<button type="button" class="${big ? 'edit-button' : 'icon-button'}" data-edit-person="${p.id}" title="Edit" aria-label="Edit ${esc(p.name)}">✎${big ? ' Edit' : ''}</button>` : '';
+  R.hooks.personButton = (p, big) => me.people.length || p.id === me.person
+    ? `<button type="button" class="${big ? 'edit-button' : 'icon-button'}" data-edit-person="${p.id}" title="Edit" aria-label="Edit ${esc(p.name)}">✎${big ? (me.people.length ? ' Edit' : ' Change my photo') : ''}</button>` : '';
   R.hooks.peopleBar = () => me.add_people ? '<button type="button" class="edit-button" data-add-person>＋ Add a person</button>' : '';
+
+  // a picked image -> a small square JPEG (the face is usually in the upper part of a portrait)
+  async function thumbnail(file) {
+    const img = await createImageBitmap(file);
+    const side = Math.min(img.width, img.height);
+    const top = Math.max(0, Math.min(img.height - side, Math.round((img.height - side) * 0.3)));
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 160;
+    canvas.getContext('2d').drawImage(img, (img.width - side) / 2, top, side, side, 0, 0, 160, 160);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  }
+
+  function photoField(p) {
+    return `<div class="row photo-row">${R.avatar(p, 'avatar-lg')}
+      <label class="photo-pick">Photo<input type="file" name="photo" accept="image/*"></label>
+      ${p.id ? '<label class="check"><input type="checkbox" name="no_photo"> No photo</label>' : ''}</div>`;
+  }
 
   function personForm(p) {
     const o = opts();
     const mine = ROTAS.filter((r) => all || me.people.includes(r));
+    const tsar = me.people.length > 0;
     return `<form class="edit-form" data-person-form="${p.id || ''}">
+      ${p.id ? photoField(p) : ''}
       ${all ? `<div class="row"><label>Name<input class="title-input" name="name" value="${esc(p.name || '')}" required></label>
         <label>Position<select name="position"><option value=""></option>${(o.positions || []).map((x) => `<option${x === p.position ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
         <label>Joined<input type="date" name="joined" value="${esc(p.joined || '')}"></label></div>` : `<strong>${esc(p.name)}</strong>`}
-      <div class="row">${mine.map((r) => `<label class="check"><input type="checkbox" name="rota" value="${r}"${(p.rotas || []).includes(r) ? ' checked' : ''}> ${r}</label>`).join('')}</div>
+      ${tsar ? `<div class="row">${mine.map((r) => `<label class="check"><input type="checkbox" name="rota" value="${r}"${(p.rotas || []).includes(r) ? ' checked' : ''}> ${r}</label>`).join('')}</div>` : ''}
       ${all ? `<div class="row"><span class="muted">Exempt from</span>${EXEMPT.map(([k, l]) => `<label class="check"><input type="checkbox" name="excluded" value="${k}"${(p.excluded || []).includes(k) ? ' checked' : ''}> ${l}</label>`).join('')}</div>
         <label class="check"><input type="checkbox" name="active"${p.active || !p.id ? ' checked' : ''}> On the rotas (active)</label>` : ''}
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
@@ -735,6 +754,17 @@
     const form = $('form', host);
     const close = () => { host.remove(); anchor.hidden = false; };
     $('[data-form-cancel]', form).addEventListener('click', close);
+    const pick = form.elements.photo;
+    pick?.addEventListener('change', async () => {
+      if (!pick.files[0]) return;
+      try {
+        form.dataset.photo = await thumbnail(pick.files[0]);
+        const box = $('.photo-row .avatar', form);
+        box.classList.remove('avatar-mono');
+        box.innerHTML = `<img src="${form.dataset.photo}" alt="">`;
+        if (form.elements.no_photo) form.elements.no_photo.checked = false;
+      } catch { $('.error', form).textContent = 'That file could not be read as a picture.'; }
+    });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = form.elements;
@@ -746,9 +776,15 @@
       button.disabled = true;
       button.textContent = 'Saving…';
       try {
-        const saved = await R.api('api_site_save_person', token(), person);
-        putItem('people', saved);
-        toast('Saved to Notion.');
+        const photo = form.dataset.photo || (f.no_photo?.checked ? '' : null);
+        if (photo !== null && p.id) R.setPhoto(p.id, photo, await R.api('api_site_save_photo', token(), p.id, photo));
+        if (me.people.length) {
+          const saved = await R.api('api_site_save_person', token(), person);
+          putItem('people', saved);
+        } else {
+          R.route();
+        }
+        toast(me.people.length ? 'Saved.' : 'Photo saved.');
       } catch (x) {
         err.textContent = x.message;
         button.disabled = false;
