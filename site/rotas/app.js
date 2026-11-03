@@ -1,6 +1,6 @@
 // Gatsby Rotas: the unit's talk, tea and coffee rotas and the guides to them, at site/rotas/ next to the tea
 // page. The tea bot (apps-script/automation/Site.js) keeps the pages and reads the rota data live from Notion;
-// tsars edit both here (edit.js). No build step.
+// tsars edit both here (edit.js). Nothing is shown that the bot hasn't just confirmed. No build step.
 'use strict';
 
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -33,7 +33,7 @@ const TYPES = {
 };
 const UNIT_WIDE = ['Research Talk', 'Tea Talk', 'External Seminar', 'Leaving Tea', 'Just Tea'];
 
-const params = new URLSearchParams(location.search);
+let params = new URLSearchParams(location.search); // again on each move between pages (show)
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -53,9 +53,9 @@ const personHref = (id) => href({ person: id });
 // tea page's own memory of its visitor, and keeps them for six months.
 
 const SESSION = 'gatsby-rotas';
-const CACHE = 'gatsby-rotas-cache';
+const CACHE = 'gatsby-rotas-cache'; // where browsers used to keep pages and data; dropped
 const TEA_PAGE_MEMORY = 'gatsby-tea-page';
-const FRESH_MS = 10 * 60e3; // pages and data are reused for this long, so moving between pages is instant
+const FRESH_MS = 60e3; // what the bot said is used for this long; then it is asked again before anything is shown
 
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -73,14 +73,15 @@ function session() {
 function remember({ key = '', token = '', person = '', name = '' }) {
   memorySession = { key, token, person, name, until: new Date(Date.now() + CONFIG.rememberDays * 864e5).toISOString() };
   store.set(SESSION, memorySession);
-  store.drop(CACHE);
+  bundle = null;
   // one site: "My tea page" then opens this person's page without a code in the address
   if (token) { try { localStorage.setItem(TEA_PAGE_MEMORY, token); } catch { /* fine */ } }
 }
 
 function forget() {
   memorySession = null;
-  store.drop(SESSION, CACHE);
+  bundle = null;
+  store.drop(SESSION);
 }
 
 class SignedOut extends Error {}
@@ -93,64 +94,164 @@ async function api(fn, ...args) {
 }
 
 let bundle = null;
-let refreshing = false;
-// What this browser had is shown at once. When it is older than FRESH_MS the bot is asked again in the
-// background, and the page redrawn if anything changed, so only the very first visit waits for the bot.
+let bundleAt = 0; // when the bot was asked for it
+let asking = null;
+const fresh = () => bundle && Date.now() - bundleAt < FRESH_MS;
+const editing = () => !!document.querySelector('.edit-form, article.editing');
+
+// The pages and data, as the bot has them now: what it said in the last minute, or else its answer to a new
+// question (the caller shows the bar: waitFor).
 async function loadBundle() {
-  if (bundle) return bundle;
-  const s = session();
-  if (!s) throw new SignedOut();
-  const cached = store.get(CACHE);
-  if (cached && cached.who === (s.token || s.key)) {
-    bundle = cached.bundle;
-    if (Date.now() - cached.at >= FRESH_MS) refresh(s);
-    return bundle;
-  }
-  const fresh = await api('api_site_bundle', s.key, s.token);
-  if (!fresh) { forget(); throw new SignedOut(); }
-  return keep(fresh);
+  return fresh() ? bundle : ask();
+}
+
+function ask() {
+  return (asking ||= (async () => {
+    const s = session();
+    if (!s) throw new SignedOut();
+    const at = Date.now();
+    const b = await timed('api_site_bundle', s.key, s.token);
+    if (!b) { forget(); throw new SignedOut(); }
+    keep(b);
+    bundleAt = at;
+    if (b.me) await loadEditor();
+    await loadPhotos();
+    return b;
+  })().finally(() => { asking = null; }));
 }
 
 const sig = (b) => JSON.stringify([b.pages, b.data.schedule, b.data.people, b.data.rota_rules, b.data.options, b.me, b.photos_version]);
 
-async function refresh(s) {
-  refreshing = true;
-  footerMeta();
-  let fresh;
+// While the page is in view the bot is asked again every minute and the page redrawn when anything changed.
+// Coming back to the tab later, the page is hidden until the bot has answered.
+async function recheck(wait) {
+  if (!bundle || editing() || !session()) return;
+  const before = sig(bundle);
+  const job = async () => {
+    await ask();
+    if (sig(bundle) !== before || $('#main .load-error')) await redraw();
+    footerMeta();
+  };
   try {
-    fresh = await api('api_site_bundle', s.key, s.token);
-  } catch {
-    fresh = undefined; // offline or the bot is down: keep showing what we had
-  } finally {
-    refreshing = false;
+    await (wait ? waitFor(job(), 'Checking for changes…', usual('api_site_bundle')) : job());
+  } catch (err) {
+    if (wait || err instanceof SignedOut) failed(err);
   }
-  if (fresh === null) { forget(); return signInPage({ notice: 'Please sign in again.' }); }
-  if (!fresh) return footerMeta();
-  const changed = sig(fresh) !== sig(bundle);
-  keep(fresh);
-  if (!changed) return footerMeta();
-  if (bundle.me) await loadEditor();
-  await loadPhotos();
-  await redraw();
 }
+setInterval(() => { if (document.visibilityState === 'visible' && !fresh() && !asking) recheck(false); }, 10e3);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && bundle && !fresh()) recheck(true); });
 
 // after newer data or photos arrived: what is on screen again, unless someone is editing it
 async function redraw() {
-  if (document.querySelector('.edit-form, article.editing')) return footerMeta();
+  if (editing()) return footerMeta();
   const y = window.scrollY;
   await route();
   window.scrollTo(0, y);
   renderAccount();
 }
 
-// after an edit: the new bundle is shown at once and remembered
+// the bot's answer, or a copy changed by an edit here (edit.js)
 function keep(b) {
   bundle = b;
   data = null;
-  const s = session();
-  store.set(CACHE, { who: s && (s.token || s.key), at: Date.now(), bundle: b });
   return b;
 }
+
+function failed(err) {
+  if (err instanceof SignedOut) return signInPage({ notice: 'Please sign in again.' });
+  console.error(err);
+  $('#main').innerHTML = `<p class="empty load-error">The rotas could not be loaded right now (${esc(err.message)}). Please try again in a minute.</p>`;
+}
+
+// ---------- waiting for the bot ----------
+// While the bot is asked, the page is hidden behind a bar that fills over the time it usually takes: the
+// middle of its last five answers on this browser.
+const TIMES = 'gatsby-rotas-times';
+const USUAL_MS = { api_site_bundle: 4000, api_site_sign_in: 3000, api_site_sign_in_token: 3000 };
+
+function usual(fn) {
+  const t = [...((store.get(TIMES) || {})[fn] || [])].sort((a, b) => a - b);
+  return t.length ? t[t.length >> 1] : USUAL_MS[fn] || 3000;
+}
+
+async function timed(fn, ...args) {
+  const t0 = performance.now();
+  const out = await api(fn, ...args);
+  const all = store.get(TIMES) || {};
+  all[fn] = [...(all[fn] || []), Math.round(performance.now() - t0)].slice(-5);
+  store.set(TIMES, all);
+  return out;
+}
+
+let waiting = null;
+async function waitFor(promise, label, ms) {
+  if (waiting) { waiting.count++; } else {
+    const el = document.createElement('div');
+    el.className = 'waiting';
+    el.setAttribute('role', 'status');
+    const n = Math.max(1, Math.round(ms / 1000));
+    el.innerHTML = `<p>${esc(label)}</p><div class="bar" aria-hidden="true"><span></span></div>
+      <p class="eta">Usually about ${n} second${n === 1 ? '' : 's'}.</p>`;
+    document.body.append(el);
+    document.body.classList.add('is-waiting');
+    const t0 = performance.now();
+    const tick = () => {
+      const t = performance.now() - t0;
+      // 90% at the usual time, then ever slower
+      $('.bar span', el).style.transform = `scaleX(${t < ms ? 0.9 * t / ms : 0.99 - 0.09 * Math.exp((ms - t) / ms)})`;
+      if (t > 2 * ms + 1000) $('.eta', el).textContent = 'Taking longer than usual…';
+    };
+    tick();
+    waiting = { el, count: 1, timer: setInterval(tick, 100) };
+  }
+  try {
+    return await promise;
+  } finally {
+    if (!--waiting.count) {
+      clearInterval(waiting.timer);
+      waiting.el.remove();
+      waiting = null;
+      document.body.classList.remove('is-waiting');
+    }
+  }
+}
+
+// ---------- moving between pages ----------
+// Links to other pages of the site open in place, so the bot's answer of the last minute is reused.
+
+async function show(y = 0) {
+  params = new URLSearchParams(location.search);
+  const person = params.get('person');
+  renderNav(person ? '' : params.get('p') || 'home');
+  const job = async () => {
+    await route();
+    renderAccount();
+  };
+  try {
+    await (fresh() ? job() : waitFor(job(), bundle ? 'Checking for changes…' : 'Getting the latest rotas…', usual('api_site_bundle')));
+    if (!location.hash) window.scrollTo(0, y);
+  } catch (err) {
+    failed(err);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href]');
+  if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target || a.hasAttribute('download')) return;
+  const url = new URL(a.href, location.href);
+  if (url.origin !== location.origin || url.pathname !== location.pathname || (url.search === location.search && url.hash)) return;
+  if (editing() || document.body.classList.contains('signed-out')) return; // the browser's own way (edit.js asks first)
+  e.preventDefault();
+  history.replaceState({ y: window.scrollY }, '');
+  history.pushState({ y: 0 }, '', url);
+  show().then(() => $('#main').focus({ preventScroll: true }));
+});
+
+window.addEventListener('popstate', (e) => {
+  if (editing()) return location.reload();
+  show(e.state?.y || 0);
+});
+history.scrollRestoration = 'manual';
 
 // ---------- data ----------
 
@@ -774,11 +875,10 @@ function notFound() {
 function footerMeta() {
   const el = $('#footer-meta');
   const s = session();
-  const generated = bundle?.data?.generated;
   const teaLink = CONFIG.teaPage;
   const who = !s ? '' : s.person && s.name ? `Signed in as <a href="${personHref(s.person)}">${esc(s.name)}</a>` : 'Signed in on this browser';
   el.innerHTML = [
-    generated && `Updated ${F.stamp.format(new Date(generated))}${refreshing ? ' (checking for changes…)' : ''}`,
+    bundleAt && `Checked ${F.stamp.format(new Date(bundleAt))}`,
     `<a href="${esc(teaLink)}">Tea page</a>`,
     who, s && '<button type="button" class="link-button" data-sign-out>Sign out</button>',
   ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
@@ -874,9 +974,8 @@ async function signInFromLink() {
     return '';
   }
   if (!via) return '';
-  $('#main').innerHTML = '<p class="loading">Signing you in…</p>';
   try {
-    const who = await api(...via);
+    const who = await waitFor(timed(...via), 'Signing you in…', usual(via[0]));
     if (who) { remember(who); return ''; }
     if (via[1] === remembered) return '';
     return code ? 'That sign-in link has expired. Links work for an hour; ask for a new one below.' : 'That link is not valid any more. Ask for a new one below.';
@@ -923,25 +1022,12 @@ api('api_page_icon').then((url) => {
 }).catch(() => {});
 
 (async function main() {
+  store.drop(CACHE);
   const notice = await signInFromLink();
   if (notice || !session()) return signInPage({ notice });
   document.body.classList.remove('signed-out');
-  const person = params.get('person');
-  renderNav(person ? '' : params.get('p') || 'home');
   footerMeta();
-  try {
-    await loadBundle();
-    // photos this browser already has are shown at once; newer ones replace them when they arrive
-    const had = store.get(PHOTOS);
-    if (had) { photos = had.photos || {}; loadPhotos().then((got) => got && redraw()); } else await loadPhotos();
-    renderAccount();
-    if (bundle.me) await loadEditor();
-    await route();
-  } catch (err) {
-    if (err instanceof SignedOut) return signInPage({ notice: 'Please sign in again.' });
-    console.error(err);
-    $('#main').innerHTML = `<p class="empty">The rotas could not be loaded right now (${esc(err.message)}). Please try again in a minute.</p>`;
-  }
+  await show();
 })();
 
 // for edit.js

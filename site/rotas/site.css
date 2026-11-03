@@ -125,6 +125,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page-home .prose > :is(p, ul, ol, blockquote) { max-width: var(--measure); }
 .loading, .noscript { text-align: center; color: var(--muted); }
 
+/* waiting for the bot (app.js waitFor): the page stays hidden until it has answered */
+body.is-waiting #main { visibility: hidden; }
+.waiting { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: .65rem; padding: 1rem; pointer-events: none; text-align: center; color: var(--muted); font: .95rem/1.4 var(--font-ui); }
+.waiting p { margin: 0; }
+.waiting .eta { font-size: .85rem; }
+.waiting .bar { width: min(16rem, 70vw); height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.waiting .bar span { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform .1s linear; }
+
 .page-head { margin-bottom: 1.25rem; }
 .crumbs { margin: 0 0 .3rem; font: 500 .85rem/1.4 var(--font-ui); color: var(--muted); }
 .crumbs a { color: inherit; text-decoration: none; }

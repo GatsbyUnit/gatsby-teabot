@@ -33,10 +33,12 @@ with the schedule, people and rota rules, which still come live from the Notion 
 picking their name; the bot emails a link that works for an hour, and their browser then remembers them for six
 months. Anyone who has used their tea page on the same browser is signed in already.
 
-The browser shows what it had at once and asks the bot for news in the background ("checking for changes" at
-the bottom), so only the first visit waits a few seconds. The bot keeps a copy of the rota data, rebuilt by the
-hourly sync and after every change it makes: edits made on the site or the tea page show straight away, edits
-made in Notion directly within the hour.
+The site only shows what the bot has just confirmed. Opening it waits for the bot, with a bar that fills over
+the time it usually takes (3–4 seconds). Moving between pages within a minute is instant; after that, or when
+coming back to the tab, the bot is asked again first, and a page left open checks every minute and updates
+itself ("Checked" at the bottom says when). The bot keeps a copy of the rota data, rebuilt by the hourly sync
+and after every change it makes: edits made on the site or the tea page show straight away, edits made in
+Notion directly only within the hour, so please edit on the site.
 
 **Editing (tsars).** Signed in as the tea tsar or a rota organiser, you see ✎ buttons:
 - **Pages:** "Edit this page", then click any text and type. The bar at the top makes text bold, italic, struck
