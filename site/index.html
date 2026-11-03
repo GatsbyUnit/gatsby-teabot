@@ -9,7 +9,7 @@
 <link id="icon" rel="icon" href="data:,">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
-<link rel="stylesheet" href="rotas/site.css?v=8">
+<link rel="stylesheet" href="rotas/site.css?v=10">
 <style>
   /* The tea page in the Gatsby Rotas design (rotas/site.css); what follows is only for its own parts. */
   main#app { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
@@ -57,7 +57,7 @@
 <body>
 <header class="site-head">
   <div class="site-head-inner">
-    <a class="brand" href="rotas/"><img id="brand-icon" src="data:," alt="" width="22" height="22" hidden>Gatsby Rotas</a>
+    <a class="brand" href="rotas/">Gatsby Rotas</a>
     <nav class="nav" aria-label="Pages"><ul>
       <li><a href="rotas/">Rotas</a></li>
       <li><a href="rotas/?p=tea-system">Tea System</a></li>
@@ -579,9 +579,6 @@
     .then(function(res){
       if (!res.ok || !res.result) return;
       document.getElementById('icon').href = res.result;
-      var img = document.getElementById('brand-icon');
-      img.src = res.result;
-      img.hidden = false;
     })
     .catch(function(){});
 

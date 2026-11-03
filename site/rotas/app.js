@@ -1008,13 +1008,9 @@ async function route() {
   else await renderPage(slug);
 }
 
-// the tea page's browser-tab icon (FAVICON_URL), remembered so it shows at once next time
+// the tea page's browser-tab icon (FAVICON_URL), remembered so it shows at once next time; only in the tab
 function showIcon(url) {
-  if (!url) return;
-  $('#favicon').href = url;
-  const img = $('#brand-icon');
-  img.src = url;
-  img.hidden = false;
+  if (url) $('#favicon').href = url;
 }
 showIcon(store.raw('gatsby-rotas-icon'));
 api('api_page_icon').then((url) => {

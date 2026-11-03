@@ -100,7 +100,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 2rem;
 }
 .brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--text); text-decoration: none; font: 650 1.05rem/1.2 var(--font-head); }
-.brand img { width: 22px; height: 22px; image-rendering: pixelated; }
 .nav ul { display: flex; gap: .15rem; list-style: none; margin: 0; padding: 0; }
 .nav a {
   display: block; padding: .4rem .6rem; border-radius: var(--radius-sm);
