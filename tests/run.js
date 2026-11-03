@@ -394,6 +394,49 @@ t('site: who may edit what', () => {
     assert.strictEqual(site_rights('', c).person, '');
   } finally { site_restore(); }
 });
+t('site: removing a slot deletes its calendar event after the row; invited guests get the cancellation; a paused bot keeps it', () => {
+  site_stubs('tnjc@x');
+  var saved = [get_settings, Calendar];
+  var calls = [];
+  try {
+    notion_get_page = () => ({id: 'row1', properties: {'Type': {select: {name: 'TNJC'}}, 'Date': {date: {start: '2026-12-22T13:30:00.000+00:00'}},
+      'GCal ID': {rich_text: [{plain_text: 'ev9@google.com'}]}}});
+    notion_request = (m, p, body) => { calls.push('notion ' + m + ' ' + JSON.stringify(body)); return {}; };
+    Calendar = {Events: {remove: (cal, id, opts) => { calls.push('remove ' + id + ' ' + opts.sendUpdates); }}};
+    get_settings = () => ({dry_run: false});
+    __props = {'state:ev9@google.com': '{}', 'invite:ev9': JSON.stringify({g: ['lena@x'], no: []})};
+    assert.deepStrictEqual(api_site_delete_slot('tok', 'row1'), {calendar: 'deleted'});
+    assert.deepStrictEqual(calls, ['notion patch {"archived":true}', 'remove ev9 all']);
+    assert.deepStrictEqual(__props, {});
+    calls = [];
+    assert.deepStrictEqual(api_site_delete_slot('tok', 'row1'), {calendar: 'deleted'});
+    assert.deepStrictEqual(calls, ['notion patch {"archived":true}', 'remove ev9 none']);
+    Calendar.Events.remove = () => { throw new Error('Resource has been deleted'); };
+    assert.deepStrictEqual(api_site_delete_slot('tok', 'row1'), {calendar: 'deleted'});
+    get_settings = () => ({dry_run: true});
+    calls = [];
+    assert.deepStrictEqual(api_site_delete_slot('tok', 'row1'), {calendar: 'kept'});
+    assert.deepStrictEqual(calls, ['notion patch {"archived":true}']);
+    identity_for_token = () => ({id: 'p1', email: 'mljc@x'});
+    assert.throws(() => api_site_delete_slot('tok', 'row1'), /Only the TNJC tsar/);
+  } finally { site_restore(); get_settings = saved[0]; Calendar = saved[1]; __props = {}; }
+});
+t('site: every write drops the site copy of the data, reads keep it', () => {
+  var saved = [store_mode, notion_http, store_mirror, CacheService];
+  var removed = [];
+  try {
+    store_mode = () => 'notion';
+    notion_http = () => ({});
+    store_mirror = () => {};
+    CacheService = {getScriptCache: () => ({remove: (k) => removed.push(k)})};
+    REAL.notion_request('post', 'databases/db/query', {}, {});
+    REAL.notion_request('get', 'pages/x', null, {});
+    assert.deepStrictEqual(removed, []);
+    REAL.notion_request('patch', 'pages/x', {}, {});
+    REAL.notion_request('post', 'pages', {}, {});
+    assert.deepStrictEqual(removed, ['site:data', 'site:data']);
+  } finally { store_mode = saved[0]; notion_http = saved[1]; store_mirror = saved[2]; CacheService = saved[3]; }
+});
 t('site: a rota tsar can only tick their own rota on people, and only edit their own slots', () => {
   site_stubs('tnjc@x');
   var patched = null;

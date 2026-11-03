@@ -93,22 +93,54 @@ async function api(fn, ...args) {
 }
 
 let bundle = null;
+let refreshing = false;
+// What this browser had is shown at once. When it is older than FRESH_MS the bot is asked again in the
+// background, and the page redrawn if anything changed, so only the very first visit waits for the bot.
 async function loadBundle() {
   if (bundle) return bundle;
   const s = session();
   if (!s) throw new SignedOut();
   const cached = store.get(CACHE);
-  const usable = cached && cached.who === (s.token || s.key);
-  if (usable && Date.now() - cached.at < FRESH_MS) return (bundle = cached.bundle);
+  if (cached && cached.who === (s.token || s.key)) {
+    bundle = cached.bundle;
+    if (Date.now() - cached.at >= FRESH_MS) refresh(s);
+    return bundle;
+  }
+  const fresh = await api('api_site_bundle', s.key, s.token);
+  if (!fresh) { forget(); throw new SignedOut(); }
+  return keep(fresh);
+}
+
+const sig = (b) => JSON.stringify([b.pages, b.data.schedule, b.data.people, b.data.rota_rules, b.data.options, b.me, b.photos_version]);
+
+async function refresh(s) {
+  refreshing = true;
+  footerMeta();
   let fresh;
   try {
     fresh = await api('api_site_bundle', s.key, s.token);
-  } catch (err) {
-    if (usable) return (bundle = cached.bundle); // offline or the bot is down: show what we had
-    throw err;
+  } catch {
+    fresh = undefined; // offline or the bot is down: keep showing what we had
+  } finally {
+    refreshing = false;
   }
-  if (!fresh) { forget(); throw new SignedOut(); }
-  return keep(fresh);
+  if (fresh === null) { forget(); return signInPage({ notice: 'Please sign in again.' }); }
+  if (!fresh) return footerMeta();
+  const changed = sig(fresh) !== sig(bundle);
+  keep(fresh);
+  if (!changed) return footerMeta();
+  if (bundle.me) await loadEditor();
+  await loadPhotos();
+  await redraw();
+}
+
+// after newer data or photos arrived: what is on screen again, unless someone is editing it
+async function redraw() {
+  if (document.querySelector('.edit-form, article.editing')) return footerMeta();
+  const y = window.scrollY;
+  await route();
+  window.scrollTo(0, y);
+  renderAccount();
 }
 
 // after an edit: the new bundle is shown at once and remembered
@@ -287,16 +319,18 @@ function initials(name) {
 const PHOTOS = 'gatsby-rotas-photos';
 let photos = {};
 
+// true when newer photos arrived
 async function loadPhotos() {
   const version = bundle?.photos_version || '';
   const cached = store.get(PHOTOS);
-  if (cached && cached.version === version) { photos = cached.photos || {}; return; }
-  if (!version) { photos = {}; return; }
+  if (cached && cached.version === version) { photos = cached.photos || {}; return false; }
+  if (!version) { photos = {}; return false; }
   const s = session();
   try {
     const got = await api('api_site_photos', s.key, s.token);
-    if (got) { photos = got.photos || {}; store.set(PHOTOS, got); }
+    if (got) { photos = got.photos || {}; store.set(PHOTOS, got); return true; }
   } catch { photos = cached?.photos || {}; }
+  return false;
 }
 
 function photoOf(p) {
@@ -744,7 +778,7 @@ function footerMeta() {
   const teaLink = CONFIG.teaPage;
   const who = !s ? '' : s.person && s.name ? `Signed in as <a href="${personHref(s.person)}">${esc(s.name)}</a>` : 'Signed in on this browser';
   el.innerHTML = [
-    generated && `Updated ${F.stamp.format(new Date(generated))}`,
+    generated && `Updated ${F.stamp.format(new Date(generated))}${refreshing ? ' (checking for changes…)' : ''}`,
     `<a href="${esc(teaLink)}">Tea page</a>`,
     who, s && '<button type="button" class="link-button" data-sign-out>Sign out</button>',
   ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
@@ -851,6 +885,12 @@ async function signInFromLink() {
   }
 }
 
+// edit.js: tsars edit the site; everyone signed in by name can change their own photo
+let editor = null;
+function loadEditor() {
+  return (editor ||= loadScript(`edit.js?v=${document.querySelector('script[src^="app.js"]')?.src.split('v=')[1] || ''}`));
+}
+
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
@@ -891,10 +931,11 @@ api('api_page_icon').then((url) => {
   footerMeta();
   try {
     await loadBundle();
-    await loadPhotos();
+    // photos this browser already has are shown at once; newer ones replace them when they arrive
+    const had = store.get(PHOTOS);
+    if (had) { photos = had.photos || {}; loadPhotos().then((got) => got && redraw()); } else await loadPhotos();
     renderAccount();
-    // edit.js: tsars edit the site; everyone signed in by name can change their own photo
-    if (bundle.me) await loadScript(`edit.js?v=${document.querySelector('script[src^="app.js"]')?.src.split('v=')[1] || ''}`);
+    if (bundle.me) await loadEditor();
     await route();
   } catch (err) {
     if (err instanceof SignedOut) return signInPage({ notice: 'Please sign in again.' });

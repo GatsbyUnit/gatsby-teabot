@@ -33,6 +33,11 @@ with the schedule, people and rota rules, which still come live from the Notion 
 picking their name; the bot emails a link that works for an hour, and their browser then remembers them for six
 months. Anyone who has used their tea page on the same browser is signed in already.
 
+The browser shows what it had at once and asks the bot for news in the background ("checking for changes" at
+the bottom), so only the first visit waits a few seconds. The bot keeps a copy of the rota data, rebuilt by the
+hourly sync and after every change it makes: edits made on the site or the tea page show straight away, edits
+made in Notion directly within the hour.
+
 **Editing (tsars).** Signed in as the tea tsar or a rota organiser, you see ✎ buttons:
 - **Pages:** "Edit this page", then click any text and type. The bar at the top makes text bold, italic, struck
   through or a link, changes the kind of block (text, headings, lists, to-do, quote, toggle), adds a block below
@@ -43,6 +48,11 @@ months. Anyone who has used their tea page on the same browser is signed in alre
 - **Slots** (✎ on a slot, "＋ Add a slot"): day and time, title, presenter(s), tea, guest speaker, CSNJC, water
   filter, description. Saved into Notion; the calendar and invitations follow within the hour, exactly as for an
   edit made in Notion. Rota organisers edit their own rota's slots; the tea tsar all of them.
+  "Remove slot" (in the slot's form) is for slots that aren't needed (bank holidays, closures): the row leaves
+  Notion (its trash keeps it for 30 days) and the calendar event is deleted with it. Guests the bot invited get
+  Google's cancellation; nobody else is emailed. To tell the people on duty, cancel instead (see Everyday).
+  Deleting the row in Notion by hand leaves the event behind: delete that yourself afterwards (the row first, or
+  the bot records a cancellation).
 - **People** (✎ on a card or a person's page): the tea tsar edits everything and adds people; rota organisers
   tick or untick their own rota (TNJC also CSNJC). Searching the people list shows inactive people too, so you can
   bring someone back.

@@ -40,30 +40,41 @@ const SETTINGS = [
 const MACHINE_KEYS = ['LOG_SHEET_ID', 'SWAP_FORM_ID', 'LAST_BACKUP_ID', 'SITE_PAGES_SHEET_ID', 'STORE_SHEET_ID'];
 
 var settings_cache = null;
+var constants_cache = null;
+var const_book_cache = null;
 
+// the constants spreadsheet, opened once per run (the constants, settings and reminders all live in it)
+function const_book(){
+  return const_book_cache || (const_book_cache = SpreadsheetApp.openById(CONST_SHEET_ID));
+}
+
+// column B of the first tab, read in one go (cell by cell took a round trip each) and once per run
 function get_global_constants(){
-  var sheet = SpreadsheetApp.openById(CONST_SHEET_ID).getSheets()[0];
-  var constants = {
-    'admin_email': sheet.getRange(2, 2).getValue(),
-    'mljc_admin_email': sheet.getRange(3, 2).getValue(),
-    'tnjc_admin_email': sheet.getRange(4, 2).getValue(),
-    'coffee_admin_email': sheet.getRange(5, 2).getValue(),
-    'unit_wide_email': sheet.getRange(7, 2).getValue(),
-    'mljc_email': sheet.getRange(8, 2).getValue(),
-    'tnjc_email': sheet.getRange(9, 2).getValue(),
-    'csnjc_email': sheet.getRange(10, 2).getValue(),
-    'gatsby_zoom_link': sheet.getRange(11, 2).getValue(),
-    'identity_mapping_id': sheet.getRange(19, 2).getValue(),
-    'google_calendar_id': sheet.getRange(20, 2).getValue(),
-    'notion_token': sheet.getRange(21, 2).getValue(),
-    'notion_people_db_id': sheet.getRange(22, 2).getValue(),
-    'notion_rota_rules_db_id': sheet.getRange(23, 2).getValue(),
-    'notion_talk_db_id': sheet.getRange(24, 2).getValue(),
-    'notion_site_url': sheet.getRange(25, 2).getValue(),
-    'coffee_email': sheet.getRange(26, 2).getValue(),
-    'gatsby_admin_email': sheet.getRange(28, 2).getValue(),   // unit admin (Zoom set-up)
-  };
-  return constants;
+  if (!constants_cache){
+    var b = const_book().getSheets()[0].getRange(1, 2, 28, 1).getValues();
+    var row = function(n){ return b[n - 1][0]; };
+    constants_cache = {
+      'admin_email': row(2),
+      'mljc_admin_email': row(3),
+      'tnjc_admin_email': row(4),
+      'coffee_admin_email': row(5),
+      'unit_wide_email': row(7),
+      'mljc_email': row(8),
+      'tnjc_email': row(9),
+      'csnjc_email': row(10),
+      'gatsby_zoom_link': row(11),
+      'identity_mapping_id': row(19),
+      'google_calendar_id': row(20),
+      'notion_token': row(21),
+      'notion_people_db_id': row(22),
+      'notion_rota_rules_db_id': row(23),
+      'notion_talk_db_id': row(24),
+      'notion_site_url': row(25),
+      'coffee_email': row(26),
+      'gatsby_admin_email': row(28),   // unit admin (Zoom set-up)
+    };
+  }
+  return Object.assign({}, constants_cache);
 }
 
 function get_settings(){
@@ -104,7 +115,7 @@ function set_setting(key, value){
 }
 
 function read_settings_tab(){
-  var sheet = SpreadsheetApp.openById(CONST_SHEET_ID).getSheetByName(SETTINGS_TAB);
+  var sheet = const_book().getSheetByName(SETTINGS_TAB);
   var out = {};
   if (!sheet || sheet.getLastRow() < 2) return out;
   sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues().forEach(function(r){ if (r[0]) out[r[0]] = r[1]; });
@@ -113,7 +124,7 @@ function read_settings_tab(){
 
 // rows of {month, day, type, subject, body}; blank rows ignored
 function read_reminders_tab(){
-  var sheet = SpreadsheetApp.openById(CONST_SHEET_ID).getSheetByName(REMINDERS_TAB);
+  var sheet = const_book().getSheetByName(REMINDERS_TAB);
   if (!sheet || sheet.getLastRow() < 2) return [];
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues()
     .filter(function(r){ return r[0] && r[1] && r[3]; })

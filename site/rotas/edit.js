@@ -576,7 +576,7 @@
       ${allDay ? '' : `<label>Description<textarea name="description" placeholder="Abstract, paper, room…">${esc(s.description || '')}</textarea></label>`}
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button>
-        ${s.id ? '<button type="button" class="edit-button" data-slot-delete title="For slots not needed. A finalised talk is better cancelled: set its title to Cancelled.">Remove slot</button>' : ''}
+        ${s.id ? '<button type="button" class="edit-button" data-slot-delete title="For slots not needed (bank holidays, closures). Its calendar event goes too. A talk whose people should hear about it is better cancelled: set its title to Cancelled.">Remove slot</button>' : ''}
         <span class="error" role="alert"></span></div>
     </form>`;
   }
@@ -649,11 +649,12 @@
         if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Remove it for good?'; return; }
         b.disabled = true;
         try {
-          await R.api('api_site_delete_slot', token(), s.id);
+          const done = await R.api('api_site_delete_slot', token(), s.id);
           const bb = R.bundle();
           R.keep({ ...bb, data: { ...bb.data, schedule: bb.data.schedule.filter((x) => x.id !== s.id) } });
           R.redrawViews();
-          toast('Slot removed.');
+          toast(done?.calendar === 'deleted' ? 'Slot and its calendar event removed.'
+            : done?.calendar === 'kept' ? 'Slot removed. The bot is paused, so its calendar event is still there.' : 'Slot removed.');
         } catch (x) { $('.error', fm).textContent = x.message; b.disabled = false; }
       });
       fm.addEventListener('click', (e) => {

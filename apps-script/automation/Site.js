@@ -18,6 +18,7 @@ const SITE = {
   history_days: 400,
   rule_order: ['Faculty', 'Postdoc', 'PhD student', 'PhD student: joint', 'Staff', 'CRS', 'Visitor'],
   link_ttl: 3600,
+  data_ttl: 3900,  // seconds: just past the hourly sync, which rebuilds it (site_refresh)
   cell: 45000  // a sheet cell holds 50,000 characters; longer pages continue in the next cells
 };
 
@@ -89,9 +90,10 @@ function site_session(row, constants){
 }
 
 // What the holder of this token may change on the site. Tsars are the tea tsar (admin_email, everything)
-// and the rota organisers (the pages, their rota's slots and membership).
-function site_rights(token, constants){
-  var me = token ? identity_for_token(String(token), constants) : null;
+// and the rota organisers (the pages, their rota's slots and membership). identity: the token's identity row,
+// when the caller has already looked it up.
+function site_rights(token, constants, identity){
+  var me = identity || (token ? identity_for_token(String(token), constants) : null);
   var email = me ? me.email.toLowerCase() : '';
   var r = {person: me ? me.id : '', pages: false, rules: false, people: [], slots: [], add_people: false, tea_tsar: false};
   if (!email) return r;
@@ -117,7 +119,7 @@ function api_site_bundle(key, token){
     generated: new Date().toISOString(),
     pages: site_pages(),
     data: site_data(constants),
-    me: me.identity ? site_rights(token, constants) : null,
+    me: me.identity ? site_rights(token, constants, me.identity) : null,
     photos_version: site_photos_version()
   };
 }
@@ -158,6 +160,16 @@ function site_forget(what){
   var cache = CacheService.getScriptCache();
   if (what === 'pages') cache.remove('site:pages');
   if (what === 'data'){ cache.remove('site:data'); cache.remove(PEOPLE_CACHE_KEY); }
+}
+
+// The rota data is kept for a little over an hour and rebuilt by the hourly sync, so visitors rarely wait for
+// Notion; every change the bot writes drops it (notion_request), hand edits in Notion show within the hour.
+function site_refresh(constants){
+  try { site_data(constants, true); } catch (err) { Logger.log('Could not refresh the site data: ' + err); }
+}
+
+function site_stale(){
+  try { CacheService.getScriptCache().remove('site:data'); } catch (err) { /* it expires anyway */ }
 }
 
 // ---- the pages ----
@@ -472,8 +484,8 @@ function api_site_save_photo(token, person_id, uri){
 
 // ---- the rota data (Notion) ----
 
-function site_data(constants){
-  var cached = cache_get_big('site:data');
+function site_data(constants, fresh){
+  var cached = fresh ? null : cache_get_big('site:data');
   if (cached) return cached;
   var since = fmt_iso_date(add_days(start_of_today(), -SITE.history_days));
   var schedule = notion_query(constants['notion_talk_db_id'], {property: 'Date', date: {on_or_after: since}},
@@ -495,7 +507,7 @@ function site_data(constants){
       rules: {research: options(rules_schema['Research Duty']), tea_talk: options(rules_schema['Tea Talk Duty']), tea: options(rules_schema['Tea Duty'])}
     }
   };
-  cache_put_big('site:data', data, 300);
+  cache_put_big('site:data', data, SITE.data_ttl);
   return data;
 }
 
@@ -618,16 +630,37 @@ function api_site_save_slot(token, slot){
   return site_slot(page);
 }
 
-// Removes a slot (as deleting its row in Notion did): for slots not needed, before they are finalised. A
-// finalised talk is better cancelled (title "Cancelled"), which keeps the calendar and the rota in step.
+// Removes a slot, for slots not needed (bank holidays, closures), together with its calendar event: deleting
+// only the row in Notion leaves the event behind, as the sync only looks at slots that exist. A talk whose
+// people should hear about it is better cancelled (title "Cancelled"): the bot then emails them.
+// {calendar: '' (no event), 'deleted', or 'kept' (the bot is paused, DRY_RUN)}
 function api_site_delete_slot(token, id){
   var ed = site_editor(token);
-  var current = site_slot(notion_get_page(hyphenate_id(id), ed.constants));
+  var page = notion_get_page(hyphenate_id(id), ed.constants);
+  var current = site_slot(page);
   if (ed.rights.slots.indexOf(current.type) < 0) throw new Error('Only the ' + current.type + ' tsar or the tea tsar can remove this slot.');
+  // the row first: an event deleted on its own would make the sync record the slot as cancelled
   notion_request('patch', 'pages/' + hyphenate_id(id), {archived: true}, ed.constants);
+  var calendar = site_delete_event(plain_text(page.properties['GCal ID']).trim(), ed.constants);
   site_forget('data');
-  log_site_edit(ed, 'removed ' + current.type + ' slot ' + current.start);
-  return true;
+  log_site_edit(ed, 'removed ' + current.type + ' slot ' + current.start + (calendar === 'deleted' ? ' and its calendar event' : ''));
+  return {calendar: calendar};
+}
+
+// Guests the bot invited get Google's cancellation, as when they are taken off a slot; nobody else is emailed.
+function site_delete_event(gcal_id, constants){
+  if (!gcal_id) return '';
+  if (get_settings().dry_run) return 'kept';
+  var invited = load_invite_state(gcal_id).g.length > 0;
+  try {
+    Calendar.Events.remove(constants['google_calendar_id'], event_key(gcal_id), {sendUpdates: invited ? 'all' : 'none'});
+  } catch (err) {
+    if (!/not found|deleted|404|410/i.test(String(err && err.message || err))) throw err;  // already gone is fine
+  }
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty(STATE_PREFIX + gcal_id);
+  props.deleteProperty(INVITE_PREFIX + event_key(gcal_id));
+  return 'deleted';
 }
 
 function site_notion_date(start, end){

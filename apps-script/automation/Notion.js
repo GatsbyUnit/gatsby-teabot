@@ -5,9 +5,15 @@ const NOTION_VERSION = '2022-06-28';
 // Every call for the rota data comes through here: Notion itself, or the bot's sheet once the data has moved
 // (Store.js, setting STORE). Changes made in Notion are copied into the sheet as well, once it exists.
 function notion_request(method, path, payload, constants){
-  if (store_mode() === 'sheet') return store_request(method, path, payload, constants);
-  var out = notion_http(method, path, payload, constants);
-  if (String(method).toLowerCase() !== 'get' && !/\/query$/.test(path)) store_mirror(out, constants);
+  var write = String(method).toLowerCase() !== 'get' && !/\/query$/.test(path);
+  var out;
+  if (store_mode() === 'sheet'){
+    out = store_request(method, path, payload, constants);
+  } else {
+    out = notion_http(method, path, payload, constants);
+    if (write) store_mirror(out, constants);
+  }
+  if (write) site_stale();  // the Rotas site's copy of the data (Site.js)
   return out;
 }
 

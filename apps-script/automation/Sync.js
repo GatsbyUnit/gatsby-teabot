@@ -32,6 +32,7 @@ function run_sync(){
     maybe_go_live(ctx);
     sync_all(ctx);
     if (!ctx.settings.dry_run) remind_swap_requests(ctx);
+    site_refresh(constants);
     clear_failures('Calendar sync');
   } catch (err) {
     notify_error('Calendar sync', err, constants, 3);
