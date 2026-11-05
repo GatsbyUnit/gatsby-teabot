@@ -481,13 +481,19 @@ FakeSheet.prototype.getRange = function(r, c, nr, nc){
     getValues: () => { var out = []; for (var i = 0; i < nr; i++){ var row = []; for (var j = 0; j < nc; j++) row.push(((sh.cells[r - 1 + i] || [])[c - 1 + j]) ?? ''); out.push(row); } return out; },
     setValues: (v) => { v.forEach((row, i) => { var t = sh.cells[r - 1 + i] = sh.cells[r - 1 + i] || []; row.forEach((x, j) => { t[c - 1 + j] = String(x); }); }); return range; },
     setValue: (x) => range.setValues([[x]]),
-    setNumberFormat: () => range
+    setNumberFormat: () => range,
+    setFontColor: (c) => { sh.heading_colour = c; return range; },
+    setFontWeight: () => range,
+    setNote: (n) => { sh.note = n; return range; }
   };
   return range;
 };
 FakeSheet.prototype.clear = function(){ this.cells = []; };
 FakeSheet.prototype.clearContents = function(){ this.cells = []; };
 FakeSheet.prototype.setFrozenRows = function(){};
+FakeSheet.prototype.setTabColor = function(c){ this.tab_colour = c; };
+FakeSheet.prototype.getProtections = function(){ return this.protection ? [this.protection] : []; };
+FakeSheet.prototype.protect = function(){ var p = this.protection = {}; p.setWarningOnly = (w) => { p.warning_only = w; return p; }; p.setDescription = (d) => { p.description = d; return p; }; return p; };
 function FakeBook(){ this.tabs = [new FakeSheet('Sheet1')]; }
 FakeBook.prototype.getSheetByName = function(n){ return this.tabs.filter(t => t.name === n)[0] || null; };
 FakeBook.prototype.insertSheet = function(n){ var t = new FakeSheet(n); this.tabs.push(t); return t; };
@@ -518,7 +524,7 @@ function store_stubs(mode, mirror){
                  nr: notion_request, np: notion_patch_page, gp: notion_get_page, nq: notion_query, tr: to_row};
   notion_request = REAL.notion_request; notion_patch_page = REAL.notion_patch_page; notion_get_page = REAL.notion_get_page; notion_query = REAL.notion_query; to_row = REAL.to_row;
   var book = new FakeBook(), calls = [];
-  SpreadsheetApp = {openById: (id) => book, create: () => book};
+  SpreadsheetApp = {openById: (id) => book, create: () => book, ProtectionType: {SHEET: 'SHEET'}};
   __props.STORE_SHEET_ID = '';
   delete __props.STORE_SHEET_ID;
   set_setting = (k, v) => { __props[k] = v; };
@@ -542,7 +548,7 @@ function store_restore(){
   SpreadsheetApp = store_saved.ss; set_setting = store_saved.ss2; store_cache = null; delete __props.STORE_SHEET_ID;
   notion_request = store_saved.nr; notion_patch_page = store_saved.np; notion_get_page = store_saved.gp; notion_query = store_saved.nq; to_row = store_saved.tr;
 }
-t('store: the import copies every row and field, leaving formulas behind', () => {
+t('store: the import copies every row and field, leaving formulas behind; its tabs warn against hand edits', () => {
   var st = store_stubs('notion', false);
   try {
     store_import_from_notion();
@@ -552,6 +558,14 @@ t('store: the import copies every row and field, leaving formulas behind', () =>
     assert.strictEqual(tab[2][5], 'Spikes');
     assert.strictEqual(tab[1][9], 'dddddddddddddddddddddddddddddddd');
     assert.strictEqual(st.book.getSheetByName('Sheet1'), null);
+    st.book.getSheets().forEach(function(sh){
+      assert.strictEqual(sh.tab_colour, '#cc0000', sh.name);
+      assert.ok(/DO NOT EDIT BY HAND/.test(sh.note), sh.name);
+      assert.strictEqual(sh.protection.warning_only, true, sh.name);
+    });
+    var before = st.book.getSheetByName('Schedule').protection;
+    store_import_from_notion();
+    assert.strictEqual(st.book.getSheetByName('Schedule').protection, before);
   } finally { store_restore(); }
 });
 t('store: queries answered from the sheet, in Notion\\'s format (filters, sorts, paging)', () => {

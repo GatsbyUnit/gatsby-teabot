@@ -426,10 +426,12 @@ function store_import_from_notion(){
     sheet.clear();
     sheet.getRange(1, 1, rows.length + 1, header.length).setNumberFormat('@').setValues([header].concat(rows));
     sheet.setFrozenRows(1);
+    guard_sheet(sheet);
     summary.push(name + ': ' + rows.length);
   });
   if (!ss.getSheetByName('Schema')) ss.insertSheet('Schema');
   store_save_schema({ss: ss, schema: schema});
+  guard_sheet(ss.getSheetByName('Schema'));
   var first = ss.getSheetByName('Sheet1');
   if (first && ss.getSheets().length > 1) ss.deleteSheet(first);
   store_cache = null;

@@ -164,6 +164,29 @@ function ensure_settings_tabs(){
   return ss;
 }
 
+// The bot's own sheets ("Gatsby Rotas data", "Gatsby Rotas pages") are written by the bot alone: red tabs, a red
+// heading row carrying the warning as a note, and warning-only protection, so a hand edit asks first. The bot's
+// own writes are not affected.
+const BOT_SHEET_WARNING = 'MANAGED BY THE TEA BOT. DO NOT EDIT BY HAND: edit on the Gatsby Rotas site.';
+
+function guard_sheet(sheet){
+  sheet.setTabColor('#cc0000');
+  sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).setFontColor('#cc0000').setFontWeight('bold').setNote(BOT_SHEET_WARNING);
+  if (!sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).length) sheet.protect().setWarningOnly(true).setDescription(BOT_SHEET_WARNING);
+  return sheet;
+}
+
+// once, from the editor: guards the bot's sheets made before guard_sheet existed (running it again is harmless)
+function guard_bot_sheets(){
+  var books = [store_spreadsheet(false), site_pages_sheet().getParent()].filter(Boolean);
+  var done = [];
+  books.forEach(function(ss){
+    ss.getSheets().forEach(function(sheet){ guard_sheet(sheet); done.push(ss.getName() + ' / ' + sheet.getName()); });
+  });
+  Logger.log('Guarded: ' + done.join(', '));
+  return done;
+}
+
 // whether the bot may write for this rota right now
 function is_live(ctx, type){
   return !ctx.settings.dry_run && ctx.settings.live_types.indexOf(type) >= 0;

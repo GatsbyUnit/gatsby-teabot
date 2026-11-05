@@ -183,6 +183,7 @@ function site_pages_sheet(){
   var sheet = ss.getSheets()[0].setName('Pages');
   sheet.appendRow(SITE_PAGES_HEADER);
   sheet.setFrozenRows(1);
+  guard_sheet(sheet);
   set_setting('SITE_PAGES_SHEET_ID', ss.getId());
   return sheet;
 }
@@ -406,7 +407,7 @@ function site_photos_tab(){
   tab = ss.insertSheet('Photos');
   tab.appendRow(['Person id', 'Photo (data address)', 'Saved', 'Saved by']);
   tab.setFrozenRows(1);
-  return tab;
+  return guard_sheet(tab);
 }
 
 function site_photos_version(){
