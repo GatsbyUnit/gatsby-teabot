@@ -152,7 +152,10 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
     if (talk_type_content !== null ){
       var talk_type = talk_type_content['name'];
     } else {
-      send_email(admin_email, 'Skipped a talk reminder for ' + talk_date_string, 'Skipped a talk reminder for ' + talk_date_string + ' as the type of talk is not specified', constants );
+      // a row without a type and nobody on duty is a note ("No unit wide activity"): nothing to remind anyone of
+      if (relevant_talk['properties']['Presenter']['relation'].length + relevant_talk['properties']['Tea']['relation'].length > 0){
+        send_email(admin_email, 'Skipped a talk reminder for ' + talk_date_string, 'Skipped a talk reminder for ' + talk_date_string + ' as the type of talk is not specified', constants );
+      }
       continue;
     }
     var talk_title_text = relevant_talk['properties']['Title']['title'];

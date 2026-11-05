@@ -113,6 +113,7 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
   
   for (var r=0; r< relevant_talks.length; r=r+1){
     var relevant_talk = relevant_talks[r];
+    if (relevant_talk['properties']['Type']['select'] === null) continue;  // a note without a type ("No unit wide activity")
     var talk_type = relevant_talk['properties']['Type']['select']['name'];
     var talk_title_text = relevant_talk['properties']['Title']['title'];
     if (talk_title_text.length > 0){
