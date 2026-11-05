@@ -133,7 +133,7 @@ Most code works with row objects, not Notion pages, so the change is fairly cont
 - Sheets has no row locking: wrap writes in `LockService.getScriptLock()`, because the hourly sync and the tea
   page can run at the same time.
 - **The Cron Jobs project calls the Notion API directly**, with the token, in `AddNewPeopleToRota.js`,
-  `SyncPeople.js`, `SaveTalksToOldFormat.js`, `UploadSlidesReminder.js` and `Utilities_TalkReminder.js` (all talk
+  `SyncPeople.js`, `UploadSlidesReminder.js` and `Utilities_TalkReminder.js` (all talk
   reminders). Port them, or better, move the reminders into the automation project and retire Cron Jobs. That
   was left out of the 2026 go-live to keep it small.
 - `tests/run.js` fakes Notion responses; give it a fake sheet store instead.
