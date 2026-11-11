@@ -50,8 +50,10 @@ copied back. The [handbook](docs/handbook.md) explains each part.
   automation (library `TeaBot`, `store_fetch`).
 - `apps-script/archive-helper/`: one-off functions that moved everything superseded into the archive folder in
   the bot's Drive. It is the only project with access to all of the bot's Drive, so the live ones don't need it.
+- `mcp/`: an MCP server for AI agents (`server.js`, no dependencies), so an agent reads the rotas and makes
+  changes through the bot's web API instead of a browser. See "Agents" below.
 - `deploy/`: `deploy.py` and `projects.json`.
-- `tests/`: `node tests/run.js`, and `python3 tests/crosscheck_scheduler.py`, which runs the scheduler port
+- `tests/`: `node tests/run.js`, `node tests/mcp.js` (the MCP server against a stand-in for the bot), and `python3 tests/crosscheck_scheduler.py`, which runs the scheduler port
   against Kevin's original `script.py` on random inputs.
 
 ## Deploying
@@ -71,6 +73,20 @@ Useful from the Apps Script editor:
 - `backup_all()` in `Backup.js` snapshots the calendar and the sheets (rota data included) into a new spreadsheet.
 - `notion_leftovers()` in `Store.js` compares the old Notion databases with the rota data (while the Notion
   token is still in the constants sheet).
+
+## Agents (MCP)
+`mcp/server.js` lets an AI agent (Claude Code, Claude Desktop, …) use the tea bot the way a person uses the tea page
+and the Rotas site: read the schedule, people, rota rules and pages; add, change and remove slots; change people
+and rota rules; edit pages; swap, add titles and away dates; plan, fill and finalise a rota. It acts as the person
+whose personal tea-page code it is given and may do exactly what they may do; the bot logs every change under their
+name. Nothing to install (Node 18 or later), nothing to host:
+
+    claude mcp add -s user gatsby-teabot -e TEABOT_TOKEN=<your code> -- node <path to this repo>/mcp/server.js
+
+The code is the `t=…` part of your personal tea-page link ("Copy my code for an AI agent" at the bottom of your tea
+page copies it). It works like a password; if it leaks, clear your cell in column D of the identity sheet and the
+daily maintenance issues a new one. Admin steps in the Apps Script editor (permissions, one-off functions) are not
+covered.
 
 ## Where the data lives
 | What | Where |

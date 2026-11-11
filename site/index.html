@@ -414,7 +414,11 @@
       'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
       'This browser remembers your page, so the tea links in calendar events and group emails open it directly. ',
       el('button', {class: 'quiet', text: 'Forget me on this browser', onclick: forgetMe}), ' ',
-      el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave})
+      el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave}), ' ',
+      el('button', {class: 'quiet', text: 'Copy my code for an AI agent', title: 'For the tea bot\'s MCP server (github.com/GatsbyUnit/gatsby-teabot, mcp/): the agent can then do what you can do here', onclick: function(e){
+        var b = e.currentTarget;
+        navigator.clipboard.writeText(TOKEN).then(function(){ b.textContent = 'Copied: keep it to yourself'; }, function(){ b.textContent = TOKEN; });
+      }})
     ]));
   }
 

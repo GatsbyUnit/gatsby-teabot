@@ -17,5 +17,7 @@ jobs:
           python-version: '3.12'
       - name: Logic tests (Google services stubbed)
         run: node tests/run.js
+      - name: MCP server for agents (against a stand-in for the bot)
+        run: node tests/mcp.js
       - name: Scheduler matches the original algorithm
         run: python3 tests/crosscheck_scheduler.py 1000
