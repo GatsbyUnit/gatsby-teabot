@@ -9,7 +9,7 @@
 <link id="icon" rel="icon" href="data:,">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
-<link rel="stylesheet" href="rotas/site.css?v=10">
+<link rel="stylesheet" href="rotas/site.css?v=11">
 <style>
   /* The tea page in the Gatsby Rotas design (rotas/site.css); what follows is only for its own parts. */
   main#app { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
@@ -46,6 +46,10 @@
   .warn { border-left: 3px solid var(--t-leaving); padding-left: .7rem; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
   .hidden { display: none !important; }
+  /* waiting for the bot: the page stays hidden behind the bar (as on the Rotas site); actions get a small bar */
+  body.is-waiting #app { visibility: hidden; }
+  .msg .bar { width: min(12rem, 60vw); height: 3px; margin-top: .35rem; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .msg .bar span { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform .1s linear; }
   #app footer { margin-top: 2rem; font-size: .85rem; color: var(--muted); }
   .scroll { overflow-x: auto; }
   table.rotas { border-collapse: collapse; width: 100%; font-size: .85rem; }
@@ -64,12 +68,12 @@
       <li><a href="rotas/?p=tnjc">TNJC</a></li>
       <li><a href="rotas/?p=mljc">MLJC</a></li>
       <li><a href="rotas/?p=coffee">Coffee</a></li>
-      <li><a href="./" aria-current="page">My tea page</a></li>
+      <li class="nav-tea-item"><a class="nav-tea" href="./" aria-current="page"><span aria-hidden="true">🫖</span> My tea page</a></li>
     </ul></nav>
     <a class="account" id="account" hidden></a>
   </div>
 </header>
-<main id="app"><p class="muted">Loading…</p></main>
+<main id="app"></main>
 
 <script>
   // A static page (GitHub Pages); everything on it comes from the tea bot's web app ("Gatsby Tea Page"), which
@@ -102,13 +106,62 @@
     (children || []).forEach(function(c){ if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
     return e;
   }
+  // A bar that fills over the time a call usually takes (median of its last five, kept in this browser): 90% at
+  // the usual time, then ever slower. Loading a page hides it behind the bar, as on the Rotas site; an action
+  // shows a small bar under its button.
+  var TIMES = 'gatsby-tea-times';
+  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…',
+                api_leave_info: 'Getting your details…', api_confirm_email: 'Confirming your address…'};
+  function usual(fn){
+    try { var t = (JSON.parse(localStorage.getItem(TIMES) || '{}')[fn] || []).slice().sort(function(a, b){ return a - b; }); return t.length ? t[Math.floor(t.length / 2)] : 4000; }
+    catch (e) { return 4000; }
+  }
+  function took(fn, ms){
+    try { var all = JSON.parse(localStorage.getItem(TIMES) || '{}'); all[fn] = (all[fn] || []).concat([Math.round(ms)]).slice(-5); localStorage.setItem(TIMES, JSON.stringify(all)); } catch (e) {}
+  }
+  var waiting = null;
+  function bar(fn, msgEl){
+    var ms = usual(fn), t0 = Date.now(), box;
+    if (msgEl){
+      box = msgEl;
+      box.className = 'msg muted';
+      box.innerHTML = '';
+      box.appendChild(document.createTextNode('Working…'));
+      box.appendChild(el('div', {class: 'bar', 'aria-hidden': 'true'}, [el('span')]));
+    } else {
+      if (waiting){ waiting.count++; return function(){ if (!--waiting.count) waiting.stop(); }; }
+      var n = Math.max(1, Math.round(ms / 1000));
+      box = el('div', {class: 'waiting', role: 'status'}, [el('p', {text: LABELS[fn] || 'Asking the tea bot…'}), el('div', {class: 'bar', 'aria-hidden': 'true'}, [el('span')]),
+                                                          el('p', {class: 'eta', text: 'Usually about ' + n + ' second' + (n === 1 ? '' : 's') + '.'})]);
+      document.body.appendChild(box);
+      document.body.classList.add('is-waiting');
+    }
+    var span = box.querySelector('.bar span'), eta = box.querySelector('.eta');
+    var tick = function(){
+      var t = Date.now() - t0;
+      span.style.transform = 'scaleX(' + (t < ms ? 0.9 * t / ms : 0.99 - 0.09 * Math.exp((ms - t) / ms)) + ')';
+      if (eta && t > 2 * ms + 1000) eta.textContent = 'Taking longer than usual…';
+    };
+    tick();
+    var timer = setInterval(tick, 100);
+    var stop = function(){
+      clearInterval(timer);
+      var b = box.querySelector('.bar'); if (b && msgEl) b.remove();
+      if (!msgEl){ box.remove(); document.body.classList.remove('is-waiting'); waiting = null; }
+    };
+    if (!msgEl){ waiting = {count: 1, stop: stop}; return function(){ if (!--waiting.count) waiting.stop(); }; }
+    return stop;
+  }
+
   // Calls go to the web app as an anonymous POST (doPost); credentials are left out, so being signed in to
   // Google (with one account or several) makes no difference.
   function call(fn, args, done, msgEl, button, failed){
     if (button) button.disabled = true;
-    if (msgEl){ msgEl.className = 'msg muted'; msgEl.textContent = 'Working…'; }
-    var finish = function(res){ if (button) button.disabled = false; done(res); };
+    var t0 = Date.now(), stop = bar(fn, msgEl), stopped = false;
+    var end = function(ok){ if (stopped) return; stopped = true; stop(); if (ok) took(fn, Date.now() - t0); };
+    var finish = function(res){ end(true); if (button) button.disabled = false; done(res); };
     var fail = function(text){
+      end(false);
       if (button) button.disabled = false;
       text = String(text || 'Something went wrong.').replace(/^Exception: /, '').replace(/^Error: /, '');
       if (failed && failed(text)) return;
@@ -331,7 +384,7 @@
     }
     app.appendChild(hi);
     if (FROM_MEMORY) app.appendChild(el('p', {class: 'muted', style: 'margin:-2px 0 6px;font-size:13px'}, [
-      'Not ' + s.name.split(' ')[0] + '? ', el('button', {class: 'quiet', text: 'Pick your name', onclick: forgetMe})]));
+      'Not ' + s.name.split(' ')[0] + '? ', el('button', {class: 'quiet', text: 'Log in as a different user', onclick: forgetMe})]));
     app.appendChild(el('p', {class: 'muted', text: 'Your Gatsby tea duties. Changes here update the Gatsby Rotas site and the shared calendar.'}));
 
     if (s.incoming && s.incoming.length){
