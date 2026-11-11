@@ -107,6 +107,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .nav a:hover { color: var(--text); background: var(--surface-2); }
 .nav a[aria-current="page"] { color: var(--text); background: var(--surface-2); }
+/* the tea page is where people swap, add titles and set away dates: the one link that stands out */
+.nav-tea-item { margin-left: .5rem; }
+.nav a.nav-tea { color: var(--surface); background: var(--accent); font-weight: 650; padding-inline: .8rem; border-radius: 999px; }
+.nav a.nav-tea:hover { color: var(--surface); background: color-mix(in srgb, var(--accent) 85%, var(--text)); }
 .signed-out .nav, .signed-out .account { display: none; }
 .account {
   margin-left: auto; display: inline-flex; align-items: center; gap: .1rem; min-width: 0;

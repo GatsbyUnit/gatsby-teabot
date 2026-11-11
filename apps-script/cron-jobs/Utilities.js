@@ -122,6 +122,16 @@ function send_email(email, title, body, constants, replyto_email){
     opt = {replyTo: replyto_email}
   }
 
+  // **text** in a body is shown in bold: such an email also gets an HTML version (same text and line breaks,
+  // addresses as links); its plain text keeps the words without the stars
+  if (/\*\*[^*\n]+\*\*/.test(body)){
+    var esc = function(s){ return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    opt.htmlBody = '<div style="white-space:pre-wrap">' + esc(body)
+      .replace(/https?:\/\/[^\s<()]+[^\s<().,;:]/g, function(u){ return '<a href="' + u + '">' + u + '</a>'; })
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>') + '</div>';
+    body = body.replace(/\*\*([^*\n]+)\*\*/g, '$1');
+  }
+
   // send email
   MailApp.sendEmail(
     email,

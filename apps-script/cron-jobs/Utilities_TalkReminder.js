@@ -311,7 +311,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
             "Presenter: " + presenter_names.join(", ") + "\n" +
             "Zoom Link: " + gatsby_zoom_link + "\n" +
             "Description: " + talk_description + "\n=============\n\n" +
-            "⏰ Research talks start at 3pm and should be kept to 50 minutes including audience questions \n ⏱️ Tea talks start at 3:30pm and should be kept to 15 minutes including audience questions \n\n" +
+            "⏰ Research talks start at 3pm and should be kept to **50 minutes including audience questions** \n⏱️ Tea talks start at 3:30pm and should be kept to **15 minutes including audience questions** \n\n" +
             "Please update your talk title and description (include paper url wherever relevant) on your tea page if you haven't already done so. They will be made available on the Google Calendar and sent out with the reminder email on the day of the presentation. For journal club presenters, it is *important* for you to include the paper url in advance." + "\n\n" + tea_page_line(email_list), constants, replyto_email );
         }
       }

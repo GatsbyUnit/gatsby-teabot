@@ -788,7 +788,7 @@ function renderAccount() {
 function renderNav(active) {
   $('#nav').innerHTML = NAV.map((n) =>
     `<li><a href="${pageHref(n.slug)}"${n.slug === active ? ' aria-current="page"' : ''}>${n.label}</a></li>`).join('')
-    + `<li><a href="${CONFIG.teaPage}">My tea page</a></li>`;
+    + `<li class="nav-tea-item"><a class="nav-tea" href="${CONFIG.teaPage}"><span aria-hidden="true">🫖</span> My tea page</a></li>`;
   $('[data-home]').setAttribute('href', pageHref('home'));
 }
 
