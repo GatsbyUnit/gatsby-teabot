@@ -722,26 +722,81 @@ t('store: finishing the move points the constants, settings, reminders and pages
     const_book = saved.cb; ensure_settings_tabs = saved.est; get_settings = saved.gs; site_pages_sheet = saved.sps; site_pages = saved.sp; save_site_page = saved.ssp; site_forget = saved.sf;
   }
 });
-t('site: photos are small data images; people change their own, tsars anyone\\'s', () => {
+// the bot's Drive, as far as the photos use it
+function FakeFolder(name){ this.name = name; this.files = []; this.folders = []; }
+FakeFolder.prototype.getFiles = function(){ var l = this.files.slice(), i = 0; return {hasNext: () => i < l.length, next: () => l[i++]}; };
+FakeFolder.prototype.getFoldersByName = function(n){ var l = this.folders.filter(f => f.name === n), i = 0; return {hasNext: () => i < l.length, next: () => l[i++]}; };
+FakeFolder.prototype.createFolder = function(n){ var f = new FakeFolder(n); this.folders.push(f); return f; };
+FakeFolder.prototype.getId = function(){ return 'folder-' + this.name; };
+FakeFolder.prototype.getUrl = function(){ return 'https://drive/' + this.name; };
+FakeFolder.prototype.createFile = function(blob){
+  var f = {name: blob.name, type: blob.type, bytes: blob.bytes, trashed: false, at: new Date()};
+  var file = {getName: () => f.name, isTrashed: () => f.trashed, setTrashed: (v) => { f.trashed = v; }, getLastUpdated: () => f.at,
+              getBlob: () => ({getContentType: () => f.type, getBytes: () => f.bytes}), f: f};
+  this.files.push(file);
+  return file;
+};
+function live(folder){ return folder.files.filter(x => !x.f.trashed).map(x => x.f.name).sort(); }
+function drive_stubs(){
+  var root = new FakeFolder('root');
+  var saved = {drive: typeof DriveApp === 'undefined' ? undefined : DriveApp, nb: Utilities.newBlob, dec: Utilities.base64Decode, enc: Utilities.base64Encode, lock: LockService, cache: CacheService};
+  DriveApp = {getRootFolder: () => root, getFolderById: (id) => { throw new Error('gone'); }};
+  Utilities.newBlob = (bytes, type, name) => ({bytes: bytes, type: type, name: name, setName: function(n){ this.name = n; return this; }, getContentType: function(){ return this.type; }});
+  Utilities.base64Decode = (s) => Array.from(Buffer.from(s, 'base64'));
+  Utilities.base64Encode = (b) => Buffer.from(b).toString('base64');
+  LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
+  CacheService = {getScriptCache: () => ({get: () => null, put: () => {}, putAll: () => {}, getAll: () => ({}), remove: () => {}})};
+  return {root: root, restore: () => { DriveApp = saved.drive; Utilities.newBlob = saved.nb; Utilities.base64Decode = saved.dec; Utilities.base64Encode = saved.enc; LockService = saved.lock; CacheService = saved.cache; delete __props.SITE_PHOTOS_FOLDER_ID; }};
+}
+t('site: photos are files in the bot\\'s Drive (full size and a small copy); people change their own, tsars anyone\\'s', () => {
   assert.ok(site_photo_ok('data:image/jpeg;base64,/9j/4AAQ=='));
   assert.ok(!site_photo_ok('data:image/svg+xml;base64,PHN2Zz4='));
   assert.ok(!site_photo_ok('https://example.org/x.jpg'));
   site_stubs('someone@x');
-  var saved = {tab: site_photos_tab, lock: LockService}, tab = new FakeSheet('Photos');
-  tab.cells = [['Person id', 'Photo', 'Saved', 'Saved by']];
-  site_photos_tab = () => tab;
-  LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
+  var d = drive_stubs();
   try {
     identity_for_token = () => ({id: 'p1', email: 'someone@x'});
-    api_site_save_photo('tok', 'p1', 'data:image/jpeg;base64,AAAA');
-    assert.deepStrictEqual(tab.cells[1].slice(0, 2), ['p1', 'data:image/jpeg;base64,AAAA']);
+    api_site_save_photo('tok', 'p1', 'data:image/jpeg;base64,AAAA', 'data:image/jpeg;base64,QUFBQUFB');
+    var folder = d.root.folders[0], small = folder.folders[0];
+    assert.strictEqual(folder.name, 'Gatsby Rotas photos');
+    assert.deepStrictEqual([live(folder), live(small)], [['Lena Weber (p1).jpg'], ['p1.jpg']]);
+    assert.deepStrictEqual(small.files[0].f.bytes, Array.from(Buffer.from('AAAA', 'base64')));
+    assert.deepStrictEqual(folder.files[0].f.bytes, Array.from(Buffer.from('QUFBQUFB', 'base64')));
+    api_site_save_photo('tok', 'p1', 'data:image/jpeg;base64,BBBB');  // no full size: the small one stands in
+    assert.deepStrictEqual([live(folder), live(small)], [['Lena Weber (p1).jpg'], ['p1.jpg']]);
+    assert.strictEqual(folder.files.length, 2);  // the first full-size photo is in the bin
     api_site_save_photo('tok', 'p1', '');
-    assert.deepStrictEqual(tab.cells[1].slice(0, 2), ['p1', 'none']);
+    assert.deepStrictEqual([live(folder), live(small)], [[], []]);
     assert.throws(() => api_site_save_photo('tok', 'b', 'data:image/jpeg;base64,AAAA'), /tsars/);
     identity_for_token = () => ({id: 'p1', email: 'tnjc@x'});
     api_site_save_photo('tok', 'b', 'data:image/jpeg;base64,BBBB');
-    assert.deepStrictEqual(tab.cells[2].slice(0, 2), ['b', 'data:image/jpeg;base64,BBBB']);
-  } finally { site_photos_tab = saved.tab; LockService = saved.lock; site_restore(); }
+    assert.deepStrictEqual(live(small), ['b.jpg']);
+  } finally { d.restore(); site_restore(); }
+});
+t('site: the photos leave the sheet: changes made on the site since the move win, "No photo" removes, the tab goes', () => {
+  site_stubs('someone@x');
+  var d = drive_stubs();
+  var saved = {sps: site_pages_sheet};
+  var book = new FakeBook(), tab = book.insertSheet('Photos');
+  tab.cells = [['Person id', 'Photo', 'Saved', 'Saved by'],
+               ['p1', 'data:image/jpeg;base64,AAAA', 'T0', 'Jan'], ['b', 'data:image/jpeg;base64,BBBB', 'T0', 'Jan'],
+               ['cccccccccccccccccccccccccccccccc', 'data:image/jpeg;base64,CCCC', 'T0', 'Jan'],
+               ['dddddddddddddddddddddddddddddddd', 'none', 'T1', 'Dee'], ['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'data:image/jpeg;base64,RUVF', 'T2', 'Eve']];
+  site_pages_sheet = () => ({getParent: () => book});
+  try {
+    var folder = site_photos_folder(), small = site_photos_small();
+    ['cccccccccccccccccccccccccccccccc', 'dddddddddddddddddddddddddddddddd', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'].forEach(function(id){
+      folder.createFile(Utilities.newBlob([1, 2, 3], 'image/jpeg', 'Someone (' + id + ').jpg'));
+      small.createFile(Utilities.newBlob([1], 'image/jpeg', id + '.jpg'));
+    });
+    site_photos_from_sheet();
+    assert.strictEqual(book.getSheetByName('Photos'), null);
+    assert.deepStrictEqual(live(small), ['cccccccccccccccccccccccccccccccc.jpg', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.jpg']);  // the two ids that are not hex are left out
+    assert.deepStrictEqual(site_photos_read()['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'], 'data:image/jpeg;base64,RUVF');  // changed on the site after the move
+    assert.deepStrictEqual(site_photos_read()['cccccccccccccccccccccccccccccccc'], 'data:image/jpeg;base64,AQ==');  // the folder's own, full size kept
+    assert.deepStrictEqual(live(folder), ['Someone (cccccccccccccccccccccccccccccccc).jpg', 'someone (eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee).jpg'].map(n => n.replace('someone', 'Someone')));
+    assert.deepStrictEqual(site_photos_from_sheet(), []);
+  } finally { site_pages_sheet = saved.sps; d.restore(); site_restore(); }
 });
 t('site: dates for Notion', () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(site_notion_date('2026-11-02', '2026-11-06'))), {start: '2026-11-02', end: '2026-11-06'});

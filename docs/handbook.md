@@ -59,8 +59,10 @@ and after every change it makes, so edits made on the site or the tea page show 
   bring someone back.
 - **Rota rules** (tea tsar): pick from the list, saved at once. The coffee duties are text on the Coffee page.
 - **Photos:** in a person's ✎ form, "Photo" (any picture; it is cut to a small square) or "No photo". Everyone
-  signed in can change their own photo on their page ("Change my photo"). Photos are kept in the Photos tab of
-  the "Gatsby Rotas pages" sheet; people without one show their initials.
+  signed in can change their own photo on their page ("Change my photo"). Photos are files in the "Gatsby Rotas
+  photos" folder in the bot's Drive: "<Name> (<person id>)" at full size, and in "small" the 160px square the site
+  shows. Change them on the site and the folder follows; a small copy replaced or removed in the folder by hand
+  reaches the site within the hour. People without a small copy show their initials.
 
 Every edit is a line in the automation log sheet (job "site edit", with who did it).
 
@@ -119,4 +121,4 @@ new person can see their tools. Work through it together with the person you tak
 
 **Good to know**
 - **The tea page** is a static page on GitHub Pages (`PAGE_URL`). Personal links carry the person's code, the general link (calendar events, emails to several people) carries the unit key `PAGE_KEY` (Automation tab) and lists the names to pick from. The bare address shows no names: people type their registered email and get their link there. If the general link ever spreads beyond the Unit, put new random letters and digits in `PAGE_KEY`: the calendar events get the new link within the hour, and links already sent stop working. Old links to the script.google.com address show a link to the new page.
-- **The bot's Drive:** everything at the top level of My Drive is live, plus the `away_dates` folder (everyone's away-date sheets and their template) and `people_files` (people lists the Cron Jobs still write in the old cluster format), and "Notion photos (saved 2026-11-11)" (full-size copies of every picture on the old Notion site, people's photos included; the site's own small photos are in the Photos tab of "Gatsby Rotas pages"). Everything else, from the scripts, forms and notebooks the bot replaced to the files of the systems before them, is in the folder "Gatsby tea – archive (superseded 2026-10-27)". "Shared with me" holds other people's files; leave them be. The Apps Script dashboard (script.google.com) lists every project regardless of folder: the starred ones (Automation, Page, Cron Jobs) are live, the archive helper only ran the clean-up, and everything named "[archived] …" belongs to the archive. Projects marked "empty, can be deleted" hold nothing but the default `myFunction`.
+- **The bot's Drive:** everything at the top level of My Drive is live, plus the `away_dates` folder (everyone's away-date sheets and their template) and `people_files` (people lists the Cron Jobs still write in the old cluster format), and "Gatsby Rotas photos" (everyone's photo at full size, the site's small copies in "small", and the old Notion pages' covers). Everything else, from the scripts, forms and notebooks the bot replaced to the files of the systems before them, is in the folder "Gatsby tea – archive (superseded 2026-10-27)". "Shared with me" holds other people's files; leave them be. The Apps Script dashboard (script.google.com) lists every project regardless of folder: the starred ones (Automation, Page, Cron Jobs) are live, the archive helper only ran the clean-up, and everything named "[archived] …" belongs to the archive. Projects marked "empty, can be deleted" hold nothing but the default `myFunction`.

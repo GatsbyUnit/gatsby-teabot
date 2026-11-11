@@ -165,6 +165,7 @@ function site_forget(what){
 // it to be read; every change the bot writes drops it (notion_request).
 function site_refresh(constants){
   try { site_data(constants, true); } catch (err) { Logger.log('Could not refresh the site data: ' + err); }
+  try { site_photos_watch(); } catch (err) { Logger.log('Could not check the photos folder: ' + err); }
 }
 
 function site_stale(){
@@ -392,21 +393,38 @@ function api_site_import_pages(token, pages, replace){
 }
 
 // ---- photos ----
-// People's photos live with the pages (Photos tab of the pages sheet): small square JPEGs as data addresses, one
-// row per person, brought over from their Notion page icons on 2026-10-31. Tsars can change anyone's, everyone
-// their own. "none" means no photo. The bundle only carries a version number; the
-// browser fetches the photos when it changes and keeps them.
+// People's photos are files in the bot's Drive, folder "Gatsby Rotas photos" (Script Property
+// SITE_PHOTOS_FOLDER_ID): "<Name> (<person id>).<ext>" at full size, and in its subfolder "small" the
+// 160px square "<person id>.jpg" the site shows (made by the browser that uploads a photo). Tsars change anyone's,
+// everyone their own, on the site; the folder follows. A person without a small copy has no photo on the site.
+// The bundle only carries a version number; the browser fetches the photos when it changes and keeps them.
 
 const SITE_PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
+const SITE_PHOTOS_FOLDER = 'Gatsby Rotas photos';
 
-function site_photos_tab(){
-  var ss = site_pages_sheet().getParent();
-  var tab = ss.getSheetByName('Photos');
-  if (tab) return tab;
-  tab = ss.insertSheet('Photos');
-  tab.appendRow(['Person id', 'Photo (data address)', 'Saved', 'Saved by']);
-  tab.setFrozenRows(1);
-  return guard_sheet(tab);
+// the folder (found by its name the first time: it was put into the bot's Drive by hand) and its "small" subfolder
+function site_photos_folder(){
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('SITE_PHOTOS_FOLDER_ID'), folder = null;
+  if (id){ try { folder = DriveApp.getFolderById(id); } catch (e) { folder = null; } }
+  if (!folder){
+    var found = DriveApp.getRootFolder().getFoldersByName(SITE_PHOTOS_FOLDER);
+    folder = found.hasNext() ? found.next() : DriveApp.getRootFolder().createFolder(SITE_PHOTOS_FOLDER);
+    set_setting('SITE_PHOTOS_FOLDER_ID', folder.getId());
+  }
+  return folder;
+}
+
+function site_photos_small(){
+  var folder = site_photos_folder(), found = folder.getFoldersByName('small');
+  return found.hasNext() ? found.next() : folder.createFolder('small');
+}
+
+// a folder's files, without those in the bin (Drive still lists them)
+function site_photo_list(folder){
+  var out = [], it = folder.getFiles();
+  while (it.hasNext()){ var f = it.next(); if (!f.isTrashed()) out.push(f); }
+  return out;
 }
 
 function site_photos_version(){
@@ -418,68 +436,114 @@ function site_photos_changed(){
   CacheService.getScriptCache().remove('site:photos');
 }
 
-// {version, photos: {person id: data address | 'none'}}
+// Hourly (site_refresh): a change made in the folder by hand (a small copy replaced or removed) reaches the site too.
+function site_photos_watch(){
+  var sig = site_photo_list(site_photos_small()).map(function(f){ return f.getName() + '@' + f.getLastUpdated().getTime(); }).sort().join('|');
+  sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, sig));
+  var props = PropertiesService.getScriptProperties();
+  if (sig !== props.getProperty('SITE_PHOTOS_SIGNATURE')){
+    props.setProperty('SITE_PHOTOS_SIGNATURE', sig);
+    site_photos_changed();
+  }
+}
+
+// {person id: data address} from the small copies (read once, then cached)
+function site_photos_read(){
+  var photos = {};
+  site_photo_list(site_photos_small()).forEach(function(f){
+    var m = f.getName().match(/^([0-9a-f]{32})\.(jpe?g|png|webp)$/);
+    if (!m) return;
+    var blob = f.getBlob();
+    photos[m[1]] = 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  });
+  return photos;
+}
+
+// {version, photos: {person id: data address}}
 function api_site_photos(key, token){
   if (!site_visitor(key, token, get_global_constants())) return null;
   var cached = cache_get_big('site:photos');
   if (cached && cached.version === site_photos_version()) return cached;
-  var tab = site_photos_tab(), photos = {};
-  if (tab.getLastRow() > 1){
-    tab.getRange(2, 1, tab.getLastRow() - 1, 2).getValues().forEach(function(r){ if (r[0]) photos[String(r[0])] = String(r[1] || 'none'); });
-  }
-  var out = {version: site_photos_version(), photos: photos};
+  var out = {version: site_photos_version(), photos: site_photos_read()};
   cache_put_big('site:photos', out, 21600);
   return out;
 }
 
-function site_photo_ok(uri){
-  return typeof uri === 'string' && uri.length <= 60000 && SITE_PHOTO_RE.test(uri);
+function site_photo_ok(uri, max){
+  return typeof uri === 'string' && uri.length <= (max || 60000) && SITE_PHOTO_RE.test(uri);
 }
 
-// all photos at once: the move from Notion (any tsar while there are none), or a restore (tea tsar)
-function api_site_import_photos(token, photos, replace){
-  var ed = site_editor(token, function(r){ return r.pages; });
-  var people = load_people(ed.constants), by = site_name(ed), now = new Date().toISOString();
-  var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    var tab = site_photos_tab();
-    if (tab.getLastRow() > 1 && !(replace && ed.rights.tea_tsar)) throw new Error('The photos are already here; only the tea tsar can replace them all.');
-    var rows = Object.keys(photos || {}).filter(function(id){ return people[normalise_id(id)] && site_photo_ok(photos[id]); })
-      .map(function(id){ return [normalise_id(id), photos[id], now, by]; });
-    if (tab.getLastRow() > 1) tab.getRange(2, 1, tab.getLastRow() - 1, 4).clearContent();
-    if (rows.length) tab.getRange(2, 1, rows.length, 4).setNumberFormat('@').setValues(rows);
-    site_photos_changed();
-  } finally {
-    lock.releaseLock();
-  }
-  log_site_edit(ed, 'imported ' + rows.length + ' photos');
-  return rows.length;
+function site_photo_blob(uri, name){
+  var m = uri.match(/^data:(image\/\w+);base64,(.*)$/);
+  return Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], name);
 }
 
-// one person's photo ('' = none); by a tsar, or by the person themself
-function api_site_save_photo(token, person_id, uri){
+// One person's photo: the small copy (data address, '' = no photo) and, when there is one, the picture at full
+// size (data address); by a tsar, or by the person themself. The person's earlier files go to the bin.
+function api_site_save_photo(token, person_id, uri, large){
   var constants = get_global_constants();
   var ed = {constants: constants, rights: site_rights(token, constants)};
   var id = normalise_id(String(person_id || ''));
   if (!ed.rights.person) throw new Error('Please sign in again.');
   if (ed.rights.person !== id && !ed.rights.people.length) throw new Error('Only the tsars can change other people\'s photos.');
-  if (!load_people(constants)[id]) throw new Error('Unknown person.');
+  var person = load_people(constants)[id];
+  if (!person) throw new Error('Unknown person.');
   if (uri && !site_photo_ok(uri)) throw new Error('That photo could not be read. Please pick a JPEG or PNG.');
+  if (large && !site_photo_ok(large, 20000000)) large = null;
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var tab = site_photos_tab();
-    var ids = tab.getLastRow() > 1 ? tab.getRange(2, 1, tab.getLastRow() - 1, 1).getValues().map(function(r){ return String(r[0]); }) : [];
-    var at = ids.indexOf(id);
-    var row = at >= 0 ? at + 2 : tab.getLastRow() + 1;
-    tab.getRange(row, 1, 1, 4).setNumberFormat('@').setValues([[id, uri || 'none', new Date().toISOString(), site_name(ed)]]);
+    site_photo_files(person, uri ? site_photo_blob(uri, id + '.jpg') : null, uri ? site_photo_blob(large || uri, '') : null);
     site_photos_changed();
   } finally {
     lock.releaseLock();
   }
   log_site_edit(ed, (uri ? 'new photo for ' : 'removed the photo of ') + id);
   return site_photos_version();
+}
+
+// replaces a person's files in the folder (no blobs: removes them)
+function site_photo_files(person, small, full){
+  var folder = site_photos_folder(), smalls = site_photos_small(), id = person.id;
+  [[smalls, new RegExp('^' + id + '\\.')], [folder, new RegExp('\\(' + id + '\\)\\.\\w+$')]].forEach(function(x){
+    site_photo_list(x[0]).forEach(function(f){ if (x[1].test(f.getName())) f.setTrashed(true); });
+  });
+  if (small) smalls.createFile(small.setName(id + '.jpg'));
+  if (full){
+    var ext = {'image/png': 'png', 'image/webp': 'webp'}[full.getContentType()] || 'jpg';
+    folder.createFile(full.setName(String(person.name || 'Someone').replace(/[\\\/:*?"<>|]+/g, '-') + ' (' + id + ').' + ext));
+  }
+}
+
+// Once, from the editor, after the "Gatsby Rotas photos" folder was put into the bot's Drive (2026-11-11): photos
+// changed on the site since 31 Oct (they were in the Photos tab of the pages sheet) replace the folder's, "No
+// photo" removes a person's files, and the tab goes. Running it again does nothing. Also asks for the permission
+// to use Drive the first time.
+function site_photos_from_sheet(){
+  var ss = site_pages_sheet().getParent(), tab = ss.getSheetByName('Photos'), done = [];
+  var folder = site_photos_folder(), smalls = site_photos_small();
+  if (tab && tab.getLastRow() > 1){
+    var rows = tab.getRange(2, 1, tab.getLastRow() - 1, 4).getValues();
+    var count = {};  // the move from Notion saved every row at the same moment; later moments are changes on the site
+    rows.forEach(function(r){ count[String(r[2])] = (count[String(r[2])] || 0) + 1; });
+    var imported = Object.keys(count).sort(function(a, b){ return count[b] - count[a]; })[0];
+    var people = load_people(get_global_constants()), have = {};
+    site_photo_list(smalls).forEach(function(f){ var m = f.getName().match(/^([0-9a-f]{32})\./); if (m) have[m[1]] = true; });
+    rows.forEach(function(r){
+      var id = String(r[0]), uri = String(r[1] || ''), person = people[id] || {id: id, name: ''};
+      if (!/^[0-9a-f]{32}$/.test(id)) return;
+      if (uri === 'none' || !uri){ if (have[id]){ site_photo_files(person, null, null); done.push('removed ' + id); } return; }
+      if (!site_photo_ok(uri)) return;
+      if (have[id] && String(r[2]) === imported) return;  // the folder has this photo at full size
+      site_photo_files(person, site_photo_blob(uri, ''), site_photo_blob(uri, ''));
+      done.push('from the site ' + id);
+    });
+  }
+  if (tab){ ss.deleteSheet(tab); done.push('Photos tab removed'); }
+  site_photos_changed();
+  var n = site_photo_list(smalls).length;
+  Logger.log('Photos: ' + n + ' people in ' + folder.getUrl() + (done.length ? '; ' + done.join(', ') : ''));
+  return done;
 }
 
 // ---- the rota data ----

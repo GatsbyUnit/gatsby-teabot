@@ -762,6 +762,17 @@
     return canvas.toDataURL('image/jpeg', 0.82);
   }
 
+  // the same picture at up to 1600px, for the photos folder in the bot's Drive
+  async function fullSize(file) {
+    const img = await createImageBitmap(file);
+    const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * k);
+    canvas.height = Math.round(img.height * k);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.88);
+  }
+
   function photoField(p) {
     return `<div class="row photo-row">${R.avatar(p, 'avatar-lg')}
       <label class="photo-pick">Photo<input type="file" name="photo" accept="image/*"></label>
@@ -799,6 +810,7 @@
       if (!pick.files[0]) return;
       try {
         form.dataset.photo = await thumbnail(pick.files[0]);
+        form.fullPhoto = await fullSize(pick.files[0]);
         const box = $('.photo-row .avatar', form);
         box.classList.remove('avatar-mono');
         box.innerHTML = `<img src="${form.dataset.photo}" alt="">`;
@@ -817,7 +829,7 @@
       button.textContent = 'Saving…';
       try {
         const photo = form.dataset.photo || (f.no_photo?.checked ? '' : null);
-        if (photo !== null && p.id) R.setPhoto(p.id, photo, await R.api('api_site_save_photo', token(), p.id, photo));
+        if (photo !== null && p.id) R.setPhoto(p.id, photo, await R.api('api_site_save_photo', token(), p.id, photo, photo ? form.fullPhoto || null : null));
         if (me.people.length) {
           const saved = await R.api('api_site_save_person', token(), person);
           putItem('people', saved);
