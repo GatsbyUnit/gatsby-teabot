@@ -76,10 +76,12 @@ Useful from the Apps Script editor:
 
 ## Agents (MCP)
 `mcp/server.js` lets an AI agent (Claude Code, Claude Desktop, …) use the tea bot the way a person uses the tea page
-and the Rotas site: read the schedule, people, rota rules and pages; add, change and remove slots; change people
-and rota rules; edit pages; swap, add titles and away dates; plan, fill and finalise a rota. It acts as the person
-whose personal tea-page code it is given and may do exactly what they may do; the bot logs every change under their
-name. Nothing to install (Node 18 or later), nothing to host:
+and the Rotas site. Everyone: read the schedule, people, rota rules and pages; see their own duties and who usually
+does them; ask for, answer and withdraw swaps; set talk titles; cancel a talk; add and remove away dates; change
+their photo (from a picture file; needs macOS or ImageMagick) and email; leave the tea system. Tsars and organisers
+also: add, change and remove slots; change people and rota rules; edit pages; plan, fill and finalise a rota. It
+acts as the person whose personal tea-page code it is given and may do exactly what they may do; the bot logs every
+change under their name. Nothing to install (Node 18 or later), nothing to host:
 
     claude mcp add -s user gatsby-teabot -e TEABOT_TOKEN=<your code> -- node <path to this repo>/mcp/server.js
 

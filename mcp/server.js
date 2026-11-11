@@ -9,6 +9,7 @@
 // The code is the t=… part of your personal tea-page link. Keep it to yourself: whoever has it can act as you. If it
 // leaks, the tea tsar clears your cell in column D of the identity sheet and you get a new one.
 'use strict';
+const fs = require('fs'), os = require('os'), path = require('path'), { execFileSync } = require('child_process');
 
 const API = process.env.TEABOT_API || 'https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec';
 const TOKEN = String(process.env.TEABOT_TOKEN || '').trim();
@@ -77,39 +78,75 @@ function pageText(blocks, depth = 0) {
   });
 }
 
+// A picture file -> the small square the site shows (160px) and a copy of at most 1600px, as data addresses. Uses
+// macOS's sips or ImageMagick, whichever is there.
+function has(cmd) { try { execFileSync('which', [cmd], { stdio: 'ignore' }); return true; } catch { return false; } }
+function photoVersions(file) {
+  if (!fs.existsSync(file)) throw new Error(`No file ${file}.`);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teabot-photo-'));
+  const small = path.join(dir, 'small.jpg'), full = path.join(dir, 'full.jpg');
+  try {
+    const im = has('magick') ? 'magick' : has('convert') ? 'convert' : null;
+    if (im) {
+      execFileSync(im, [file, '-auto-orient', '-resize', '160x160^', '-gravity', 'center', '-extent', '160x160', '-quality', '82', small]);
+      execFileSync(im, [file, '-auto-orient', '-resize', '1600x1600>', '-quality', '88', full]);
+    } else if (has('sips')) {
+      const dims = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]).toString();
+      const w = +dims.match(/pixelWidth: (\d+)/)[1], h = +dims.match(/pixelHeight: (\d+)/)[1];
+      const tmp = path.join(dir, 'tmp.jpg');
+      execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '82', w < h ? '--resampleWidth' : '--resampleHeight', '160', file, '--out', tmp], { stdio: 'ignore' });
+      execFileSync('sips', ['-c', '160', '160', tmp, '--out', small], { stdio: 'ignore' });
+      execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '88', ...(Math.max(w, h) > 1600 ? ['-Z', '1600'] : []), file, '--out', full], { stdio: 'ignore' });
+    } else {
+      throw new Error('Making the small copy needs ImageMagick or macOS; change the photo on the Gatsby Rotas site instead.');
+    }
+    const uri = (f) => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64');
+    return { small: uri(small), full: uri(full) };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const str = { type: 'string' }, bool = { type: 'boolean' }, strs = { type: 'array', items: { type: 'string' } };
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 
 // ---------- tools ----------
 
 const TOOLS = [
-  { name: 'whoami', description: 'Who the server acts as, and what they may edit (slots of which rotas, people, pages, rota rules).',
-    inputSchema: obj({}), run: async () => { const b = await data(true); const me = b.data.people.find((p) => p.id === b.me?.person);
-      return { name: me?.name, id: b.me?.person, rights: b.me }; } },
-  { name: 'my_tea_page', description: "Your own tea page: your upcoming duties (with each slot's id), swap requests to you and from you, away dates, and the organiser tools you have (rotas you can plan, with the next dates to plan).",
-    inputSchema: obj({}), run: async () => { const s = await api('api_state', TOKEN); delete s.people; delete s.badge; return s; } },
-  { name: 'schedule', description: 'Slots of the rotas (research and tea talks, MLJC, TNJC, coffee, just/leaving tea, external seminars), with presenters and tea people by name. Defaults: from today, 90 days ahead.',
+  { name: 'whoami', description: 'Everyone: who the server acts as, and what they may do. Everyone can read the rotas and look after their own duties (swaps, talk titles, away dates, photo, email); tsars can also edit slots, people, rota rules and pages.',
+    inputSchema: obj({}), run: async () => { const b = await data(true); const r = b.me || {}; const me = b.data.people.find((p) => p.id === r.person);
+      const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: swaps, talk titles, cancelling a talk, away dates', 'change your own photo and email'];
+      if (r.slots?.length) can.push('edit the slots of ' + r.slots.join(', '));
+      if (r.people?.includes('all')) can.push('edit and add people'); else if (r.people?.length) can.push('tick or untick ' + r.people.join(', ') + ' on people');
+      if (r.pages) can.push('edit the site\'s pages');
+      if (r.rules) can.push('edit the rota rules');
+      return { name: me?.name, id: r.person, tea_tsar: !!r.tea_tsar, can }; } },
+  { name: 'my_tea_page', description: "Everyone: your own tea page: your upcoming duties (with each slot's id), swap requests to you and from you, away dates, and the organiser tools you have (rotas you can plan, with the next dates to plan).",
+    inputSchema: obj({}), run: async () => { const s = await api('api_state', TOKEN); const who = Object.fromEntries((s.people || []).map((p) => [p.id, p.name]));
+      (s.duties || []).forEach((d) => { d.usual = (d.usual || []).map((id) => who[id] || id); });  // who usually does this duty: the people to ask for a swap
+      delete s.people; delete s.badge; return s; } },
+  { name: 'schedule', description: 'Everyone: slots of the rotas (research and tea talks, MLJC, TNJC, coffee, just/leaving tea, external seminars), with presenters and tea people by name. Defaults: from today, 90 days ahead.',
     inputSchema: obj({ from: { ...str, description: 'YYYY-MM-DD' }, to: { ...str, description: 'YYYY-MM-DD' }, type: { ...str, description: 'e.g. TNJC, MLJC, Research Talk, Tea Talk, Coffee Cleaning' },
       person: { ...str, description: 'name or id: only their slots' }, query: { ...str, description: 'text to find in titles, descriptions or guest names' } }),
     run: async (a) => { const b = await data(); const from = a.from || londonDay(), to = a.to || addDays(from, 90);
       const who = a.person ? personId(b, a.person) : null, q = String(a.query || '').toLowerCase();
       return b.data.schedule.filter((s) => s.start.slice(0, 10) >= from && s.start.slice(0, 10) <= to && (!a.type || s.type.toLowerCase() === a.type.toLowerCase())
         && (!who || s.presenter.includes(who) || s.tea.includes(who)) && (!q || [s.title, s.description, s.guest].join(' ').toLowerCase().includes(q))).map((s) => slotOut(b, s)); } },
-  { name: 'people', description: 'People on the rotas: position, which rotas they are on (TNJC, CSNJC, MLJC, Coffee), what they are exempt from, when they joined. Active only unless include_inactive.',
+  { name: 'people', description: 'Everyone: people on the rotas: position, which rotas they are on (TNJC, CSNJC, MLJC, Coffee), what they are exempt from, when they joined. Active only unless include_inactive.',
     inputSchema: obj({ include_inactive: bool, rota: { ...str, description: 'TNJC, CSNJC, MLJC or Coffee' }, query: { ...str, description: 'part of a name' } }),
     run: async (a) => { const b = await data(); const q = String(a.query || '').toLowerCase();
       return b.data.people.filter((p) => (a.include_inactive || p.active) && (!a.rota || p.rotas.includes(a.rota)) && (!q || p.name.toLowerCase().includes(q))); } },
-  { name: 'rota_rules', description: 'When newcomers join each duty, by position (the "You are added to the rota when" table), with the choices allowed.',
+  { name: 'rota_rules', description: 'Everyone: when newcomers join each duty, by position (the "You are added to the rota when" table), with the choices allowed.',
     inputSchema: obj({}), run: async () => { const b = await data(); return { rules: b.data.rota_rules, choices: b.data.options.rules }; } },
   { name: 'rotas_overview', description: 'Organisers: everyone active on the rotas you organise, the rotas they can be scheduled for, their upcoming slots and whether an email is registered.',
     inputSchema: obj({}), run: async () => api('api_rotas', TOKEN) },
-  { name: 'list_pages', description: 'The pages of the Gatsby Rotas site (guides and toolbox), by slug.',
+  { name: 'list_pages', description: 'Everyone: the pages of the Gatsby Rotas site (guides and toolbox), by slug.',
     inputSchema: obj({}), run: async () => { const b = await data(); return Object.values(b.pages).map((p) => ({ slug: p.slug, title: p.title, saved: p.saved, by: p.by })); } },
-  { name: 'read_page', description: 'One page of the site as text, one line per block with its id (to use with edit_page).',
+  { name: 'read_page', description: 'Everyone: one page of the site as text, one line per block with its id (to use with edit_page).',
     inputSchema: obj({ slug: str }, ['slug']), run: async (a) => { const b = await data(); const p = b.pages[a.slug];
       if (!p) throw new Error(`No page "${a.slug}". Pages: ${Object.keys(b.pages).join(', ')}`); return `# ${p.title}\n\n` + pageText(p.blocks).join('\n'); } },
 
-  { name: 'save_slot', description: 'Add a slot (no id) or change one (id: only the fields given change). Dates in London time: start "YYYY-MM-DDTHH:mm" (or "YYYY-MM-DD" for a week-long coffee duty, with end the last day). People by name or id. Organisers change their own rota, the tea tsar all. The calendar follows within the hour. To block a date, add a slot titled "Cancelled: <reason>" with nobody on it.',
+  { name: 'save_slot', description: 'Tsars: add a slot (no id) or change one (id: only the fields given change). Dates in London time: start "YYYY-MM-DDTHH:mm" (or "YYYY-MM-DD" for a week-long coffee duty, with end the last day). People by name or id. Organisers change their own rota, the tea tsar all. The calendar follows within the hour. To block a date, add a slot titled "Cancelled: <reason>" with nobody on it.',
     inputSchema: obj({ id: str, type: str, title: str, start: str, end: str, presenter: strs, tea: strs, guest: { ...str, description: 'guest speaker (presenter then stays empty)' },
       description: str, csnjc: bool, water_filter: bool }),
     run: async (a) => { const b = await data(true); let slot = {};
@@ -119,9 +156,9 @@ const TOOLS = [
       for (const k of ['presenter', 'tea']) if (a[k] !== undefined) slot[k] = a[k].map((w) => personId(b, w));
       slot.presenter ||= []; slot.tea ||= [];
       const saved = await api('api_site_save_slot', TOKEN, slot); changed(); return slotOut(b, saved); } },
-  { name: 'remove_slot', description: 'Remove a slot that is not needed (bank holiday, closure) together with its calendar event. To tell the people on duty, cancel the talk instead (title "Cancelled: …", or cancel_talk).',
+  { name: 'remove_slot', description: 'Tsars: remove a slot that is not needed (bank holiday, closure) together with its calendar event. To tell the people on duty, cancel the talk instead (title "Cancelled: …", or cancel_talk).',
     inputSchema: obj({ id: str }, ['id']), run: async (a) => { const r = await api('api_site_delete_slot', TOKEN, norm(a.id)); changed(); return r; } },
-  { name: 'save_person', description: 'Add a person (tea tsar, no id) or change one (id or name: only the fields given change). Organisers can only tick or untick their own rota; the tea tsar everything. active=false takes someone off the rotas.',
+  { name: 'save_person', description: 'Tsars: add a person (tea tsar, no id) or change one (id or name: only the fields given change). Organisers can only tick or untick their own rota; the tea tsar everything. active=false takes someone off the rotas.',
     inputSchema: obj({ id: { ...str, description: 'id or name' }, name: str, position: str, active: bool, rotas: { ...strs, description: 'all rotas they are on: TNJC, CSNJC, MLJC, Coffee' },
       excluded: { ...strs, description: 'exempt from: research, tea_talk, tea' }, joined: { ...str, description: 'YYYY-MM-DD' } }),
     run: async (a) => { const b = await data(true); let p = { rotas: [], excluded: [], active: true };
@@ -132,28 +169,38 @@ const TOOLS = [
     inputSchema: obj({ id: str, research: str, tea_talk: str, tea: str }, ['id']),
     run: async (a) => { const rule = { id: norm(a.id) }; for (const k of ['research', 'tea_talk', 'tea']) if (a[k] !== undefined) rule[k] = a[k];
       const r = await api('api_site_save_rule', TOKEN, rule); changed(); return r; } },
-  { name: 'edit_page', description: 'Change a page of the site (tsars), with ops applied in order: {op:"update", id, rt} new text for a block; {op:"insert", tmp, parent, after, type, rt} a new block (type p, h1, h2, h3, ul, ol, todo, toggle, quote) under parent (the page slug or a block id) after block `after` (or first); {op:"delete", id}; {op:"cells", id, cells:[rt,…]} a table row; {op:"title", title}. rt is rich text: [{text, b?, i?, s?, u?, code?, color?, href?}]. Read the page first for the block ids.',
+  { name: 'edit_page', description: 'Tsars: change a page of the site, with ops applied in order: {op:"update", id, rt} new text for a block; {op:"insert", tmp, parent, after, type, rt} a new block (type p, h1, h2, h3, ul, ol, todo, toggle, quote) under parent (the page slug or a block id) after block `after` (or first); {op:"delete", id}; {op:"cells", id, cells:[rt,…]} a table row; {op:"title", title}. rt is rich text: [{text, b?, i?, s?, u?, code?, color?, href?}]. Read the page first for the block ids.',
     inputSchema: obj({ slug: str, ops: { type: 'array', items: { type: 'object' } } }, ['slug', 'ops']),
     run: async (a) => { const p = await api('api_site_edit_page', TOKEN, a.slug, a.ops); changed(); return `# ${p.title}\n\n` + pageText(p.blocks).join('\n'); } },
 
-  { name: 'set_talk_title', description: 'Your own upcoming talk: set its title and description (the calendar and the reminder emails show them). slot_id from my_tea_page.',
+  { name: 'set_talk_title', description: 'Everyone: your own upcoming talk: set its title and description (the calendar and the reminder emails show them). slot_id from my_tea_page.',
     inputSchema: obj({ slot_id: str, title: str, description: str }, ['slot_id', 'title']),
     run: async (a) => { const r = await api('api_title', TOKEN, norm(a.slot_id), a.title, a.description || ''); changed(); return r; } },
-  { name: 'ask_swap', description: 'Ask someone to take over one of your duties (they accept or decline by email or on their tea page; less than a day before the slot it goes through at once).',
+  { name: 'ask_swap', description: 'Everyone: ask someone to take over one of your duties (my_tea_page lists who usually does it) (they accept or decline by email or on their tea page; less than a day before the slot it goes through at once).',
     inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] }, to: { ...str, description: 'name or id' } }, ['slot_id', 'duty', 'to']),
     run: async (a) => { const b = await data(); const r = await api('api_swap', TOKEN, norm(a.slot_id), a.duty, personId(b, a.to)); changed(); return r; } },
-  { name: 'answer_swap', description: 'Accept or decline a swap request made to you (code from my_tea_page, "incoming").',
+  { name: 'answer_swap', description: 'Everyone: accept or decline a swap request made to you (code from my_tea_page, "incoming").',
     inputSchema: obj({ code: str, accept: bool }, ['code', 'accept']), run: async (a) => { const r = await api('api_answer_swap_mine', TOKEN, a.code, a.accept); changed(); return r; } },
-  { name: 'withdraw_swap', description: 'Withdraw a swap request you made (code from my_tea_page, a duty\'s "pending").',
+  { name: 'withdraw_swap', description: 'Everyone: withdraw a swap request you made (code from my_tea_page, a duty\'s "pending").',
     inputSchema: obj({ code: str }, ['code']), run: async (a) => { const r = await api('api_withdraw_swap', TOKEN, a.code); changed(); return r; } },
-  { name: 'cancel_talk', description: 'Last resort when nobody can take over your talk: cancels it (you keep your turn; the organiser is told). Only for your own upcoming talk.',
+  { name: 'cancel_talk', description: 'Everyone: last resort when nobody can take over your talk: cancels it (you keep your turn; the organiser is told). Only for your own upcoming talk.',
     inputSchema: obj({ slot_id: str, reason: { ...str, description: 'who you asked, and why it cannot happen' } }, ['slot_id', 'reason']),
     run: async (a) => { const r = await api('api_cancel', TOKEN, norm(a.slot_id), a.reason); changed(); return r; } },
-  { name: 'add_away', description: 'Add dates you are away (you will not be scheduled then).',
+  { name: 'add_away', description: 'Everyone: add dates you are away (you will not be scheduled then).',
     inputSchema: obj({ from: { ...str, description: 'YYYY-MM-DD' }, to: { ...str, description: 'YYYY-MM-DD' }, reason: str }, ['from', 'to']),
     run: async (a) => api('api_add_away', TOKEN, a.from, a.to, a.reason || '') },
-  { name: 'remove_away', description: 'Remove away dates (row number from my_tea_page, "away").',
+  { name: 'remove_away', description: 'Everyone: remove away dates (row number from my_tea_page, "away").',
     inputSchema: obj({ row: { type: 'number' } }, ['row']), run: async (a) => api('api_remove_away', TOKEN, a.row) },
+  { name: 'set_photo', description: 'Everyone: change your photo on the site from a picture file on this computer (cut to a small square for the site; kept at up to 1600px in the bot\'s Drive), or remove it (no file). Tsars can do it for anyone (person).',
+    inputSchema: obj({ file: { ...str, description: 'path to a JPEG, PNG or HEIC; leave out to remove the photo' }, person: { ...str, description: 'name or id; yourself if left out' } }),
+    run: async (a) => { const b = await data(); const id = a.person ? personId(b, a.person) : b.me?.person;
+      const v = a.file ? photoVersions(a.file.replace(/^~(?=\/)/, os.homedir())) : { small: '', full: null };
+      await api('api_site_save_photo', TOKEN, id, v.small, v.full); return a.file ? 'Photo saved.' : 'Photo removed.'; } },
+  { name: 'change_my_email', description: 'Everyone: change the address the bot emails you at. The bot sends a confirmation link to the new address first.',
+    inputSchema: obj({ email: str }, ['email']), run: async (a) => api('api_change_email', TOKEN, a.email) },
+  { name: 'leave_tea_system', description: 'Everyone: leave the tea system for good, for someone no longer a member of the Unit: you are marked inactive, the bot stops emailing you, and the tea tsar and organisers hear about slots you still hold. Only the tea tsar can undo it.',
+    inputSchema: obj({ i_have_left_the_unit: { type: 'boolean', description: 'must be true' } }, ['i_have_left_the_unit']),
+    run: async (a) => { if (a.i_have_left_the_unit !== true) throw new Error('Only for someone who has left the Unit.'); return api('api_leave', TOKEN); } },
 
   { name: 'plan_slots', description: 'Organisers: create the slots for these dates (bank holidays skipped, existing slots kept) and fill them fairly. They stay tentative until finalise. rota: TNJC, MLJC, Coffee Cleaning or talks (talks take research_from/research_to and tea_from/tea_to instead of from/to).',
     inputSchema: obj({ rota: str, from: str, to: str, research_from: str, research_to: str, tea_from: str, tea_to: str }, ['rota']),
