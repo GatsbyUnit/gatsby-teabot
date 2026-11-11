@@ -3,7 +3,7 @@
 //                   water-filter weeks as the notebooks); slots that already exist are not duplicated
 //   fill_slots():   assigns people to the tentative slots with the fairness algorithm below, using
 //                   everyone's away dates; slots that already have someone are left alone
-// Then the organiser checks Notion and finalises (Events.js), as before.
+// Then the organiser checks the slots and finalises (Events.js), as before.
 //
 // The algorithm is a line-by-line port of github.com/KevHH/gatsby_tea_scheduling/script.py; tests/
 // crosscheck_scheduler.py runs both on random inputs and checks they agree. Dates are 'yyyy-MM-dd'.
@@ -111,9 +111,9 @@ function sched_main(to_fill, past, people, query){
   return schedule.filter(function(t){ return t.to_fill; });
 }
 
-// ---- Notion plumbing (what the notebooks did) ----
+// ---- rota data plumbing (what the notebooks did) ----
 
-// which slots a rota gets: weekday (0 = Sunday), times, Notion type
+// which slots a rota gets: weekday (0 = Sunday), times, slot type
 const SLOT_PLANS = {
   'TNJC': [{type: 'TNJC', weekday: 2, start: [13, 30], end: [14, 30]}],
   'MLJC': [{type: 'MLJC', weekday: 1, start: [13, 30], end: [14, 30]}],
@@ -178,8 +178,8 @@ function create_slots(rota, ranges, ctx){
   return {created: created, skipped: skipped, holidays: holiday_skipped};
 }
 
-// Water-filter weeks continue the 4-week cycle from the last filter week in Notion; descriptions are
-// copied from the most recent coffee slot of the same kind, so organisers keep editing them in Notion.
+// Water-filter weeks continue the 4-week cycle from the last filter week; descriptions are
+// copied from the most recent coffee slot of the same kind, so organisers keep editing them on the site.
 function coffee_templates(first_monday, ctx){
   var rows = load_rows('Coffee Cleaning', add_days(first_monday, -365), add_days(first_monday, -1), ctx);
   var last_filter = null, standard_text = '', filter_text = '';

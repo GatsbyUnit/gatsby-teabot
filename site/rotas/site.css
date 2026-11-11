@@ -418,7 +418,7 @@ details.toggle > summary:hover { color: var(--accent); }
   .cal-slot { font-size: .85rem; }
 }
 
-/* ---------- Notion content ---------- */
+/* ---------- Page content ---------- */
 
 .indent { margin-left: 1.4rem; }
 .todo { display: flex; gap: .5rem; align-items: baseline; margin: .3rem 0; }

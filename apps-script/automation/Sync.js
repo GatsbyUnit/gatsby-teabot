@@ -1,17 +1,17 @@
-// Hourly: keeps the gatsby.tea calendar and Notion in step for the rotas in SYNC_TYPES.
+// Hourly: keeps the gatsby.tea calendar and the rota data (the site) in step for the rotas in SYNC_TYPES.
 //
-// For every slot it remembers what the calendar title and the Notion people looked like last time
+// For every slot it remembers what the calendar title and the slot's people looked like last time
 // (Script Properties, "state:<event id>"), so it can tell who changed what:
-//   - only Notion changed        -> rewrite the calendar title (future slots only)
+//   - only the slot changed      -> rewrite the calendar title (future slots only)
 //   - only the calendar changed  -> someone edited the event by hand: names that match registered people
-//                                   are recorded in Notion; an unknown presenter in a journal club is a
+//                                   are recorded in the slot; an unknown presenter in a journal club is a
 //                                   guest speaker; anything unclear goes to the tea tsar
 //   - both changed and disagree  -> ask the organiser
 // A talk or just tea whose event is deleted, or renamed to "… CANCELLED", by hand is recorded as cancelled
 // (see cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup can't cancel it.
-// Slots titled "Cancelled" in Notion are left alone.
-// A talk title or description edited in Notion rewrites the event description (future slots, and only
-// when the Notion text changed since last time, so text typed into the calendar is otherwise left alone).
+// Slots titled "Cancelled" are left alone.
+// A talk title or description edited on the site rewrites the event description (future slots, and only
+// when the slot's text changed since last time, so text typed into the calendar is otherwise left alone).
 // Confirmed future slots without an event get one (same title / description as the finalizing scripts).
 // For the rotas in INVITE_TYPES the people on duty are the event's guests (see Invites.js). Upcoming talks
 // without a location get the unit's Zoom link as their location.
@@ -54,7 +54,7 @@ function maybe_go_live(ctx){
   ctx.settings = get_settings();
   log_row(ctx, 'sync', '', null, 'went live', 'scheduled by GO_LIVE_ON');
   send_mail(ctx.constants['tnjc_admin_email'], 'The tea bot is now live for ' + ctx.settings.LIVE_TYPES, [
-    'As scheduled, the dry run has ended. From now on the bot keeps the calendar and Notion in sync for ' + ctx.settings.LIVE_TYPES + '.',
+    'As scheduled, the dry run has ended. From now on the bot keeps the calendar and the site in sync for ' + ctx.settings.LIVE_TYPES + '.',
     'To pause it, set DRY_RUN to TRUE in the Automation tab of the constants sheet.',
     {link: 'Constants sheet', url: SpreadsheetApp.openById(CONST_SHEET_ID).getUrl()},
     {link: 'Log', url: ctx.log.getUrl()}
@@ -172,7 +172,7 @@ function sync_row(row, ctx, today){
   if (future && prev && prev.x !== undefined && prev.x !== text){
     var description = event_description(row, ctx);
     if (strip_links(event.getDescription() || '') !== description){
-      out.text_updated = act(ctx, row, 'text_from_notion', 'title / description edited in Notion', function(){ event.setDescription(description); });
+      out.text_updated = act(ctx, row, 'text_from_notion', 'title / description edited on the site', function(){ event.setDescription(description); });
     }
   }
   if (future && ctx.settings.links_in_events){
@@ -205,14 +205,14 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
     if (done){
       res.actual_after = title;
       res.mismatch = null;
-      return res;  // the normal effect of editing Notion: nothing to report
+      return res;  // the normal effect of editing on the site: nothing to report
     }
-    res.finding = finding(row, 'calendar_updated', 'Notion was edited directly, so the calendar title would be updated to "' + expected + '".', false);
+    res.finding = finding(row, 'calendar_updated', 'The slot was edited on the site, so the calendar title would be updated to "' + expected + '".', false);
     return res;
   }
 
   if (prev && notion_changed && cal_changed){
-    res.finding = finding(row, 'conflict', 'Both Notion and the calendar were edited since the last check, and they disagree (calendar: "' + actual + '", Notion: "' + expected + '"). Please fix one of them by hand.', false);
+    res.finding = finding(row, 'conflict', 'Both the site and the calendar were edited since the last check, and they disagree (calendar: "' + actual + '", site: "' + expected + '"). Please fix one of them by hand.', false);
     return res;
   }
 
@@ -220,7 +220,7 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
   var first_seen = !prev || ctx.baseline;
   var predates = ' This was already the case when the bot first looked, so nothing was changed.';
   if (!parsed){
-    res.finding = finding(row, 'unrecognised', 'The calendar title "' + actual + '" does not follow the usual format, so I left it alone. Notion says "' + expected + '".', false);
+    res.finding = finding(row, 'unrecognised', 'The calendar title "' + actual + '" does not follow the usual format, so I left it alone. The site says "' + expected + '".', false);
     return res;
   }
 
@@ -251,10 +251,10 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
       plan[role] = hits.map(function(x){ return x.m.person.id; });
     }
   });
-  var where = 'The calendar says "' + actual + '", but Notion says "' + notion_says + '".';
+  var where = 'The calendar says "' + actual + '", but the site says "' + notion_says + '".';
 
   if (unsure.length){
-    res.finding = finding(row, 'uncertain_match', where + ' I could not tell for sure who is meant: ' + unsure.join('; ') + '. Nothing was changed. Please record the right person in Notion.', false);
+    res.finding = finding(row, 'uncertain_match', where + ' I could not tell for sure who is meant: ' + unsure.join('; ') + '. Nothing was changed. Please record the right person on the site.', false);
     res.finding.alert_tsar = true;
     return res;
   }
@@ -275,7 +275,7 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
   if (plan.Presenter && ctx.has_guest_prop && row.guest) props[GUEST_PROP] = {rich_text: []};
   if (guest){
     if (!ctx.has_guest_prop){
-      res.finding = finding(row, 'guest_suggested', where + ' "' + guest + '" looks like a guest speaker, but Notion has no "' + GUEST_PROP + '" field, so nothing was changed.', false);
+      res.finding = finding(row, 'guest_suggested', where + ' "' + guest + '" looks like a guest speaker, but the rota data has no "' + GUEST_PROP + '" field, so nothing was changed.', false);
       return res;
     }
     props[GUEST_PROP] = {rich_text: [{text: {content: guest}}]};
@@ -283,7 +283,7 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
   }
   var done = act(ctx, row, guest ? 'guest_from_calendar' : 'swap_from_calendar', notion_says + ' -> ' + actual, function(){ notion_patch_page(row.id, props, ctx.constants); });
   if (!done){
-    res.finding = finding(row, guest ? 'guest_from_calendar' : 'swap_from_calendar', where + ' The event was edited by hand, so the bot would record this in Notion.', false);
+    res.finding = finding(row, guest ? 'guest_from_calendar' : 'swap_from_calendar', where + ' The event was edited by hand, so the bot would record this on the site.', false);
     return res;
   }
   if (plan.Presenter){ row.presenter_ids = plan.Presenter; row.guest = ''; }
@@ -335,7 +335,7 @@ function report_findings(findings, ctx){
     var cc = key.split('|')[1];
     var watching = list.every(function(f){ return !is_live(ctx, f.row.type); });
     var blocks = digest_blocks(list, watching, ctx.log.getUrl());
-    var subject = cc ? 'Could not match a name in the ' + list[0].row.type + ' calendar' : list.length + ' calendar / Notion ' + (list.length === 1 ? 'item' : 'items') + ' to look at';
+    var subject = cc ? 'Could not match a name in the ' + list[0].row.type + ' calendar' : list.length + ' calendar / site ' + (list.length === 1 ? 'item' : 'items') + ' to look at';
     send_mail(admin, (watching ? 'Dry run: ' : '') + subject, blocks, ctx.constants, cc ? {cc: cc, reply_to: cc} : {});
   });
 }
@@ -343,11 +343,11 @@ function report_findings(findings, ctx){
 function digest_blocks(list, watching, log_url){
   var blocks = [watching
     ? 'Dry run: for this rota the bot is only watching, nothing has been changed. This is what it found, and what it would do once switched on.'
-    : 'The bot checked the calendar against Notion and found something that needs a person.'];
+    : 'The bot checked the calendar against the site and found something that needs a person.'];
   list.forEach(function(f){
     blocks.push({heading: fmt_day(f.row.start) + ' · ' + f.row.type});
     blocks.push(f.text);
-    blocks.push('[Open in Notion](' + f.row.url + ')');
+    blocks.push('[Open on the site](' + f.row.url + ')');
   });
   blocks.push('[Full log](' + log_url + ')');
   return blocks;

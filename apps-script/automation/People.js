@@ -1,5 +1,5 @@
-// People come from the Notion People database; registered emails come from the identity sheet
-// (column A = Notion URL, B = name, C = email), which the old Cron Jobs keep in sync.
+// People come from the People table of the rota data; registered emails come from the identity sheet
+// (column A = the person's address on the site, B = name, C = email), which the old Cron Jobs keep in sync.
 
 const PEOPLE_CACHE_KEY = 'people:v4';
 
@@ -34,7 +34,7 @@ function load_people(constants){
   return people;
 }
 
-// {notion id: {email}} from the identity sheet (A = Notion URL, C = email)
+// {person id: {email}} from the identity sheet (A = address with the id, C = email)
 function load_identity_emails(constants){
   var values = SpreadsheetApp.openById(constants['identity_mapping_id']).getSheets()[0].getRange('A:C').getValues();
   var out = {};

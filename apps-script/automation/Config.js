@@ -1,5 +1,5 @@
 // Where things live:
-//  - the shared constants sheet, first tab: IDs, emails and the Notion token (read by the old scripts too)
+//  - the shared constants sheet, first tab: IDs and emails (read by the old scripts too)
 //  - the same spreadsheet, "Automation" tab: this project's switches, one row per setting with a
 //    description; "Automation reminders" tab: dated reminders for organisers. Edit them there.
 //  - Script Properties: only things the script manages itself (IDs of the form and log it created,
@@ -18,12 +18,12 @@ const OLD_SWAP_FORM_ENTRIES = { date: 'entry.1526923741', slot_type: 'entry.1298
 
 // [key, default, description shown in the Automation tab]
 const SETTINGS = [
-  ['DRY_RUN', 'TRUE', 'TRUE = the bot only watches and emails what it would do. FALSE = it updates Notion and the calendar. Set back to TRUE to pause it at any time.'],
-  ['SYNC_TYPES', 'TNJC', 'Rotas the bot watches: it compares calendar and Notion and emails the rota organiser about differences (comma-separated Notion types, e.g. TNJC, MLJC, Coffee Cleaning).'],
+  ['DRY_RUN', 'TRUE', 'TRUE = the bot only watches and emails what it would do. FALSE = it updates the rota data and the calendar. Set back to TRUE to pause it at any time.'],
+  ['SYNC_TYPES', 'TNJC', 'Rotas the bot watches: it compares the calendar with the site and emails the rota organiser about differences (comma-separated slot types, e.g. TNJC, MLJC, Coffee Cleaning).'],
   ['LIVE_TYPES', 'TNJC', 'Of the watched rotas, the ones the bot may actually change (fix titles, record hand edits, add links). The others are only reported. Ignored while DRY_RUN is TRUE.'],
   ['REMINDER_TYPES', 'TNJC', 'Rotas whose organiser gets a Monday reminder when the schedule is running out.'],
   ['SCHEDULE_WARNING_DAYS', '21', 'Send that reminder when the schedule ends within this many days.'],
-  ['LOOKBACK_DAYS', '60', 'How far back hand edits of past calendar events are copied into Notion (keeps the rota fair).'],
+  ['LOOKBACK_DAYS', '60', 'How far back hand edits of past calendar events are copied into the site (keeps the rota fair).'],
   ['SWAP_HORIZON_DAYS', '120', 'How far ahead the swap form lists slots.'],
   ['INVITE_TYPES', '', 'Rotas whose people on duty get a calendar invitation for their slot (comma-separated, e.g. TNJC, MLJC; live rotas only). Declining does not take anyone off the rota: the bot emails them how to swap instead.'],
   ['LINKS_IN_EVENTS', 'TRUE', 'Add "swap your slot" and "edit title" links to upcoming calendar events.'],
@@ -31,8 +31,6 @@ const SETTINGS = [
   ['HANDBOOK_URL', '', 'Link to the organiser handbook, included in reminder emails.'],
   ['PAGE_URL', '', 'Address of the tea page (GitHub Pages: https://gatsbyunit.github.io/gatsby-teabot/; also read by the reminder emails of the old Cron Jobs).'],
   ['PAGE_KEY', '', 'Unit key in the general tea-page link (calendar events, emails to several people); without it, the page shows nothing to someone who only knows its public address. Any random letters and digits. Changing it breaks the general links already sent; the calendar events get the new one within the hour.'],
-  ['STORE', 'notion', 'Where the rota data (Schedule, People, Rota rules) is read from: notion, or sheet (the bot\'s "Gatsby Rotas data" sheet, made by store_import_from_notion(); see Store.js). Switching back to notion is safe while NOTION_MIRROR is TRUE.'],
-  ['NOTION_MIRROR', 'TRUE', 'With STORE = sheet: also write every change to Notion (first), so Notion stays complete and switching back is possible. Set to FALSE once Notion is retired.'],
   ['FAVICON_URL', '', 'Optional browser-tab icon of the tea page: an image address ending in .png (a Drive image shared by link: https://lh3.googleusercontent.com/d/<file id>#.png). Kept here rather than in the public repo.']
 ];
 
@@ -65,11 +63,10 @@ function get_global_constants(){
       'gatsby_zoom_link': row(11),
       'identity_mapping_id': row(19),
       'google_calendar_id': row(20),
-      'notion_token': row(21),
-      'notion_people_db_id': row(22),
+      'notion_token': row(21),         // only for notion_leftovers (Store.js), until the token is gone
+      'notion_people_db_id': row(22),  // 22-24: the old Notion database ids, now names of the rota data tables (Store.js)
       'notion_rota_rules_db_id': row(23),
       'notion_talk_db_id': row(24),
-      'notion_site_url': row(25),
       'coffee_email': row(26),
       'gatsby_admin_email': row(28),   // unit admin (Zoom set-up)
     };
@@ -178,7 +175,7 @@ function guard_sheet(sheet){
 
 // once, from the editor: guards the bot's sheets made before guard_sheet existed (running it again is harmless)
 function guard_bot_sheets(){
-  var books = [store_spreadsheet(false), site_pages_sheet().getParent()].filter(Boolean);
+  var books = [store_spreadsheet(), site_pages_sheet().getParent()].filter(Boolean);
   var done = [];
   books.forEach(function(ss){
     ss.getSheets().forEach(function(sheet){ guard_sheet(sheet); done.push(ss.getName() + ' / ' + sheet.getName()); });

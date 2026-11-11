@@ -1,6 +1,6 @@
 // Editing for the tsars, loaded only for them. Pages are edited in place: click any text, type, format it with
 // the bar at the top, and save; slots, people and the rota rules have small forms where they are shown. The tea
-// bot keeps the pages and writes the rota changes into Notion (apps-script/automation/Site.js).
+// bot keeps the pages and the rota data (apps-script/automation/Site.js).
 'use strict';
 (function () {
   const R = window.Rotas;
@@ -636,7 +636,7 @@
         try {
           const saved = await R.api('api_site_save_slot', token(), slot);
           putItem('schedule', saved);
-          toast('Saved to Notion. The calendar follows within the hour.');
+          toast('Saved. The calendar follows within the hour.');
         } catch (x) {
           err.textContent = x.message;
           button.disabled = false;
@@ -866,7 +866,7 @@
         const saved = await R.api('api_site_save_rule', token(), { id: sel.dataset.rule, [sel.dataset.key]: sel.value });
         const b = R.bundle();
         R.keep({ ...b, data: { ...b.data, rota_rules: b.data.rota_rules.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)) } });
-        toast('Saved to Notion.');
+        toast('Saved.');
       } catch (x) {
         toast(x.message, true);
       }

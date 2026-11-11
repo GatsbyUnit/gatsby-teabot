@@ -1,5 +1,5 @@
 // "Gatsby Tea Automation log" spreadsheet in the bot's Drive: what the bot did (or would do) and the
-// currently open calendar/Notion mismatches.
+// currently open calendar/site mismatches.
 
 const LOG_TAB = 'Log';
 const MISMATCH_TAB = 'Mismatches';
@@ -11,7 +11,7 @@ function ensure_log_sheet(){
   var log = ss.getSheets()[0].setName(LOG_TAB);
   log.appendRow(['When', 'Job', 'Mode', 'Type', 'Slot', 'Action', 'Detail']);
   log.setFrozenRows(1);
-  ss.insertSheet(MISMATCH_TAB).appendRow(['Checked', 'Type', 'Slot', 'Calendar title', 'Notion says', 'Notion page']);
+  ss.insertSheet(MISMATCH_TAB).appendRow(['Checked', 'Type', 'Slot', 'Calendar title', 'Site says', 'On the site']);
   set_setting('LOG_SHEET_ID', ss.getId());
   return ss;
 }

@@ -1,6 +1,6 @@
 // One-off and admin functions, run by hand from the Apps Script editor.
 //
-//   backup_all()                  snapshot of calendar, Notion and sheets into a new spreadsheet
+//   backup_all()                  snapshot of calendar, rota data and sheets into a new spreadsheet
 //   setup()                       first run: authorises the script, takes a backup, adds the Automation tabs to
 //                                 the constants sheet, creates the log sheet and the (closed) swap form,
 //                                 installs triggers, does one dry-run sync
@@ -8,8 +8,8 @@
 // One-off fixes: add a RunOnce.js with a single function, commit and deploy (deploy/deploy.py), open that
 // file in the editor and Run, then delete it, commit and deploy again (the git history keeps what was run).
 //   show_status()                 prints settings, links and installed triggers
-//   add_guest_speaker_property()  adds the "Guest speaker" text field to the Notion Schedule database
-//   go_live()                     DRY_RUN off: the sync starts writing to Notion / Calendar
+//   add_guest_speaker_property()  adds the "Guest speaker" text field to the Schedule table
+//   go_live()                     DRY_RUN off: the sync starts writing to the rota data / Calendar
 //   close_old_forms()             closes the old swap, title / Zoom and change-email forms (they point to the page)
 //   pause()                       DRY_RUN back on (kill switch); remove_triggers() stops everything
 
@@ -46,7 +46,7 @@ function add_guest_speaker_property(){
 
 function go_live(){
   set_setting('DRY_RUN', 'FALSE');
-  Logger.log('DRY_RUN is off. The next hourly sync writes to Notion and the calendar for: ' + get_settings().SYNC_TYPES);
+  Logger.log('DRY_RUN is off. The next hourly sync writes to the rota data and the calendar for: ' + get_settings().SYNC_TYPES);
 }
 
 function pause(){

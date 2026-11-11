@@ -1,23 +1,16 @@
-// Minimal Notion API client. Throws on errors so callers fail loudly (and the trigger emails the organiser).
+// The rota data (Schedule, People, Rota rules) lives in the bot's "Gatsby Rotas data" sheet (Store.js). The code
+// asks for it in the shape of Notion's API, where the data came from in 2026: notion_request answers every such
+// call from the sheet. Notion itself is no longer used.
 
 const NOTION_VERSION = '2022-06-28';
 
-// Every call for the rota data comes through here: Notion itself, or the bot's sheet once the data has moved
-// (Store.js, setting STORE). Changes made in Notion are copied into the sheet as well, once it exists.
 function notion_request(method, path, payload, constants){
-  var write = String(method).toLowerCase() !== 'get' && !/\/query$/.test(path);
-  var out;
-  if (store_mode() === 'sheet'){
-    out = store_request(method, path, payload, constants);
-  } else {
-    out = notion_http(method, path, payload, constants);
-    if (write) store_mirror(out, constants);
-  }
-  if (write) site_stale();  // the Rotas site's copy of the data (Site.js)
+  var out = store_request(method, path, payload, constants);
+  if (String(method).toLowerCase() !== 'get' && !/\/query$/.test(path)) site_stale();  // the Rotas site's copy of the data (Site.js)
   return out;
 }
 
-// the Notion API itself
+// Notion's own API: only to look back at the old databases after the move (notion_leftovers in Store.js)
 function notion_http(method, path, payload, constants){
   var params = {
     method: method,
@@ -93,8 +86,11 @@ function hyphenate_id(id){
   return id.slice(0, 8) + '-' + id.slice(8, 12) + '-' + id.slice(12, 16) + '-' + id.slice(16, 20) + '-' + id.slice(20);
 }
 
-// Notion page URLs end in "<Title-Words>-<32 hex id>", possibly followed by a query string
+// The person or slot id in an address: the site's own (".../rotas/?person=<id>", "?slot=<id>"), or an old
+// Notion page address ("…/Name-<id>?pvs=4"). Identity-sheet column A holds one of these per person.
 function id_from_notion_url(url){
+  var m = String(url).match(/[?&](?:person|slot)=([0-9a-f]{32})(?![0-9a-f])/i);
+  if (m) return m[1].toLowerCase();
   var last = String(url).split('?')[0].split('/').pop();
   var tail = last.split('-').pop();
   return /^[0-9a-f]{32}$/i.test(tail) ? tail.toLowerCase() : '';

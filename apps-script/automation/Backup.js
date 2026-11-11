@@ -1,6 +1,6 @@
 // Snapshot of everything the bot touches, into a new spreadsheet in the bot's Drive:
-// calendar events, the Notion databases (flattened + raw JSON), the constants sheet (token masked),
-// the identity sheet and the form-response sheets. setup() runs it before doing anything else.
+// calendar events, the constants sheet (tokens masked), the identity sheet, the rota data sheet, the Rotas site's
+// pages and photos, and the form-response sheets. setup() runs it before doing anything else.
 
 const RESPONSE_SHEETS = {
   'Change presenter responses': '1AwdUBzdb5aDjs6koyd3seyRuQaaxDZmbpu1Yc5mvgno',
@@ -24,30 +24,17 @@ function backup_all(){
   write_backup_tab(ss, 'Calendar', ['Event ID', 'Title', 'All day', 'Start', 'End', 'Description', 'Location', 'Creators', 'Created', 'Last updated'], cal_rows);
   summary.push(['Calendar ' + constants['google_calendar_id'], cal_rows.length, '2020 to 2028']);
 
-  // Notion databases
-  var dbs = {'Notion Schedule': constants['notion_talk_db_id'], 'Notion People': constants['notion_people_db_id'], 'Notion Rota rules': constants['notion_rota_rules_db_id']};
-  Object.keys(dbs).forEach(function(name){
-    if (!dbs[name]) return;
-    var pages = notion_query(dbs[name], null, null, constants);
-    var keys = {};
-    pages.forEach(function(p){ Object.keys(p.properties).forEach(function(k){ keys[k] = true; }); });
-    keys = Object.keys(keys).sort();
-    var rows = pages.map(function(p){
-      return [p.id, p.url, p.created_time, p.last_edited_time]
-        .concat(keys.map(function(k){ return cut(flatten_notion_value(p.properties[k])); }))
-        .concat([cut(JSON.stringify(p.properties))]);
-    });
-    write_backup_tab(ss, name, ['Page ID', 'URL', 'Created', 'Last edited'].concat(keys).concat(['Raw JSON']), rows);
-    summary.push([name, rows.length, '']);
-  });
-
   // sheets
   var const_values = SpreadsheetApp.openById(CONST_SHEET_ID).getSheets()[0].getDataRange().getValues().map(function(r){
-    return r.map(function(v){ return /^(secret_|ntn_)/.test(String(v)) ? '(Notion token, masked)' : v; });
+    return r.map(function(v){ return /^(secret_|ntn_)/.test(String(v)) ? '(token, masked)' : v; });
   });
   write_backup_tab(ss, 'Constants sheet', null, const_values);
-  summary.push(['Constants sheet', const_values.length, 'Notion token masked']);
+  summary.push(['Constants sheet', const_values.length, 'tokens masked']);
   copy_spreadsheet_tabs(ss, 'Identity', constants['identity_mapping_id'], summary);
+  // the rota data and the site's pages and photos (the bot's own sheets)
+  var data = store_spreadsheet();
+  if (data) copy_spreadsheet_tabs(ss, 'Rota data', data.getId(), summary);
+  copy_spreadsheet_tabs(ss, 'Rotas site', site_pages_sheet().getParent().getId(), summary);
   Object.keys(RESPONSE_SHEETS).forEach(function(name){ copy_spreadsheet_tabs(ss, name, RESPONSE_SHEETS[name], summary); });
 
   var first = ss.getSheets()[0];
@@ -82,30 +69,6 @@ function write_backup_tab(ss, name, header, rows){
   all = all.map(function(r){ while (r.length < width) r.push(''); return r; });
   sheet.getRange(1, 1, all.length, width).setValues(all);
   if (header) sheet.setFrozenRows(1);
-}
-
-function flatten_notion_value(v){
-  if (!v) return '';
-  switch (v.type){
-    case 'title': case 'rich_text': return plain_text(v);
-    case 'checkbox': return v.checkbox ? 'TRUE' : 'FALSE';
-    case 'select': return v.select ? v.select.name : '';
-    case 'multi_select': return v.multi_select.map(function(o){ return o.name; }).join(', ');
-    case 'status': return v.status ? v.status.name : '';
-    case 'date': return v.date ? v.date.start + (v.date.end ? ' → ' + v.date.end : '') : '';
-    case 'relation': return v.relation.map(function(r){ return r.id; }).join(', ');
-    case 'people': return v.people.map(function(p){ return p.name || p.id; }).join(', ');
-    case 'formula': return v.formula ? String(v.formula[v.formula.type]) : '';
-    case 'rollup': return JSON.stringify(v.rollup);
-    case 'url': return v.url || '';
-    case 'email': return v.email || '';
-    case 'phone_number': return v.phone_number || '';
-    case 'number': return v.number === null ? '' : v.number;
-    case 'files': return v.files.map(function(f){ return f.name; }).join(', ');
-    case 'created_time': return v.created_time;
-    case 'last_edited_time': return v.last_edited_time;
-    default: return JSON.stringify(v[v.type]);
-  }
 }
 
 function cut(v){

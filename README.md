@@ -6,26 +6,27 @@ coffee cleaning and external seminars. It runs as Google Apps Script under the s
 
 What to read where (each topic lives in one place only):
 - **Unit members:** the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/): rules, guides,
-  the schedule, and how to swap, add a title or set away dates. (It replaced the Gatsby Rotas pages on Notion.)
+  the schedule, and how to swap, add a title or set away dates. (It replaced the Gatsby Rotas pages and databases on Notion in 2026.)
 - **Organisers and the tea tsar:** [docs/handbook.md](docs/handbook.md): how the parts fit together, scheduling,
   yearly jobs, handing over.
 - **New organiser or tea tsar:** the handover guide at the end of the [handbook](docs/handbook.md#handing-over-a-guide-for-new-organisers-and-tea-tsars).
 - **Whoever maintains the code:** this file.
 - **Next steps:** [docs/next-steps.md](docs/next-steps.md): keeping this public repo clean, what else is public
-  (personal data on the Notion site, tea-page links), and how one might move off Notion.
+  (tea-page links), and how the move off Notion went.
 
 ## The setup at a glance
 
-<p align="center"><img src="docs/setup.svg" width="820" alt="Unit members and organisers use the tea page, which uses Gatsby Tea Automation as a library. The automation syncs with Notion every hour, keeps the gatsby.tea calendar in step and uses Google Sheets; the Cron Jobs read Notion and send reminders. Hand edits to the calendar are copied back to Notion. GitHub deploys the Apps Script projects."></p>
+<p align="center"><img src="docs/setup.svg" width="820" alt="Unit members and organisers use the tea page, which uses Gatsby Tea Automation as a library. The automation keeps the rota data in a Google Sheet, behind the Gatsby Rotas site, keeps the gatsby.tea calendar in step every hour and uses Google Sheets; the Cron Jobs read the rota data through it and send reminders. Hand edits to the calendar are copied back. GitHub deploys the Apps Script projects."></p>
 
-Notion decides who does what and when; the calendar is a copy that the bot keeps in step, and hand edits to it are
+The rota data (the Gatsby Rotas site) decides who does what and when; the calendar is a copy that the bot keeps in step, and hand edits to it are
 copied back. The [handbook](docs/handbook.md) explains each part.
 
 ## Layout
-- `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ Notion sync, scheduling and
-  finalising, emails, organiser reminders, and everything behind the tea page. All rota data goes through
-  `notion_request` (`Notion.js`), which `Store.js` can answer from the bot's own "Gatsby Rotas data" sheet
-  instead of Notion (setting `STORE`; the move is described in docs/next-steps.md). Settings are described at the top
+- `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ rota sync, scheduling and
+  finalising, emails, organiser reminders, and everything behind the tea page and the Rotas site. The rota data
+  (schedule, people, rota rules) lives in the bot's "Gatsby Rotas data" sheet (`Store.js`); the code reaches it
+  through `notion_request` (`Notion.js`) in the shape of Notion's API, where it came from (moved off Notion on
+  2026-11-11, see docs/next-steps.md). Settings are described at the top
   of `Config.js`, one-off admin functions in `Setup.js`.
 - `site/`: the tea page itself, a static page on GitHub Pages (https://gatsbyunit.github.io/gatsby-teabot/),
   published by `.github/workflows/pages.yml` whenever it changes. It is not served by Apps Script because Apps
@@ -33,11 +34,11 @@ copied back. The [handbook](docs/handbook.md) explains each part.
   personal code or the unit key (`PAGE_KEY`) in the link it only offers to email your link to your registered address.
 - `site/rotas/`: the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/): the member guides and
   the rota views, served by `apps-script/automation/Site.js`. The guides live in the "Gatsby Rotas pages" sheet in
-  the bot's Drive (one row per page; moved off Notion on 2026-10-31); the schedule, people and rota rules are
-  read live from the Notion databases. Members sign in by picking their name and opening the link the bot emails
+  the bot's Drive (one row per page; moved off Notion on 2026-10-31); the schedule, people and rota rules come
+  from the rota data sheet. Every slot and person has an address (`?slot=<id>`, `?person=<id>`). Members sign in by picking their name and opening the link the bot emails
   them (valid for an hour); the browser then keeps the unit key and their tea-page token for six months (the tea
   page's own memory of them works too). Tsars edit the pages in place and slots, people and rota rules in small
-  forms; rota changes are written straight into Notion, and every edit is noted in the log sheet. Static files
+  forms; rota changes are written straight into the rota data, and every edit is noted in the log sheet. Static files
   only, like the tea page; `edit.js` loads only for tsars. Developed against a local stand-in for `Site.js` that
   is not part of this repo.
 - `apps-script/page/`: "Gatsby Tea Page", the tea page's back end (web app): `doPost` with thin `api_*` wrappers,
@@ -45,7 +46,8 @@ copied back. The [handbook](docs/handbook.md) explains each part.
   because a web page can call every top-level function of its own project; a test makes sure it exposes
   nothing else.
 - `apps-script/cron-jobs/`: the older "Gatsby Tea Cron Jobs" (talk reminders, people sync, away-date sheets,
-  adding newcomers to rotas), now under version control.
+  adding newcomers to rotas), now under version control. They read and write the rota data through the
+  automation (library `TeaBot`, `store_fetch`).
 - `apps-script/archive-helper/`: one-off functions that moved everything superseded into the archive folder in
   the bot's Drive. It is the only project with access to all of the bot's Drive, so the live ones don't need it.
 - `deploy/`: `deploy.py` and `projects.json`.
@@ -66,17 +68,19 @@ API, verifies it and moves the tea page to the new version. It uses the bot acco
 
 Useful from the Apps Script editor:
 - `send_examples()` in `Checks.js` emails the TNJC organiser one example of every bot email.
-- `backup_all()` in `Backup.js` snapshots the calendar, Notion and the sheets into a new spreadsheet.
+- `backup_all()` in `Backup.js` snapshots the calendar and the sheets (rota data included) into a new spreadsheet.
+- `notion_leftovers()` in `Store.js` compares the old Notion databases with the rota data (while the Notion
+  token is still in the constants sheet).
 
 ## Where the data lives
 | What | Where |
 |---|---|
-| People, rota, schedule, titles, guest speakers | Notion (source of truth) |
+| People, rota, schedule, titles, guest speakers | "Gatsby Rotas data" sheet in the bot's Drive (source of truth; edited on the Rotas site) |
 | Registered emails, tea-page tokens | identity sheet (the Cron Jobs add a row per new person; the tea tsar fills in the email, people change it on their tea page) |
-| Away dates | one sheet per person, linked from their Notion page |
-| Emails, IDs, Notion token | constants sheet, first tab |
+| Away dates | one sheet per person (`away_dates` folder), linked from their People row |
+| Emails, IDs | constants sheet, first tab |
 | Automation switches (dry run / pause, rotas) and dated reminders | constants sheet, tabs **Automation** and **Automation reminders** |
-| Calendar | a copy of Notion; hand edits are pulled back into Notion |
+| Calendar | a copy of the rota data; hand edits are pulled back into it |
 
 Secrets never go in this repo. The sheets and scripts it names are owned by the bot account and not shared by
 link, so their IDs here give nobody access.

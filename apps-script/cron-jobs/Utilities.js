@@ -25,7 +25,7 @@ function get_global_constants(){
     'notion_people_db_id': sheet.getRange(22, 2).getValue(),
     'notion_rota_rules_db_id': sheet.getRange(23, 2).getValue(),
     'notion_talk_db_id': sheet.getRange(24, 2).getValue(),
-    'notion_site_url': sheet.getRange(25, 2).getValue(),
+    'site_url': sheet.getRange(25, 2).getValue(),   // the Gatsby Rotas site
   }
   return constants;
 }
@@ -56,7 +56,7 @@ function get_notion_id_url(email, mapping_sheet_id){
   var notion_url = mapping_sheet.getRange(email_row, 1).getValue();
   var notion_id = get_notion_id_from_url(notion_url);
   if (notion_id === false){
-    return "Invalid Notion URL for email [" + email + "]";
+    return "Invalid address in the identity sheet for email [" + email + "]";
   } else {
     return [notion_id];
   }
@@ -109,10 +109,10 @@ function get_email_from_notion_id(notion_id, mapping_sheet_id){
 }
 
 function send_email(email, title, body, constants, replyto_email){  
-  const notion_site_url =  constants['notion_site_url'];  
+  const site_url = constants['site_url'];
   const today = new Date();
   var page = tea_page_url();
-  var footer = '--------\nGatsby Tea Bot @ ' + today.getFullYear() + '\n' + notion_site_url + '\n\nMake me smarter at scheduling by keeping your away dates up to date' + (page ? ' on your tea page (' + page + ') or' : '') + ' in your away-date sheet (linked from your profile on ' + notion_site_url + ').' +
+  var footer = '--------\nGatsby Tea Bot @ ' + today.getFullYear() + '\n' + site_url + '\n\nMake me smarter at scheduling by keeping your away dates up to date' + (page ? ' on your tea page (' + page + ') or' : '') + ' in your away-date sheet.' +
     (page ? '\n\nLeave the tea system (no longer a member of the Unit): ' + tea_page_url({leave: 1}) : '');
   body = body + '\n\n\n' + footer;
   
@@ -200,3 +200,13 @@ function isNumeric(num){
   return !isNaN(num)
 }
 
+
+// Run once from the editor after the TeaBot library was added (2026-11-11): Google asks to allow it, then this
+// logs what the rota data answers. The reminders and syncs need that permission, or their triggers stop.
+function check_rota_data(){
+  const constants = get_global_constants();
+  var res = TeaBot.store_fetch('https://api.notion.com/v1/databases/' + constants['notion_people_db_id'] + '/query',
+                               {method: 'post', payload: JSON.stringify({filter: {property: 'Active', checkbox: {equals: true}}})});
+  var body = JSON.parse(res.getContentText());
+  Logger.log(res.getResponseCode() === 200 ? 'Rota data OK: ' + body.results.length + ' active people (first 100 at most).' : 'Rota data failed: ' + body.message);
+}

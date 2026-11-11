@@ -1,6 +1,14 @@
 {
   "timeZone": "Europe/London",
   "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "TeaBot",
+        "libraryId": "196XK7FwFXSPW51FevvghFjH-4LRs5836xclNVnMJ2s3AhGRdWwagH-2w",
+        "version": "11",
+        "developmentMode": true
+      }
+    ]
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8"

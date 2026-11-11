@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" role="img" aria-labelledby="title desc">
   <title id="title">How the Gatsby tea bot fits together</title>
-  <desc id="desc">Unit members and organisers use the tea page. The tea page uses Gatsby Tea Automation as a library. The automation syncs with Notion every hour, keeps the gatsby.tea calendar in step and reads and writes Google Sheets. The Cron Jobs read Notion and send reminders. Hand edits to the calendar are copied back to Notion. GitHub deploys all Apps Script projects.</desc>
+  <desc id="desc">Unit members and organisers use the tea page and the Gatsby Rotas site. Their back end uses Gatsby Tea Automation as a library. The automation reads and writes the rota data (the Gatsby Rotas data sheet), keeps the gatsby.tea calendar in step every hour and reads and writes Google Sheets. The Cron Jobs read the rota data through the library and send reminders. Hand edits to the calendar are copied back into the rota data. GitHub deploys all Apps Script projects.</desc>
   <style>
     .bg { fill: #ffffff; }
     .group { fill: #f6f8fa; stroke: #d0d7de; stroke-width: 1.2; }
@@ -55,7 +55,7 @@
   <rect class="card" x="90" y="190" width="220" height="100" rx="12"/>
   <rect class="blue" x="106" y="204" width="24" height="4" rx="2"/>
   <text class="t" x="200" y="232" text-anchor="middle">Gatsby Tea Page</text>
-  <text class="s" x="200" y="256" text-anchor="middle">everyone's personal page</text>
+  <text class="s" x="200" y="256" text-anchor="middle">tea page · Rotas site</text>
   <text class="s" x="200" y="274" text-anchor="middle">(web app)</text>
 
   <rect class="card" x="365" y="190" width="220" height="100" rx="12"/>
@@ -74,7 +74,7 @@
   <rect class="card" x="90" y="430" width="220" height="100" rx="12"/>
   <rect class="purple" x="106" y="444" width="24" height="4" rx="2"/>
   <text class="t" x="200" y="472" text-anchor="middle">gatsby.tea calendar</text>
-  <text class="s" x="200" y="496" text-anchor="middle">a copy of Notion,</text>
+  <text class="s" x="200" y="496" text-anchor="middle">a copy of the rota,</text>
   <text class="s" x="200" y="514" text-anchor="middle">kept in step by the bot</text>
 
   <rect class="card" x="365" y="430" width="220" height="100" rx="12"/>
@@ -85,8 +85,8 @@
 
   <rect class="card" x="640" y="430" width="220" height="100" rx="12"/>
   <rect class="ink" x="656" y="444" width="24" height="4" rx="2"/>
-  <text class="t" x="750" y="472" text-anchor="middle">Notion</text>
-  <text class="s" x="750" y="496" text-anchor="middle">Schedule · People</text>
+  <text class="t" x="750" y="472" text-anchor="middle">Gatsby Rotas data</text>
+  <text class="s" x="750" y="496" text-anchor="middle">Schedule · People · rules</text>
   <text class="s" x="750" y="514" text-anchor="middle">the source of truth</text>
 
   <!-- edges -->
@@ -107,11 +107,11 @@
   <path class="edge" d="M475,292 V428" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
 
   <path class="edge" d="M520,292 V375 H700 V428" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <rect class="on-bg" x="576" y="368" width="70" height="15"/>
-  <text class="l" x="611" y="379" text-anchor="middle">every hour</text>
+  <rect class="on-bg" x="571" y="368" width="80" height="15"/>
+  <text class="l" x="611" y="379" text-anchor="middle">reads · writes</text>
 
   <path class="edge" d="M800,292 V428" marker-end="url(#arrow)"/>
-  <text class="l" x="810" y="382">reads</text>
+  <text class="l" x="810" y="382">via the library</text>
 
   <path class="edge dash" d="M90,66 H32 V480 H88" marker-end="url(#arrow)"/>
   <g transform="translate(32,300) rotate(-90)">

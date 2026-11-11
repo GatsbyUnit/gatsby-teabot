@@ -1,6 +1,6 @@
-// this function periodically syncs current people in Notion with Google, by
-// 1. making sure that all active people in Notion have a corresponding away date sheet
-// 2. making sure that all active people appear in the notion email mapping sheet
+// this function periodically syncs current people in the rota data (the bot's sheet) with Google, by
+// 1. making sure that all active people have a corresponding away date sheet
+// 2. making sure that all active people appear in the identity sheet
 // 3. saving the current list of people to old format
 
 function sync_people_wrapper() {
@@ -56,7 +56,7 @@ function sync_people(admin_email, constants){
     return;    
   }
 
-  /* get people from notion */
+  /* get people from the rota data */
   var params = {
     'headers':{
       'Authorization': 'Bearer ' + notion_token + '',
@@ -133,13 +133,13 @@ function sync_identity_sheet(people, admin_email, constants){
 
       // Match either:
       // 1. exact old URL
-      // 2. Notion page ID extracted from old URL
+      // 2. the person id in the old address
       if (same_exact_url || same_id_from_old_url) {
         found_person = true;
         people[p]['found_in_mapping_sheet'] = true;
 
         // Keep column C email untouched.
-        // But refresh URL/name so future runs use the current Notion URL.
+        // But refresh URL/name so future runs use the current address (on the site).
         var title = get_notion_person_title(people[p]);
 
         if (notion_url && mapping_sheet.getRange(current_sheet_row, 1).getValue() !== notion_url) {
@@ -196,7 +196,7 @@ function sync_identity_sheet(people, admin_email, constants){
   }
 
   // email
-  send_email(admin_email, 'Synced People with Notion-Email Mapping Sheet', 'Sync successful. ' + new_people_count.toString() + ' people added. '
+  send_email(admin_email, 'Synced People with the identity sheet', 'Sync successful. ' + new_people_count.toString() + ' people added. '
   + deleted_count.toString() + ' people deleted.', constants );
 }
 
@@ -242,7 +242,7 @@ function notion_id_from_url(url) {
     return normalise_notion_id(uuidMatches[uuidMatches.length - 1]);
   }
 
-  // Compact Notion page ID form:
+  // Compact id form:
   // 32 hexadecimal characters
   var compactMatches = s.match(/[0-9a-fA-F]{32}/g);
   if (compactMatches && compactMatches.length > 0) {
@@ -343,8 +343,10 @@ function sync_away_date_sheets(swc_cluster_bot_email, people, admin_email, notio
         var cluster_id =  "MISSING";
       }
 
-      // check if the file corresponds to the person
-      if ( notion_url === sheet_notion_url ){
+      // check if the file corresponds to the person: by id (H2 holds the person's address: on the site, or
+      // their old Notion page)
+      var sheet_id = notion_id_from_url(sheet_notion_url);
+      if ( notion_url === sheet_notion_url || (sheet_id !== '' && sheet_id === normalise_notion_id(notion_id)) ){
         found_person = true;
         people[p]['found_in_away_date_folder'] = true;
 
@@ -459,7 +461,7 @@ function fill_in_name_files(people, admin_email, names_file, rt_file, tt_file, t
     var position_select = people[p]['properties']['Position']['select'];
     if (position_select === null && active === true) {
       throw new Error(
-        'Missing Position for "' + title + '". Notion page: ' + people[p]['url']
+        'Missing Position for "' + title + '". On the site: ' + people[p]['url']
       );
     }
     var position = position_select === null ? '' : position_select['name'];
@@ -590,7 +592,7 @@ function send_http_request_sp(url, data, params, email, constants){
   params['muteHttpExceptions'] = true;
   params['payload'] = JSON.stringify(data);
 
-  var response = UrlFetchApp.fetch(url, params);
+  var response = TeaBot.store_fetch(url, params);  // the rota data sheet, through the automation (Store.js)
 
   var responseCode = response.getResponseCode();
   var responseBody = response.getContentText();
@@ -609,7 +611,7 @@ function send_http_request_sp(url, data, params, email, constants){
       results = results.concat(next_results); 
     }
   } else {
-    send_email(email, 'Notion API Failed When Syncing People', 'Notion does not seem to be responding. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
+    send_email(email, 'Rota data unavailable when syncing people', 'The rota data could not be read or written. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
   }
   return results;
 }

@@ -31,10 +31,10 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
   const mapping_sheet_id = constants['identity_mapping_id'];
 
   const talk_date_string = fmt_date(talk_date);
-  const slides_faq_link = 'https://www.notion.so/gcnu/Gatsby-Tea-System-2444835e8eab46fa9a7c792877e09620?pvs=4#b336808b691c4e25b407103950f50d6d';
+  const slides_faq_link = constants['site_url'] + '?p=tea-system#b336808b691c4e25b407103950f50d6d';  // "How do I add talk slides to the cluster?"
   
   /* 
-      get recent talks for people from Notion, assuming that there is only one talk per day
+      get recent talks for people from the rota data, assuming that there is only one talk per day
   */
   var data = {
 	  'filter': {
@@ -66,7 +66,7 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
   }
 
   /* 
-      get list of active people from Notion, including those excluded from schedule
+      get list of active people from the rota data, including those excluded from schedule
   */
   var data = {
 	  'filter': {
@@ -153,7 +153,7 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
       send_email(email_list.join(","), "REMINDER Please upload your slides", 
         "Hi,\n\n" +
         "Thank you for giving your talk today! \n\n" +
-        "Please update your talk title through the Notion site if you haven't already done so. \n\n" +
+        "Please update your talk title on your tea page if you haven't already done so. \n\n" +
         "Also, please upload your slides in PDF format to the cluster, as detailed below: \n" +
         slides_faq_link , constants, admin_email);
     }

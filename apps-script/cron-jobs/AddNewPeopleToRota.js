@@ -1,4 +1,4 @@
-// this function periodically adds people to rota. Periods of exemption differ according to their positions, for which the data is obtained from the Notion page.
+// this function periodically adds people to rota. Periods of exemption differ according to their positions, taken from the rota rules in the rota data (the bot's sheet).
 
 function add_new_people_to_rota_wrapper(){
   const constants = get_global_constants();
@@ -94,7 +94,7 @@ function add_new_people_to_rota(admin_email, constants) {
               'date': { 'on_or_before': fmt_date_for_notion(today_x_days_before) }
         });
 
-        // get people who fulfil the conditions from Notion
+        // get people who fulfil the conditions from the rota data
         var data = {
           'filter': {
             'and': and_conds
@@ -151,7 +151,7 @@ function send_http_request_anptr(url, data, params, email, constants){
   params['muteHttpExceptions'] = true;
   params['payload'] = JSON.stringify(data);
 
-  var response = UrlFetchApp.fetch(url, params);
+  var response = TeaBot.store_fetch(url, params);  // the rota data sheet, through the automation (Store.js)
 
   var responseCode = response.getResponseCode();
   var responseBody = response.getContentText();
@@ -170,7 +170,7 @@ function send_http_request_anptr(url, data, params, email, constants){
       results = results.concat(next_results); 
     }
   } else {
-    send_email(email, 'Notion API Failed When Adding New People to Rota', 'Notion does not seem to be responding. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
+    send_email(email, 'Rota data unavailable when adding new people to rota', 'The rota data could not be read or written. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
   }
   return results;
 }

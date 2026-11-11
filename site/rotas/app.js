@@ -1,6 +1,6 @@
 // Gatsby Rotas: the unit's talk, tea and coffee rotas and the guides to them, at site/rotas/ next to the tea
-// page. The tea bot (apps-script/automation/Site.js) keeps the pages and reads the rota data live from Notion;
-// tsars edit both here (edit.js). Nothing is shown that the bot hasn't just confirmed. No build step.
+// page. The tea bot (apps-script/automation/Site.js) keeps the pages and the rota data; tsars edit both here
+// (edit.js). Nothing is shown that the bot hasn't just confirmed. No build step.
 'use strict';
 
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -8,7 +8,6 @@ const CONFIG = {
   // the tea page's back end (apps-script/page); locally, the stand-in from gatsby-rotas/tools/dev_server.py
   api: LOCAL ? 'api' : 'https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec',
   teaPage: '../',
-  notionSite: 'https://gcnu.notion.site/',
   rememberDays: 182,
   timeZone: 'Europe/London',
 };
@@ -46,6 +45,7 @@ function href(query = {}, hash = '') {
 }
 const pageHref = (slug, hash) => href({ p: slug }, hash);
 const personHref = (id) => href({ person: id });
+const slotHref = (id) => href({ slot: id });
 
 // ---------- signing in ----------
 // The bot hands out pages and data only for the unit key (PAGE_KEY) or a member's own token. A browser gets
@@ -221,8 +221,7 @@ async function waitFor(promise, label, ms) {
 
 async function show(y = 0) {
   params = new URLSearchParams(location.search);
-  const person = params.get('person');
-  renderNav(person ? '' : params.get('p') || 'home');
+  renderNav(params.get('person') || params.get('slot') ? '' : params.get('p') || 'home');
   const job = async () => {
     await route();
     renderAccount();
@@ -300,14 +299,15 @@ const keyDate = (key) => new Date(key + 'T12:00:00Z');
 
 // ---------- page content ----------
 
-// A Notion address -> where it goes here: our pages and people stay on the site, other pages open on Notion.
+// A page, person or block id written as an address ("/<id>", or the old Notion form) -> where it is on the site;
+// an id the site does not know leaves the text unlinked.
 function resolveHref(url) {
   const u = String(url || '');
   const ids = u.replace(/-/g, '').match(/[0-9a-f]{32}/g);
   if (!ids || !/^(\/|https?:\/\/([\w-]+\.)?notion\.(so|site))/.test(u)) return u;
   const anchor = (u.split('#')[1] || '').replace(/-/g, '');
   const id = u.includes('#') ? u.split('#')[0].replace(/-/g, '').match(/[0-9a-f]{32}/g)?.pop() : ids[ids.length - 1];
-  return targetHref(id, /^[0-9a-f]{32}$/.test(anchor) ? anchor : '') || CONFIG.notionSite + id + (anchor ? '#' + anchor : '');
+  return targetHref(id, /^[0-9a-f]{32}$/.test(anchor) ? anchor : '');
 }
 
 function targetHref(id, anchor = '') {
@@ -330,11 +330,12 @@ function rich(rt) {
     if (r.b) h = `<strong>${h}</strong>`;
     if (r.color && COLOURS.test(r.color)) h = `<span class="nc-${r.color}" data-color="${r.color}">${h}</span>`;
     if (r.page) {
-      const to = targetHref(r.page) || CONFIG.notionSite + r.page;
-      return `<a href="${esc(to)}" data-page="${r.page}"${to.startsWith('http') ? ' target="_blank" rel="noopener"' : ''}>${h}</a>`;
+      const to = targetHref(r.page);
+      return to ? `<a href="${esc(to)}" data-page="${r.page}">${h}</a>` : h;
     }
     if (r.href) {
       const to = resolveHref(r.href);
+      if (!to) return h;
       const external = /^(https?:|mailto:)/i.test(to);
       return `<a href="${esc(to)}" data-href="${esc(r.href)}"${external ? ' target="_blank" rel="noopener"' : ''}>${h}</a>`;
     }
@@ -344,7 +345,7 @@ function rich(rt) {
 
 const plain = (rt) => (rt || []).map((r) => r.text).join('');
 
-// The site's blocks (see Site.js: to_site_block) -> HTML. Every block keeps its Notion id, for links to it
+// The site's blocks (see Site.js: to_site_block) -> HTML. Every block keeps its id, for links to it
 // and for the editor.
 function renderBlocks(blocks) {
   let html = '';
@@ -395,9 +396,8 @@ function renderBlock(b) {
     case 'bookmark': return `<p class="bookmark" ${at}><a href="${esc(b.url)}" target="_blank" rel="noopener">${b.caption?.length ? rich(b.caption) : esc(b.url)}</a></p>`;
     case 'page': {
       const page = Object.values(bundle.pages).find((p) => p.id === b.page);
-      const to = page ? pageHref(page.slug) : CONFIG.notionSite + b.page;
-      const title = page?.title || b.title || 'Page on Notion';
-      return `<p class="page-link" ${at}><a href="${esc(to)}"${page ? '' : ' target="_blank" rel="noopener"'}>${page?.icon ? `<span aria-hidden="true">${esc(page.icon)}</span> ` : ''}${esc(title)}</a></p>`;
+      if (!page) return b.title ? `<p class="page-link" ${at}>${esc(b.title)}</p>` : '';
+      return `<p class="page-link" ${at}><a href="${esc(pageHref(page.slug))}">${page.icon ? `<span aria-hidden="true">${esc(page.icon)}</span> ` : ''}${esc(page.title)}</a></p>`;
     }
     case 'view': return `<span class="anchor" id="v-${b.view}"></span><div class="view view-${b.view}" ${at} data-view="${b.view}"></div>`;
     default: return '';
@@ -415,8 +415,8 @@ function initials(name) {
   return [words[0], words.length > 1 && words[words.length - 1]].filter(Boolean).map((w) => Array.from(w)[0]).join('').toUpperCase();
 }
 
-// People's photos: the bot keeps them (api_site_photos), fetched again only when their version changes; until a
-// person has one there, their Notion page icon. 'none': no photo.
+// People's photos: the bot keeps them (api_site_photos), fetched again only when their version changes. 'none' or
+// none at all: no photo.
 const PHOTOS = 'gatsby-rotas-photos';
 let photos = {};
 
@@ -437,7 +437,7 @@ async function loadPhotos() {
 function photoOf(p) {
   const own = photos[p.id];
   if (own === 'none') return null;
-  return own ? { src: own, alt: [] } : p.photo ? { src: p.photo, alt: [].concat(p.photo_alt || []) } : null;
+  return own ? { src: own, alt: [] } : null;
 }
 
 // A person's photo in a round frame; without one (or when it fails to load), their initials.
@@ -541,6 +541,7 @@ const VIEWS = {
   schedule: scheduleView,
   people: peopleView,
   'rota-rules': rotaRulesView,
+  slot: slotView,
 };
 
 function nextUpView(el, d) {
@@ -762,7 +763,7 @@ function rotaRulesView(el) {
   draw();
 }
 
-// plain text from a Notion text property: line breaks kept, addresses made into links
+// plain text from a text field: line breaks kept, addresses made into links
 const linkify = (text) => esc(text).replace(/https?:\/\/[^\s<]+[^\s<.,;:)]/g, (u) => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g, '<br>');
 
 function redrawViews() {
@@ -794,7 +795,7 @@ function renderNav(active) {
 async function renderPage(slug) {
   const main = $('#main');
   await loadBundle();
-  const page = bundle.pages[slug] || (slug === 'home' && { id: '', slug, title: 'Gatsby Rotas', error: 'The pages are being moved here from Notion.' });
+  const page = bundle.pages[slug] || (slug === 'home' && { id: '', slug, title: 'Gatsby Rotas', error: 'The pages could not be loaded.' });
   if (!page) return notFound();
   document.title = slug === 'home' ? 'Gatsby Rotas' : `${page.title || slug} · Gatsby Rotas`;
   main.className = `page page-${slug}`;
@@ -812,7 +813,7 @@ async function renderPage(slug) {
     // "Next up" is the site's own; it goes above the first heading.
     const at = Math.max(0, blocks.findIndex((b) => /^h[123]$/.test(b.type)));
     blocks = [...blocks.slice(0, at), { id: 'next-up', type: 'view', view: 'next-up' }, ...blocks.slice(at)];
-    // should Notion ever leave out its linked database views, the site's own still appear
+    // should a page edit ever drop a view, the site's own still appear
     const has = (v) => JSON.stringify(blocks).includes(`"view":"${v}"`);
     for (const [v, title] of [['rota-rules', 'You are added to the rota when'], ['schedule', 'Schedule'], ['people', 'People']]) {
       if (!has(v)) blocks.push({ id: v, type: 'h1', rt: [{ text: title }] }, { id: `${v}-view`, type: 'view', view: v });
@@ -863,6 +864,37 @@ async function renderPerson(id) {
       ${past.length ? `<h2>Recently</h2><ol class="slots slots-past">${past.map((x) => slotItem(x, d)).join('')}</ol>` : ''}
     </article>`;
   footerMeta();
+}
+
+// One slot, the address the bot's emails link to (?slot=<id>): as on the schedule, its details open; tsars edit
+// it here too (edit.js redraws the view).
+async function renderSlot(id) {
+  const main = $('#main');
+  main.className = 'page page-slot';
+  await loadBundle();
+  const s = loadData().slots.find((x) => x.id === id);
+  if (!s) return notFound();
+  document.title = `${TYPES[s.type].label}, ${F.date.format(s.startDate)} · Gatsby Rotas`;
+  main.innerHTML = `<header class="page-head"><p class="crumbs"><a href="${pageHref('home')}">Gatsby Rotas</a> › <a href="${pageHref('home', 'v-schedule')}">Schedule</a></p>
+      <h1>${esc(TYPES[s.type].label)}, ${esc(s.allDay ? `week of ${F.date.format(s.startDate)}` : F.full.format(s.startDate))}</h1></header>
+    <article class="prose">
+      <div class="view view-slot" data-view="slot" data-slot-id="${esc(id)}"></div>
+      <p class="hint">Away, or need to swap? Use <a href="${esc(CONFIG.teaPage)}">your tea page</a>.</p>
+    </article>`;
+  mountViews(main);
+  footerMeta();
+}
+
+function slotView(el, d) {
+  const draw = () => {
+    const dd = d || loadData();
+    d = null;
+    const s = dd.slots.find((x) => x.id === el.dataset.slotId);
+    el.innerHTML = s ? `<ol class="slots">${slotItem(s, dd, nextTalk(dd)?.id)}</ol>` : '<p class="empty">This slot has been removed.</p>';
+    $('.slot-desc', el)?.setAttribute('open', '');
+  };
+  el.redraw = draw;
+  draw();
 }
 
 function notFound() {
@@ -1003,7 +1035,9 @@ function loadScript(src) {
 async function route() {
   const person = params.get('person');
   const slug = params.get('p') || 'home';
+  const slot = params.get('slot');
   if (person) await renderPerson(person.replace(/-/g, ''));
+  else if (slot) await renderSlot(slot.replace(/-/g, ''));
   else if (!/^[a-z0-9-]+$/.test(slug)) notFound();
   else await renderPage(slug);
 }
@@ -1030,5 +1064,5 @@ api('api_page_icon').then((url) => {
 window.Rotas = {
   CONFIG, TYPES, api, session, hooks, esc, rich, plain, renderBlocks, loadData, keep, redrawViews, route,
   setPhoto: (id, uri, version) => { photos = { ...photos, [id]: uri || 'none' }; if (bundle) bundle.photos_version = version; store.set(PHOTOS, { version, photos }); renderAccount(); },
-  bundle: () => bundle, mountViews, footerMeta, avatar, personHref, pageHref, initials,
+  bundle: () => bundle, mountViews, footerMeta, avatar, personHref, pageHref, slotHref, initials,
 };

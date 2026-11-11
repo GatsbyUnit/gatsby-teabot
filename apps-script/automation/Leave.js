@@ -1,9 +1,9 @@
 // Leaving the tea system: the "Leave the tea system (no longer a member of the Unit)" link at the end of every
-// bot email. It only concerns the tea system: the person is marked inactive in Notion (no more scheduling),
+// bot email. It only concerns the tea system: the person is marked inactive (no more scheduling),
 // their registered email and tea-page code are cleared (no more emails from the bot or the Cron Jobs), their
 // open swap requests are dropped, and the tea tsar gets an email (organisers of slots they still hold in cc).
-// Gatsby's mailing lists are not touched. To come back, the tea tsar ticks Active on their Notion page and
-// fills in their email again.
+// Gatsby's mailing lists are not touched. To come back, the tea tsar ticks Active on their page on the site
+// and fills in their email again.
 //
 // Links in emails are opened by mail scanners, so leaving takes one click on the page, but no confirmation
 // by email: people who left the Unit often can't read their university address any more. An email to several
@@ -107,15 +107,15 @@ function leave_tea_system(ctx, how){
   var cc = rows.map(function(r){ return admin_email_for_type(r.type, ctx.constants); })
     .filter(function(o, i, a){ return o && o !== tsar && a.indexOf(o) === i; });
   var blocks = [
-    me.name + ' has left the Gatsby tea system (no longer a member of the Unit), using the link at the end of the bot\'s emails. They are now inactive in Notion, so they will not be scheduled again, and the bot no longer emails them.',
+    me.name + ' has left the Gatsby tea system (no longer a member of the Unit), using the link at the end of the bot\'s emails. They are now inactive, so they will not be scheduled again, and the bot no longer emails them.',
     how === 'own link' ? 'They used their personal link.' : 'They picked their name on the tea page, which anyone could do. If this looks wrong, undo it (below) and let them know.'
   ];
   if (rows.length){
-    blocks.push('They still hold these slots. Please give them to someone else: in Notion or the calendar, or for tentative slots with "Fill … again" on the tea page after clearing them' + (cc.length ? ' (the organisers are in cc)' : '') + '.');
+    blocks.push('They still hold these slots. Please give them to someone else: on the site or in the calendar, or for tentative slots with "Fill … again" on the tea page after clearing them' + (cc.length ? ' (the organisers are in cc)' : '') + '.');
     blocks.push({items: rows.map(function(r){ return '[' + slot_line(r, me.id) + '](' + r.url + ')'; })});
   } else {
     blocks.push('They had no upcoming slots.');
   }
-  blocks.push('To undo: tick Active on their Notion page and put their email back in column C of the identity sheet.');
+  blocks.push('To undo: tick Active on their page on the site and put their email back in column C of the identity sheet.');
   send_mail(tsar || ctx.constants['tnjc_admin_email'], me.name + ' has left the tea system', blocks, ctx.constants, cc.length ? {cc: cc.join(',')} : {});
 }

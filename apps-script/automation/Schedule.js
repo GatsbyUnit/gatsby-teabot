@@ -1,4 +1,4 @@
-// Reading the Notion Schedule database, and the calendar title formats the old scripts use.
+// Reading the Schedule table of the rota data, and the calendar title formats the old scripts use.
 
 const TZ = 'Europe/London';
 const GUEST_PROP = 'Guest speaker';
@@ -9,7 +9,7 @@ const GUEST_TYPES = ['TNJC', 'MLJC'];
 // slots an organiser can cancel by deleting or renaming the calendar event
 const CALENDAR_CANCEL_TYPES = PRESENTER_TYPES.concat(['Just Tea']);
 
-// which Notion relations a slot's calendar title shows
+// which relations (people) a slot's calendar title shows
 function roles_for_type(type){
   if (type === 'TNJC' || type === 'MLJC') return ['Presenter'];
   if (type === 'Coffee Cleaning' || type === 'Just Tea') return ['Tea'];
@@ -99,7 +99,7 @@ function parse_title(title, type){
 
 // events marked as cancelled by hand are left alone (no change, no email)
 // A label written by hand ("UPGRADE TALK: …", "ROTATION TALK: …") survives when the bot rewrites the names
-// of a talk's event (after a swap or an edit in Notion).
+// of a talk's event (after a swap or an edit on the site).
 function keep_label(current, expected, type){
   if (!current || ['Research Talk', 'Tea Talk', 'Leaving Tea', 'External Seminar'].indexOf(type) < 0) return expected;
   var label = String(current).trim().match(/^([^:]{1,40}?)\s*:/);
@@ -132,7 +132,7 @@ function notion_role_names(row, role, people){
   return names_of(row.tea_ids, people);
 }
 
-// the calendar title shows the same people as Notion, whatever the exact formatting
+// the calendar title shows the same people as the slot, whatever the exact formatting
 function titles_agree(parsed, row, people){
   return Object.keys(parsed.roles).every(function(role){
     return same_names(parsed.roles[role], notion_role_names(row, role, people));

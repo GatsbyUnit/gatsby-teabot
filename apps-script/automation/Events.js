@@ -40,7 +40,7 @@ function event_description(row, ctx){
   return d;
 }
 
-// creates the event and stores its ID in Notion (plus any extra Notion properties, in the same call)
+// creates the event and stores its ID in the slot's row (plus any other fields, in the same call)
 function create_event(row, ctx, extra_props){
   var title = format_title(row, ctx.people);
   var end = row.end || new Date(row.start.getTime() + 3600 * 1000);
@@ -83,7 +83,7 @@ function finalise_rota(rota, email_group, ctx){
   return rows.length;
 }
 
-// Swap one person's duty in a slot for another person: Notion, calendar, and one email to both.
+// Swap one person's duty in a slot for another person: rota data, calendar, and one email to both.
 // Returns a short message for the person who asked; throws with a readable message if not possible.
 function validate_swap(row, duty, from_id, to_id, ctx){
   var ids = duty === 'tea' ? row.tea_ids : row.presenter_ids;
@@ -125,13 +125,13 @@ function apply_swap(row, duty, from_id, to_id, ctx){
 
 function swap_done_blocks(row, what, from_name, to_name){
   return [
-    'The ' + what + ' for this slot has been swapped. Notion and the shared calendar are updated.',
+    'The ' + what + ' for this slot has been swapped. The site and the shared calendar are updated.',
     {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Before', from_name], ['Now', to_name]]},
-    '[Open in Notion](' + row.url + ')'
+    '[Open on the site](' + row.url + ')'
   ];
 }
 
-// Cancelling a talk, a last resort: swapping is always better. The slot stays in Notion, titled "Cancelled",
+// Cancelling a talk, a last resort: swapping is always better. The slot stays on the site, titled "Cancelled",
 // without its presenter, so they keep their turn and are scheduled again soon; tea duty stays. A just tea
 // (cancelled in the calendar only) loses its tea people instead, who keep their turn. how.source is 'page'
 // (the presenter on their tea page, with how.by and how.reason), 'deleted' or 'renamed' (by hand in the
@@ -177,6 +177,6 @@ function cancel_slot(row, ctx, how){
   ];
   if (bumped.length) blocks.push('The ' + role + ' is no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
   if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
-  blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + role + ' back in Notion, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
+  blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + role + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
   send_mail(to.length ? to.join(',') : organiser, 'Cancelled: ' + row.type + ' on ' + fmt_day(row.start), blocks, ctx.constants, to.length ? {reply_to: organiser, cc: organiser} : {});
 }

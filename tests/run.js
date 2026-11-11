@@ -422,12 +422,10 @@ t('site: removing a slot deletes its calendar event after the row; invited guest
   } finally { site_restore(); get_settings = saved[0]; Calendar = saved[1]; __props = {}; }
 });
 t('site: every write drops the site copy of the data, reads keep it', () => {
-  var saved = [store_mode, notion_http, store_mirror, CacheService];
+  var saved = [store_request, CacheService];
   var removed = [];
   try {
-    store_mode = () => 'notion';
-    notion_http = () => ({});
-    store_mirror = () => {};
+    store_request = () => ({});
     CacheService = {getScriptCache: () => ({remove: (k) => removed.push(k)})};
     REAL.notion_request('post', 'databases/db/query', {}, {});
     REAL.notion_request('get', 'pages/x', null, {});
@@ -435,7 +433,7 @@ t('site: every write drops the site copy of the data, reads keep it', () => {
     REAL.notion_request('patch', 'pages/x', {}, {});
     REAL.notion_request('post', 'pages', {}, {});
     assert.deepStrictEqual(removed, ['site:data', 'site:data']);
-  } finally { store_mode = saved[0]; notion_http = saved[1]; store_mirror = saved[2]; CacheService = saved[3]; }
+  } finally { store_request = saved[0]; CacheService = saved[1]; }
 });
 t('site: a rota tsar can only tick their own rota on people, and only edit their own slots', () => {
   site_stubs('tnjc@x');
@@ -478,6 +476,7 @@ FakeSheet.prototype.getLastColumn = function(){ return this.cells.reduce((m, r) 
 FakeSheet.prototype.getRange = function(r, c, nr, nc){
   var sh = this; nr = nr || 1; nc = nc || 1;
   var range = {
+    getValue: () => range.getValues()[0][0],
     getValues: () => { var out = []; for (var i = 0; i < nr; i++){ var row = []; for (var j = 0; j < nc; j++) row.push(((sh.cells[r - 1 + i] || [])[c - 1 + j]) ?? ''); out.push(row); } return out; },
     setValues: (v) => { v.forEach((row, i) => { var t = sh.cells[r - 1 + i] = sh.cells[r - 1 + i] || []; row.forEach((x, j) => { t[c - 1 + j] = String(x); }); }); return range; },
     setValue: (x) => range.setValues([[x]]),
@@ -519,61 +518,67 @@ var STORE_NOTION = {
   cccccccccccccccccccccccccccccccc: {schema: {Type: {id: 'title', type: 'title'}}, pages: []}
 };
 var store_saved = {};
-function store_stubs(mode, mirror){
-  store_saved = {gc: get_global_constants, gs: get_settings, nh: notion_http, est: ensure_settings_tabs, ss: SpreadsheetApp, ss2: set_setting,
+// the rota data sheet as the move left it: every Notion row copied, formulas left behind (what the one-off import did)
+function store_fill(book){
+  var schema = {};
+  Object.keys(STORE_TABS).forEach(function(k){
+    var name = STORE_TABS[k], db = STORE_DBS[k], props = {};
+    Object.keys(STORE_NOTION[db].schema).forEach(function(n){
+      var def = STORE_NOTION[db].schema[n];
+      if (STORE_TYPES.indexOf(def.type) < 0) return;
+      props[n] = {id: def.id, type: def.type};
+      if (def.type === 'select') props[n].options = def.select.options.map(o => o.name);
+    });
+    schema[name] = {db: db, properties: props};
+    var header = STORE_META.slice();
+    Object.keys(props).forEach(n => { header.push(n); if (props[n].type === 'date') header.push(n + ' end'); });
+    var tab = {name: name, header: header, col: {}};
+    header.forEach((h, i) => { tab.col[h] = i; });
+    book.insertSheet(name).cells = [header].concat(STORE_NOTION[db].pages.map(pg => store_row_from_page(tab, pg, header.map(() => ''), {schema: schema})));
+  });
+  book.insertSheet('Schema');
+  store_save_schema({ss: book, schema: schema});
+}
+function store_stubs(){
+  store_saved = {gc: get_global_constants, gs: get_settings, nh: notion_http, ss: SpreadsheetApp,
                  nr: notion_request, np: notion_patch_page, gp: notion_get_page, nq: notion_query, tr: to_row};
   notion_request = REAL.notion_request; notion_patch_page = REAL.notion_patch_page; notion_get_page = REAL.notion_get_page; notion_query = REAL.notion_query; to_row = REAL.to_row;
   var book = new FakeBook(), calls = [];
-  SpreadsheetApp = {openById: (id) => book, create: () => book, ProtectionType: {SHEET: 'SHEET'}};
-  __props.STORE_SHEET_ID = '';
-  delete __props.STORE_SHEET_ID;
-  set_setting = (k, v) => { __props[k] = v; };
-  ensure_settings_tabs = () => {};
+  store_fill(book);
+  SpreadsheetApp = {openById: (id) => book, ProtectionType: {SHEET: 'SHEET'}};
+  __props.STORE_SHEET_ID = 'book';
   get_global_constants = () => Object.assign({notion_token: 't'}, STORE_DBS);
-  get_settings = () => ({STORE: mode, NOTION_MIRROR: mirror ? 'TRUE' : 'FALSE'});
+  get_settings = () => ({PAGE_URL: 'https://gatsbyunit.github.io/gatsby-teabot/'});
   notion_http = function(method, path, body){
     calls.push(method + ' ' + path);
     var m;
-    if (method === 'get' && (m = path.match(/^databases\\/(\\w+)$/))) return {properties: STORE_NOTION[m[1]].schema};
     if (method === 'post' && (m = path.match(/^databases\\/(\\w+)\\/query$/))) return {results: STORE_NOTION[m[1]].pages, has_more: false};
-    if (method === 'patch' && (m = path.match(/^pages\\/([\\w-]+)$/))){ var pg = JSON.parse(JSON.stringify(STORE_NOTION.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.pages[0])); Object.assign(pg.properties, body.properties); return pg; }
-    if (method === 'post' && path === 'pages') return Object.assign(slot_page('44444444444444444444444444444444', body.properties.Date.date.start, 'MLJC', []), {});
     throw new Error('unexpected ' + method + ' ' + path);
   };
   store_cache = null;
   return {book: book, calls: calls};
 }
 function store_restore(){
-  get_global_constants = store_saved.gc; get_settings = store_saved.gs; notion_http = store_saved.nh; ensure_settings_tabs = store_saved.est;
-  SpreadsheetApp = store_saved.ss; set_setting = store_saved.ss2; store_cache = null; delete __props.STORE_SHEET_ID;
+  get_global_constants = store_saved.gc; get_settings = store_saved.gs; notion_http = store_saved.nh;
+  SpreadsheetApp = store_saved.ss; store_cache = null; delete __props.STORE_SHEET_ID;
   notion_request = store_saved.nr; notion_patch_page = store_saved.np; notion_get_page = store_saved.gp; notion_query = store_saved.nq; to_row = store_saved.tr;
 }
-t('store: the import copies every row and field, leaving formulas behind; its tabs warn against hand edits', () => {
-  var st = store_stubs('notion', false);
-  try {
-    store_import_from_notion();
-    var tab = st.book.getSheetByName('Schedule').cells;
-    assert.deepStrictEqual(tab[0], ['id', 'archived', 'created', 'edited', 'icon', 'Title', 'Date', 'Date end', 'Type', 'Presenter', 'Tea', 'CSNJC']);
-    assert.strictEqual(tab.length, 4);
-    assert.strictEqual(tab[2][5], 'Spikes');
-    assert.strictEqual(tab[1][9], 'dddddddddddddddddddddddddddddddd');
-    assert.strictEqual(st.book.getSheetByName('Sheet1'), null);
-    st.book.getSheets().forEach(function(sh){
-      assert.strictEqual(sh.tab_colour, '#cc0000', sh.name);
-      assert.ok(/DO NOT EDIT BY HAND/.test(sh.note), sh.name);
-      assert.strictEqual(sh.protection.warning_only, true, sh.name);
-    });
-    var before = st.book.getSheetByName('Schedule').protection;
-    store_import_from_notion();
-    assert.strictEqual(st.book.getSheetByName('Schedule').protection, before);
-  } finally { store_restore(); }
+t('store: the bot\\'s sheets warn against hand edits, once', () => {
+  var sh = new FakeSheet('Schedule'), saved = SpreadsheetApp;
+  sh.cells = [['id', 'Title']];
+  SpreadsheetApp = {ProtectionType: {SHEET: 'SHEET'}};
+  try { guard_sheet(sh); } finally { SpreadsheetApp = saved; }
+  assert.strictEqual(sh.tab_colour, '#cc0000');
+  assert.ok(/DO NOT EDIT BY HAND/.test(sh.note));
+  assert.strictEqual(sh.protection.warning_only, true);
+  var before = sh.protection;
+  SpreadsheetApp = {ProtectionType: {SHEET: 'SHEET'}};
+  try { guard_sheet(sh); } finally { SpreadsheetApp = saved; }
+  assert.strictEqual(sh.protection, before);
 });
-t('store: queries answered from the sheet, in Notion\\'s format (filters, sorts, paging)', () => {
-  var st = store_stubs('notion', false);
+t('store: queries answered from the sheet, in Notion\\'s format (filters, sorts, paging); Notion never asked', () => {
+  var st = store_stubs();
   try {
-    store_import_from_notion();
-    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'FALSE'});
-    store_cache = null;
     var c = get_global_constants();
     var ids = (f, sorts) => notion_query(STORE_DBS.notion_talk_db_id, f, sorts, c).map(p => normalise_id(p.id).slice(0, 1));
     assert.deepStrictEqual(ids({property: 'Date', date: {on_or_after: '2026-11-17'}}), ['2']);
@@ -584,68 +589,138 @@ t('store: queries answered from the sheet, in Notion\\'s format (filters, sorts,
     assert.strictEqual(last.results.length, 1); assert.strictEqual(last.has_more, true);
     var row = to_row(notion_get_page('22222222222222222222222222222222', c));
     assert.deepStrictEqual([row.title, row.type, row.presenter_ids[0], row.start.toISOString()], ['Spikes', 'TNJC', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', '2026-11-17T13:30:00.000Z']);
-    assert.strictEqual(st.calls.filter(x => /query/.test(x)).length, 3);  // only the import asked Notion
+    assert.deepStrictEqual(st.calls, []);
   } finally { store_restore(); }
 });
-t('store: changes in the sheet (Notion left alone without the mirror); archived rows drop out', () => {
-  var st = store_stubs('notion', false);
+t('store: changes go into the sheet only; archived rows drop out', () => {
+  var st = store_stubs();
   try {
-    store_import_from_notion();
-    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'FALSE'});
-    store_cache = null;
-    var c = get_global_constants(), before = st.calls.length;
+    var c = get_global_constants();
     notion_patch_page('11111111-1111-1111-1111-111111111111', {Title: {title: [{text: {content: 'New title'}}]}, Tea: {relation: [{id: 'ffffffff-ffff-ffff-ffff-ffffffffffff'}]}}, c);
     var made = notion_request('post', 'pages', {parent: {database_id: STORE_DBS.notion_talk_db_id}, properties: {Type: {select: {name: 'MLJC'}}, Date: {date: {start: '2026-12-01'}}}}, c);
     notion_request('patch', 'pages/22222222222222222222222222222222', {archived: true}, c);
-    assert.strictEqual(st.calls.length, before);
+    assert.deepStrictEqual(st.calls, []);
     store_cache = null;  // as the next run sees it
     var rows = notion_query(STORE_DBS.notion_talk_db_id, null, [{property: 'Date', direction: 'ascending'}], c).map(to_row);
     assert.deepStrictEqual(rows.map(r => r.id.slice(0, 1)), ['3', '1', normalise_id(made.id).slice(0, 1)]);
+    assert.ok(/^[0-9a-f]{32}$/.test(normalise_id(made.id)));
     assert.strictEqual(rows[1].title, 'New title');
     assert.deepStrictEqual(rows[1].tea_ids, ['ffffffffffffffffffffffffffffffff']);
   } finally { store_restore(); }
 });
-t('store: with Notion as the store its changes are copied into the sheet; mirrored the other way round too', () => {
-  var st = store_stubs('notion', false);
+t('store: a change writes only its own cells; a new row goes after rows another run added meanwhile', () => {
+  var st = store_stubs();
   try {
-    store_import_from_notion();
-    store_cache = null;
     var c = get_global_constants();
-    notion_patch_page('11111111111111111111111111111111', {Title: {title: rt('Copied')}}, c);
-    store_cache = null;
-    assert.strictEqual(st.book.getSheetByName('Schedule').cells[1][5], 'Copied');
-    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'TRUE'});
-    store_cache = null;
-    var made = notion_request('post', 'pages', {parent: {database_id: STORE_DBS.notion_talk_db_id}, properties: {Date: {date: {start: '2026-12-08T13:30:00+00:00'}}}}, c);
-    assert.strictEqual(normalise_id(made.id), '44444444444444444444444444444444');  // Notion's id, so both agree
-    assert.ok(st.calls.indexOf('post pages') >= 0);
-    assert.strictEqual(st.book.getSheetByName('Schedule').cells.length, 5);
+    notion_get_page('11111111111111111111111111111111', c);  // this run has read the tab
+    var cells = st.book.getSheetByName('Schedule').cells;
+    cells[1][8] = 'MLJC';  // another run changes the type meanwhile
+    cells.push(cells[3].slice()); cells[4][0] = '55555555555555555555555555555555'; cells[4][5] = 'Added elsewhere';
+    notion_patch_page('11111111111111111111111111111111', {Title: {title: rt('Mine')}}, c);
+    assert.deepStrictEqual([cells[1][5], cells[1][8]], ['Mine', 'MLJC']);
+    var made = notion_request('post', 'pages', {parent: {database_id: STORE_DBS.notion_talk_db_id}, properties: {Title: {title: rt('New')}, Date: {date: {start: '2026-12-01'}}}}, c);
+    assert.strictEqual(cells.length, 6);
+    assert.deepStrictEqual([cells[4][5], cells[5][5]], ['Added elsewhere', 'New']);
+    assert.strictEqual(normalise_id(made.id), cells[5][0]);
+    assert.strictEqual(notion_get_page('55555555555555555555555555555555', c).properties.Title.title[0].plain_text, 'Added elsewhere');
   } finally { store_restore(); }
 });
-t('store: the Cron Jobs get Notion-like answers from the sheet', () => {
-  var st = store_stubs('notion', false);
+t('store: rows link to the slot or person on the site, and the ids come back out of those addresses', () => {
+  var st = store_stubs();
   try {
-    store_import_from_notion();
-    get_settings = () => ({STORE: 'sheet', NOTION_MIRROR: 'FALSE'});
-    store_cache = null;
-    var res = store_fetch('https://api.notion.com/v1/databases/' + STORE_DBS.notion_talk_db_id + '/query', {method: 'post', payload: JSON.stringify({filter: {property: 'Date', date: {on_or_before: '2026-11-10'}}})});
+    var c = get_global_constants();
+    var slot = notion_get_page('11111111111111111111111111111111', c);
+    assert.strictEqual(slot.url, 'https://gatsbyunit.github.io/gatsby-teabot/rotas/?slot=11111111111111111111111111111111');
+    assert.strictEqual(to_row(slot).url, slot.url);
+    var person = notion_request('post', 'pages', {parent: {database_id: STORE_DBS.notion_people_db_id}, properties: {Name: {title: rt('Lena Weber')}, Active: {checkbox: true}}}, c);
+    assert.strictEqual(person.url, 'https://gatsbyunit.github.io/gatsby-teabot/rotas/?person=' + normalise_id(person.id));
+    assert.strictEqual(id_from_notion_url(person.url), normalise_id(person.id));
+    assert.strictEqual(id_from_notion_url('https://gatsbyunit.github.io/gatsby-teabot/rotas/?slot=11111111111111111111111111111111&mode=dark'), '11111111111111111111111111111111');
+    assert.strictEqual(id_from_notion_url('https://www.notion.so/Lena-Weber-0123456789abcdef0123456789abcdef?pvs=4'), '0123456789abcdef0123456789abcdef');
+    assert.strictEqual(id_from_notion_url('https://www.notion.so/0123456789abcdef0123456789abcdef'), '0123456789abcdef0123456789abcdef');
+    assert.strictEqual(id_from_notion_url('https://gatsbyunit.github.io/gatsby-teabot/rotas/'), '');
+  } finally { store_restore(); }
+});
+t('store: the Cron Jobs get Notion-like answers from the sheet, and their changes land there', () => {
+  var st = store_stubs();
+  var saved = CacheService, removed = [];
+  CacheService = {getScriptCache: () => ({remove: (k) => removed.push(k)})};
+  try {
+    var res = store_fetch('https://api.notion.com/v1/databases/' + STORE_DBS.notion_talk_db_id + '/query', {method: 'post', headers: {Authorization: 'Bearer x'}, payload: JSON.stringify({filter: {property: 'Date', date: {on_or_before: '2026-11-10'}}})});
     assert.strictEqual(res.getResponseCode(), 200);
     var body = JSON.parse(res.getContentText());
     assert.deepStrictEqual(body.results.map(p => p.properties.Type.select.name).sort(), ['MLJC', 'TNJC']);
     assert.strictEqual(body.results[0].properties.Title.title.length >= 0, true);
+    var patched = store_fetch('https://api.notion.com/v1/pages/22222222-2222-2222-2222-222222222222', {method: 'patch', payload: JSON.stringify({properties: {CSNJC: {checkbox: true}}})});
+    assert.strictEqual(patched.getResponseCode(), 200);
+    assert.deepStrictEqual(removed, ['site:data']);
+    store_cache = null;
+    assert.strictEqual(notion_get_page('22222222222222222222222222222222', get_global_constants()).properties.CSNJC.checkbox, true);
     assert.strictEqual(store_fetch('https://api.notion.com/v1/pages/99999999999999999999999999999999', {method: 'get'}).getResponseCode(), 500);
+    assert.deepStrictEqual(st.calls, []);
+  } finally { CacheService = saved; store_restore(); }
+});
+t('store: the look back at Notion lists what was changed there after the move, and what the site changed since', () => {
+  var st = store_stubs();
+  try {
+    var cells = st.book.getSheetByName('Schedule').cells;
+    cells[2][5] = 'Changed on the site';
+    cells[2][3] = '2026-11-12T10:00:00.000Z';
+    cells[1][9] = 'ffffffffffffffffffffffffffffffff';
+    cells[1][3] = '2025-12-31T00:00:00.000Z';
+    store_cache = null;
+    var diffs = notion_leftovers();
+    assert.strictEqual(diffs.length, 2, diffs.join('\\n'));
+    assert.ok(/^Schedule 1+ \\(Notion newer.*Presenter Notion "d+", sheet "f+"/.test(diffs[0]), diffs[0]);
+    assert.ok(/^Schedule 2+ \\(sheet newer.*Title Notion "Spikes", sheet "Changed on the site"/.test(diffs[1]), diffs[1]);
   } finally { store_restore(); }
 });
-t('store: the check finds what differs', () => {
-  var st = store_stubs('notion', false);
+t('store: old Notion addresses in the pages become the site\\'s own', () => {
+  assert.strictEqual(site_href_from_notion('https://www.notion.so/8db62d404bf14fa5b90a6a3a3707e80a'), '/8db62d404bf14fa5b90a6a3a3707e80a');
+  assert.strictEqual(site_href_from_notion('https://www.notion.so/gcnu/Gatsby-Tea-System-2444835e8eab46fa9a7c792877e09620?pvs=4#b336808b691c4e25b407103950f50d6d'), '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d');
+  assert.strictEqual(site_href_from_notion('https://gcnu.notion.site/Coffee-cb2adc1a95294900a825b366d65b369b'), '/cb2adc1a95294900a825b366d65b369b');
+  ['https://example.org/notion.so/x', '/556a292407ac488e91ef3b70a69768ce', 'mailto:a@b', undefined].forEach(h => assert.strictEqual(site_href_from_notion(h), h));
+});
+t('store: finishing the move points the constants, settings, reminders and pages at the site; a second run does nothing', () => {
+  var saved = {cb: const_book, est: ensure_settings_tabs, gs: get_settings, sps: site_pages_sheet, sp: site_pages, ssp: save_site_page, sf: site_forget};
+  var book = new FakeBook();
+  var first = book.tabs[0];
+  first.cells = Array.from({length: 28}, (_, i) => ['row ' + (i + 1), '']);
+  first.cells[24] = ['Notion site URL', 'https://gcnu.notion.site'];
+  var tab = book.insertSheet(SETTINGS_TAB);
+  tab.cells = [['Setting', 'Value', 'What it does'], ['DRY_RUN', 'FALSE', 'old words'], ['STORE', 'notion', 'x'], ['NOTION_MIRROR', 'TRUE', 'y'], ['PAGE_KEY', 'k', SETTINGS.filter(r => r[0] === 'PAGE_KEY')[0][2]]];
+  tab.deleteRow = function(n){ this.cells.splice(n - 1, 1); };
+  var rem = book.insertSheet(REMINDERS_TAB);
+  rem.cells = [['Month', 'Day', 'Rota', 'Subject', 'Text']].concat(Object.keys(OLD_DATE_REMINDER_TEXTS).map(t => [4, 22, 'TNJC', 's', t])).concat([[1, 1, 'TNJC', 'mine', 'In Notion, my own words']]);
+  var pages = {home: {slug: 'home', blocks: [{id: 'b1', type: 'p', rt: [{text: 'Jan', href: 'https://www.notion.so/bd83d35783aa4e728d0e77679924e9b5'}, {text: ' and '}, {text: 'MLJC', href: '/556a292407ac488e91ef3b70a69768ce'}],
+                                              children: [{id: 'b2', type: 'table', rows: [{id: 'r', cells: [[{text: 'x', href: 'https://www.notion.so/Coffee-cb2adc1a95294900a825b366d65b369b'}]]}]}]}]},
+               coffee: {slug: 'coffee', blocks: [{id: 'c1', type: 'p', rt: [{text: 'plain'}]}]}};
+  var pages_sheet = new FakeSheet('Pages');
+  pages_sheet.cells = [['Page', 'Notion id', 'Title']];
+  var written = [];
+  const_book = () => book;
+  ensure_settings_tabs = () => book;
+  get_settings = () => ({PAGE_URL: 'https://gatsbyunit.github.io/gatsby-teabot/'});
+  site_pages_sheet = () => pages_sheet;
+  site_pages = () => pages;
+  save_site_page = (sheet, page, by) => written.push(page.slug + ' by ' + by);
+  site_forget = () => {};
   try {
-    store_import_from_notion();
-    st.book.getSheetByName('Schedule').cells[2][5] = 'Changed by hand';
-    store_cache = null;
-    var diffs = store_check();
-    assert.strictEqual(diffs.length, 1);
-    assert.ok(/Title: Notion "Spikes", sheet "Changed by hand"/.test(diffs[0]));
-  } finally { store_restore(); }
+    var done = finish_notion_move();
+    assert.deepStrictEqual(first.cells[24], ['Gatsby Rotas site', 'https://gatsbyunit.github.io/gatsby-teabot/rotas/']);
+    assert.deepStrictEqual(tab.cells.map(r => r[0]), ['Setting', 'DRY_RUN', 'PAGE_KEY']);
+    assert.strictEqual(tab.cells[1][1], 'FALSE');
+    assert.ok(/rota data/.test(tab.cells[1][2]));
+    assert.deepStrictEqual(rem.cells.slice(1).map(r => r[4]), DEFAULT_DATE_REMINDERS.map(r => r.body).concat(['In Notion, my own words']));
+    assert.deepStrictEqual(pages.home.blocks[0].rt.map(r => r.href), ['/bd83d35783aa4e728d0e77679924e9b5', undefined, '/556a292407ac488e91ef3b70a69768ce']);
+    assert.strictEqual(pages.home.blocks[0].children[0].rows[0].cells[0][0].href, '/cb2adc1a95294900a825b366d65b369b');
+    assert.deepStrictEqual(written, ['home by tea bot (move off Notion)']);
+    assert.strictEqual(pages_sheet.cells[0][1], 'Id');
+    assert.ok(done.length >= 6, done.join(', '));
+    assert.deepStrictEqual(finish_notion_move(), []);
+  } finally {
+    const_book = saved.cb; ensure_settings_tabs = saved.est; get_settings = saved.gs; site_pages_sheet = saved.sps; site_pages = saved.sp; save_site_page = saved.ssp; site_forget = saved.sf;
+  }
 });
 t('site: photos are small data images; people change their own, tsars anyone\\'s', () => {
   assert.ok(site_photo_ok('data:image/jpeg;base64,/9j/4AAQ=='));
@@ -696,7 +771,16 @@ const autoApis = [...src.matchAll(/^function (api_\w+)\(/gm)].map(m => m[1]);
 const missing = autoApis.filter(n => pageFns.indexOf(n) < 0);
 console.log((extra.length || missing.length ? 'FAIL' : 'ok  ') + ' page project exposes only doGet, doPost, api_* and authorize' + (extra.length ? ' (extra: ' + extra + ')' : '') + (missing.length ? ' (missing wrappers: ' + missing + ')' : ''));
 if (extra.length || missing.length) process.exitCode = 1;
+// The Cron Jobs (their own project) match away-date sheets and identity rows to people by the id in the address
+// they keep (H2, column A): the site's since the move, the old Notion page's before
+const cron = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'cron-jobs', 'SyncPeople.js'), 'utf8'), cron);
+const cronIds = [['https://gatsbyunit.github.io/gatsby-teabot/rotas/?person=0123456789abcdef0123456789abcdef', '0123456789abcdef0123456789abcdef'],
+  ['https://www.notion.so/Abbe-Lena-0123456789abcdef0123456789abcdef', '0123456789abcdef0123456789abcdef'], ['', '']]
+  .filter(([u, id]) => cron.notion_id_from_url(u) !== id);
+console.log((cronIds.length ? 'FAIL' : 'ok  ') + ' cron jobs: people found by the id in their address' + (cronIds.length ? ' (' + cronIds.map(x => x[0]) + ')' : ''));
+if (cronIds.length) process.exitCode = 1;
 const ctx = vm.createContext({console, Buffer, assert, require_crypto: require('crypto'), Intl});
 const out = vm.runInContext(stubs + src + tests, ctx);
 console.log(out);
-process.exit(out.includes('FAIL') ? 1 : 0);
+process.exit(out.includes('FAIL') || process.exitCode ? 1 : 0);

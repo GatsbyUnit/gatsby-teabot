@@ -1,10 +1,10 @@
 // Server side of the Gatsby Rotas site (site/rotas/ on GitHub Pages): the members' pages (guides, toolbox) and
 // the rota views, with editing for the tsars.
 //
-// The pages live here now, no longer on Notion: one row per page in the "Gatsby Rotas pages" sheet in the bot's
-// Drive (made on first use; its version history is the pages' history). They were imported once from the
-// published Notion site. The rota data (schedule, people, rota rules) still comes live from the Notion
-// databases, and edits to it are written back there.
+// The pages: one row per page in the "Gatsby Rotas pages" sheet in the bot's Drive (made on first use; its
+// version history is the pages' history). They were imported once from the old Notion site. The rota data
+// (schedule, people, rota rules) comes from the bot's "Gatsby Rotas data" sheet (Store.js), and edits to it are
+// written there.
 //
 // Signing in: the visitor picks their name and gets a link by email (?signin=<code>, valid for an hour).
 // Opening it hands the browser the unit key (PAGE_KEY) and the person's tea-page token, which it keeps for
@@ -14,7 +14,6 @@
 const SITE = {
   slugs: ['home', 'tea-system', 'tnjc', 'mljc', 'coffee', 'away-dates', 'talk-title', 'change-presenter'],
   views: ['schedule', 'people', 'rota-rules'],
-  notion_site: 'https://gcnu.notion.site',
   history_days: 400,
   rule_order: ['Faculty', 'Postdoc', 'PhD student', 'PhD student: joint', 'Staff', 'CRS', 'Visitor'],
   link_ttl: 3600,
@@ -163,7 +162,7 @@ function site_forget(what){
 }
 
 // The rota data is kept for a little over an hour and rebuilt by the hourly sync, so visitors rarely wait for
-// Notion; every change the bot writes drops it (notion_request), hand edits in Notion show within the hour.
+// it to be read; every change the bot writes drops it (notion_request).
 function site_refresh(constants){
   try { site_data(constants, true); } catch (err) { Logger.log('Could not refresh the site data: ' + err); }
 }
@@ -174,7 +173,7 @@ function site_stale(){
 
 // ---- the pages ----
 
-const SITE_PAGES_HEADER = ['Page', 'Notion id', 'Title', 'Icon', 'Saved', 'Saved by', 'Content (JSON; edit on the site, not here)'];
+const SITE_PAGES_HEADER = ['Page', 'Id', 'Title', 'Icon', 'Saved', 'Saved by', 'Content (JSON; edit on the site, not here)'];
 
 function site_pages_sheet(){
   var id = PropertiesService.getScriptProperties().getProperty('SITE_PAGES_SHEET_ID');
@@ -395,7 +394,7 @@ function api_site_import_pages(token, pages, replace){
 // ---- photos ----
 // People's photos live with the pages (Photos tab of the pages sheet): small square JPEGs as data addresses, one
 // row per person, brought over from their Notion page icons on 2026-10-31. Tsars can change anyone's, everyone
-// their own. "none" means no photo (not even the Notion one). The bundle only carries a version number; the
+// their own. "none" means no photo. The bundle only carries a version number; the
 // browser fetches the photos when it changes and keeps them.
 
 const SITE_PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
@@ -483,7 +482,7 @@ function api_site_save_photo(token, person_id, uri){
   return site_photos_version();
 }
 
-// ---- the rota data (Notion) ----
+// ---- the rota data ----
 
 function site_data(constants, fresh){
   var cached = fresh ? null : cache_get_big('site:data');
@@ -517,7 +516,7 @@ function rule_rank(position){
   return i < 0 ? 99 : i;
 }
 
-// a Notion date property -> London time ("2026-11-02T13:30:00+00:00"), or the plain day when it has no time
+// a date field -> London time ("2026-11-02T13:30:00+00:00"), or the plain day when it has no time
 function site_date(s){
   if (!s) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
@@ -545,7 +544,6 @@ function site_slot(page){
 function site_person(page){
   var p = page.properties, box = function(name){ return !!(p[name] && p[name].checkbox); };
   var join = p['Join Date'] && p['Join Date'].date;
-  var photo = site_photo(page);
   return {
     id: normalise_id(page.id),
     name: plain_text(p['Name']).trim(),
@@ -554,22 +552,8 @@ function site_person(page){
     rotas: ['TNJC', 'CSNJC', 'MLJC', 'Coffee'].filter(box),
     excluded: [['research', 'Excluded from research talk'], ['tea_talk', 'Excluded from tea talk'], ['tea', 'Excluded from tea']]
       .filter(function(x){ return box(x[1]); }).map(function(x){ return x[0]; }),
-    joined: join ? join.start : null,
-    photo: photo[0], photo_alt: photo.slice(1)
+    joined: join ? join.start : null
   };
-}
-
-// People's photos are their Notion page icons: first through the published Notion site's image proxy (small;
-// gone once that site is unpublished), then straight from where they are. Resized copies on ucl.ac.uk go
-// stale, so their original upload comes last. Uploaded icons have addresses that work for an hour.
-function site_photo(page){
-  var icon = page.icon;
-  if (!icon || icon.type === 'emoji') return [null];
-  var direct = icon.type === 'external' ? icon.external.url : icon.file.url;
-  var bare = direct.split('?')[0];
-  var out = [SITE.notion_site + '/image/' + encodeURIComponent(icon.type === 'external' ? direct : bare) + '?table=block&id=' + page.id + '&width=240&cache=v2', direct];
-  if (icon.type === 'external' && /\/styles\/[^\/]+\/public\//.test(bare)) out.push(bare.replace(/\/styles\/[^\/]+\/public\//, '/'));
-  return out;
 }
 
 function site_rule(page){
@@ -632,7 +616,7 @@ function api_site_save_slot(token, slot){
 }
 
 // Removes a slot, for slots not needed (bank holidays, closures), together with its calendar event: deleting
-// only the row in Notion leaves the event behind, as the sync only looks at slots that exist. A talk whose
+// only the row leaves the event behind, as the sync only looks at slots that exist. A talk whose
 // people should hear about it is better cancelled (title "Cancelled"): the bot then emails them.
 // {calendar: '' (no event), 'deleted', or 'kept' (the bot is paused, DRY_RUN)}
 function api_site_delete_slot(token, id){

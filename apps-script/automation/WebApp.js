@@ -71,7 +71,7 @@ function page_context(token){
   var me = identity_for_token(token, constants);
   if (!me) throw new Error('This link is not valid any more. You can ask for a new one on the page without a link.');
   var ctx = make_context(constants, get_settings());
-  if (!ctx.people[me.id]) throw new Error('Your Notion entry could not be found. Please ask the tea tsar.');
+  if (!ctx.people[me.id]) throw new Error('Your entry in the rota could not be found. Please ask the tea tsar.');
   ctx.me = ctx.people[me.id];
   ctx.me_identity = me;
   return ctx;
@@ -213,7 +213,7 @@ function api_title(token, row_id, title, description){
     if (ctx.settings.links_in_events) ensure_links(event, row, ctx);
   }
   log_row(ctx, 'page', row.type, row.start, 'title', ctx.me.name + ': ' + title);
-  return 'Saved. Notion and the calendar now show the new title' + (description ? ' and description.' : '.');
+  return 'Saved. The site and the calendar now show the new title' + (description ? ' and description.' : '.');
 }
 
 function api_add_away(token, from, to, reason){
@@ -300,7 +300,7 @@ function api_page_icon(){
   return get_settings().FAVICON_URL || '';
 }
 
-// The page without the unit key (e.g. linked from the public Notion site): you type your registered address
+// The page without the unit key (e.g. its bare public address): you type your registered address
 // and your link goes there. The answer is the same whether or not the address is registered, so it reveals
 // nobody; the usual rate limits apply.
 const LINK_BY_EMAIL_REPLY = 'If this address is registered, your link is on its way. Check your inbox (and spam). Nothing after a few minutes? Ask the tea tsar.';
@@ -442,7 +442,7 @@ function parse_iso_date(s){
   return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
 }
 
-// Notion rich text is limited to 2000 characters per piece
+// rich text in pieces of at most 2000 characters, the format the rota data kept from Notion
 function chunk_text(s){
   var out = [];
   for (var i = 0; i < s.length; i += 1900) out.push({text: {content: s.slice(i, i + 1900)}});

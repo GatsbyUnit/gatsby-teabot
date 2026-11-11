@@ -1,39 +1,24 @@
-// Where the rota data lives: the Notion databases (Schedule, People, Rota rules) or, after the move, the
-// "Gatsby Rotas data" sheet in the bot's Drive, one tab per database. The rest of the code keeps speaking
-// Notion's API (notion_request in Notion.js): with STORE = sheet (Automation tab) the same calls are answered
-// from the sheet, in Notion's format, so nothing else had to change. The Cron Jobs come through here too
-// (store_fetch).
+// Where the rota data lives: the "Gatsby Rotas data" sheet in the bot's Drive (Script Property STORE_SHEET_ID),
+// one tab per table: Schedule, People, Rota rules. It was copied from the Notion databases in November 2026; the
+// bot, the Rotas site and the Cron Jobs (through store_fetch) read and write only the sheet since. The rest of the
+// code still speaks Notion's API (notion_request in Notion.js) and the sheet answers in that format, so the
+// tables keep their Notion database ids (constants rows 22-24) as names and every row its Notion page id.
 //
-// The move, step by step (docs/next-steps.md, "Moving off Notion"):
-//   1. store_import_from_notion()  copies all three databases into the sheet (run it from the editor). From then
-//                                  on every change written to Notion is copied into the sheet as well.
-//   2. store_check()               compares the two and logs any difference.
-//   3. STORE = sheet               the sheet is read from now on. With NOTION_MIRROR = TRUE every change still goes
-//                                  to Notion first, so STORE = notion switches back without losing anything.
-//
-// Sheet layout: a header row; columns id, archived, created, edited, icon, then one per Notion property (dates
-// take two: "<name>" and "<name> end"; relations hold person/slot ids, comma-separated). Everything is stored
-// as plain text. The Schema tab keeps each database's property types and choices.
+// Sheet layout: a header row; columns id, archived, created, edited, icon, then one per field (dates take two:
+// "<name>" and "<name> end"; relations hold person/slot ids, comma-separated). Everything is stored as plain
+// text. The Schema tab keeps each table's field types and choices.
 
 const STORE_TABS = {notion_talk_db_id: 'Schedule', notion_people_db_id: 'People', notion_rota_rules_db_id: 'Rota rules'};
 const STORE_META = ['id', 'archived', 'created', 'edited', 'icon'];
 const STORE_TYPES = ['title', 'rich_text', 'select', 'checkbox', 'date', 'relation', 'url', 'number', 'email', 'phone_number'];
 var store_cache = null;  // what this run has read of the sheet: {ss, schema, tabs (read when needed), where: id -> row}
 
-function store_mode(){
-  return String(get_settings().STORE || 'notion').trim().toLowerCase() === 'sheet' ? 'sheet' : 'notion';
-}
-
-function store_spreadsheet(create){
+function store_spreadsheet(){
   var id = PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID');
-  if (id) return SpreadsheetApp.openById(id);
-  if (!create) return null;
-  var ss = SpreadsheetApp.create('Gatsby Rotas data');
-  set_setting('STORE_SHEET_ID', ss.getId());
-  return ss;
+  return id ? SpreadsheetApp.openById(id) : null;
 }
 
-// which tab holds this Notion database
+// which tab holds this table
 function store_tab_of(db_id, constants){
   var want = normalise_id(db_id);
   var key = Object.keys(STORE_TABS).filter(function(k){ return normalise_id(constants[k] || '') === want; })[0];
@@ -46,8 +31,8 @@ function store_tab_of(db_id, constants){
 // the sheet and its schema; tabs are read when first needed, once per run
 function store_load(constants){
   if (store_cache) return store_cache;
-  var ss = store_spreadsheet(false);
-  if (!ss) throw new Error('There is no rota data sheet yet: run store_import_from_notion() first.');
+  var ss = store_spreadsheet();
+  if (!ss) throw new Error('The rota data sheet is missing (Script Property STORE_SHEET_ID).');
   var schema = {};
   var stab = ss.getSheetByName('Schema');
   stab.getRange(1, 1, stab.getLastRow(), 3).getValues().forEach(function(r){ if (r[0]) schema[r[0]] = {db: String(r[1]), properties: JSON.parse(r[2])}; });
@@ -95,14 +80,21 @@ function store_page(tab, row, store){
   });
   var id = c('id');
   return {object: 'page', id: hyphenate_id(id), created_time: c('created'), last_edited_time: c('edited'), archived: c('archived') === 'TRUE',
-          in_trash: c('archived') === 'TRUE', url: 'https://www.notion.so/' + id, icon: c('icon') ? JSON.parse(c('icon')) : null,
+          in_trash: c('archived') === 'TRUE', url: store_url(tab.name, id, store), icon: c('icon') ? JSON.parse(c('icon')) : null,
           parent: {type: 'database_id', database_id: hyphenate_id(store.schema[tab.name].db)}, properties: out};
 }
 
-// Notion property values (as Notion sends or receives them) -> the cells of a row
-function store_cells(tab, props_in, row, store){
+// a row's address: the slot or person on the Rotas site (emails link it; identity-sheet column A and the away-date
+// sheets keep the person's)
+function store_url(tab_name, id, store){
+  var site = store.site || (store.site = site_url(get_settings()));
+  return tab_name === 'Schedule' ? site + '?slot=' + id : tab_name === 'People' ? site + '?person=' + id : site;
+}
+
+// field values (as Notion sends or receives them) -> the cells of a row; `touched` collects their columns
+function store_cells(tab, props_in, row, store, touched){
   var props = store.schema[tab.name].properties;
-  var set = function(h, v){ var i = tab.col[h]; if (i != null) row[i] = v; };
+  var set = function(h, v){ var i = tab.col[h]; if (i != null){ row[i] = v; if (touched) touched.push(i); } };
   Object.keys(props_in || {}).forEach(function(name){
     var def = props[name], v = props_in[name];
     if (!def || v == null) return;
@@ -125,6 +117,31 @@ function store_write_row(tab, i){
   tab.sheet.getRange(i + 2, 1, 1, tab.header.length).setNumberFormat('@').setValues([tab.rows[i]]);
 }
 
+// Only the cells a change touches are written (runs of neighbouring columns in one go), like Notion's PATCH: two
+// runs changing different fields of the same row at the same time (the hourly sync and an edit on the site, say)
+// both keep their change.
+function store_write_cells(tab, i, cols){
+  tab.pages[i] = null;
+  cols = cols.filter(function(c, k){ return cols.indexOf(c) === k; }).sort(function(a, b){ return a - b; });
+  for (var k = 0; k < cols.length; ){
+    var from = cols[k], to = from;
+    while (k + 1 < cols.length && cols[k + 1] === to + 1){ k++; to++; }
+    k++;
+    tab.sheet.getRange(i + 2, from + 1, 1, to - from + 1).setNumberFormat('@').setValues([tab.rows[i].slice(from, to + 1)]);
+  }
+}
+
+// rows other runs added since this run read the tab (the sheet is the truth: a new row goes after them)
+function store_catch_up(tab){
+  var last = tab.sheet.getLastRow();
+  if (last <= tab.rows.length + 1) return;
+  tab.sheet.getRange(tab.rows.length + 2, 1, last - tab.rows.length - 1, tab.header.length).getValues().forEach(function(r){
+    r = r.map(function(v){ return v === null ? '' : String(v); });
+    tab.rows.push(r);
+    if (r[0] && store_cache) store_cache.where[r[0]] = {tab: tab.name, i: tab.rows.length - 1};
+  });
+}
+
 // ---- answering Notion's API from the sheet ----
 
 // method, path and payload as for api.notion.com/v1/; the answer as Notion gives it
@@ -134,24 +151,10 @@ function store_request(method, path, payload, constants){
   if (method === 'post' && (m = path.match(/^databases\/([\w-]+)\/query$/))) return store_query(m[1], payload || {}, constants);
   if (method === 'get' && (m = path.match(/^databases\/([\w-]+)$/))) return store_database(m[1], constants);
   if (method === 'get' && (m = path.match(/^pages\/([\w-]+)$/))) return store_get(m[1], constants);
-  // changes: to Notion first while it is mirrored (it hands out the ids of new pages), then here
-  if (store_mirrored()){
-    try {
-      var out = notion_http(method, path, payload, constants);
-      store_mirror(out, constants);
-      return out.object === 'page' ? store_get(out.id, constants) : out;
-    } catch (e) {
-      Logger.log('Notion mirror failed, writing the sheet only: ' + e);
-    }
-  }
   if (method === 'patch' && (m = path.match(/^pages\/([\w-]+)$/))) return store_patch(m[1], payload || {}, constants);
   if (method === 'post' && path === 'pages') return store_create(payload || {}, constants);
   if (method === 'patch' && (m = path.match(/^databases\/([\w-]+)$/))) return store_alter(m[1], payload || {}, constants);
   throw new Error('The rota data sheet cannot answer ' + method + ' ' + path + '.');
-}
-
-function store_mirrored(){
-  return String(get_settings().NOTION_MIRROR || 'TRUE').trim().toUpperCase() !== 'FALSE';
 }
 
 function store_find(id, constants){
@@ -160,7 +163,7 @@ function store_find(id, constants){
   var names = ['Schedule', 'People', 'Rota rules'];
   for (var k = 0; k < names.length && !s.where[id]; k++) store_tab(s, names[k]);
   var hit = s.where[id];
-  if (!hit) throw new Error('Notion get pages/' + id + ' failed (404): not in the rota data sheet');
+  if (!hit) throw new Error('get pages/' + id + ' failed (404): not in the rota data sheet');
   return {s: s, tab: s.tabs[hit.tab], i: hit.i};
 }
 
@@ -171,11 +174,14 @@ function store_get(id, constants){
 
 function store_patch(id, payload, constants){
   var f = store_find(id, constants);
-  var row = f.tab.rows[f.i];
-  store_cells(f.tab, payload.properties, row, f.s);
-  if ('archived' in payload || 'in_trash' in payload) row[f.tab.col['archived']] = (payload.archived || payload.in_trash) ? 'TRUE' : '';
+  var row = f.tab.rows[f.i], touched = [f.tab.col['edited']];
+  store_cells(f.tab, payload.properties, row, f.s, touched);
+  if ('archived' in payload || 'in_trash' in payload){
+    row[f.tab.col['archived']] = (payload.archived || payload.in_trash) ? 'TRUE' : '';
+    touched.push(f.tab.col['archived']);
+  }
   row[f.tab.col['edited']] = new Date().toISOString();
-  store_write_row(f.tab, f.i);
+  store_write_cells(f.tab, f.i, touched);
   return store_page_at(f.s, f.tab, f.i);
 }
 
@@ -189,6 +195,7 @@ function store_create(payload, constants, id){
   row[tab.col['edited']] = now;
   if (payload.icon) row[tab.col['icon']] = JSON.stringify(payload.icon);
   store_cells(tab, payload.properties, row, s);
+  store_catch_up(tab);
   tab.rows.push(row);
   s.where[row[0]] = {tab: tab.name, i: tab.rows.length - 1};
   store_write_row(tab, tab.rows.length - 1);
@@ -338,29 +345,22 @@ function store_day(start){
   return /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : Utilities.formatDate(new Date(start), TZ, 'yyyy-MM-dd');
 }
 
-// ---- keeping the sheet in step with Notion ----
-
-// a page Notion just returned (after a change made there): the sheet gets the same row
-function store_mirror(out, constants){
+// The Cron Jobs' calls to api.notion.com (they keep their own request code, and call this through the TeaBot
+// library instead of UrlFetchApp.fetch): answered from the sheet, as Notion would
+function store_fetch(url, params){
+  params = params || {};
+  var path = String(url).replace('https://api.notion.com/v1/', '');
+  var reply = function(code, body){ var text = JSON.stringify(body); return {getResponseCode: function(){ return code; }, getContentText: function(){ return text; }}; };
   try {
-    if (!out || out.object !== 'page' || !out.parent || !out.parent.database_id) return;
-    if (!PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID')) return;
-    var s = store_load(constants);
-    var tab = store_tab(s, store_tab_of(out.parent.database_id, constants));
-    var id = normalise_id(out.id), hit = s.where[id];
-    var row = hit ? tab.rows[hit.i] : tab.header.map(function(){ return ''; });
-    store_row_from_page(tab, out, row, s);
-    if (hit) store_write_row(tab, hit.i);
-    else {
-      tab.rows.push(row);
-      s.where[id] = {tab: tab.name, i: tab.rows.length - 1};
-      store_write_row(tab, tab.rows.length - 1);
-    }
+    return reply(200, notion_request(params.method || 'get', path, params.payload ? JSON.parse(params.payload) : null, get_global_constants()));
   } catch (e) {
-    Logger.log('Could not copy the change into the rota data sheet: ' + e);
+    return reply(500, {object: 'error', message: String(e.message || e)});
   }
 }
 
+// ---- after the move off Notion ----
+
+// a Notion page -> a row of this tab (to compare it with the sheet)
 function store_row_from_page(tab, page, row, s){
   row[0] = normalise_id(page.id);
   row[tab.col['archived']] = page.archived || page.in_trash ? 'TRUE' : '';
@@ -371,76 +371,11 @@ function store_row_from_page(tab, page, row, s){
   return row;
 }
 
-// The Cron Jobs' calls to api.notion.com (they keep their own request code): answered by Notion or the sheet
-function store_fetch(url, params){
-  var path = String(url).replace('https://api.notion.com/v1/', '');
-  var method = String(params.method || 'get').toLowerCase();
-  var constants = get_global_constants();
-  if (store_mode() === 'notion'){
-    var res = UrlFetchApp.fetch(url, params);
-    if (res.getResponseCode() === 200 && method !== 'get' && !/\/query$/.test(path)) store_mirror(JSON.parse(res.getContentText()), constants);
-    return res;
-  }
-  var reply = function(code, body){ var text = JSON.stringify(body); return {getResponseCode: function(){ return code; }, getContentText: function(){ return text; }}; };
-  try {
-    return reply(200, store_request(method, path, params.payload ? JSON.parse(params.payload) : null, constants));
-  } catch (e) {
-    return reply(500, {object: 'error', message: String(e.message || e)});
-  }
-}
-
-// ---- the move ----
-
-// Copies the three Notion databases into the sheet (all rows, history included: the fair rota counts past
-// turns). Run from the editor; safe to run again (it starts the tabs afresh).
-function store_import_from_notion(){
-  var constants = get_global_constants();
-  ensure_settings_tabs();
-  var ss = store_spreadsheet(true);
-  var schema = {};
-  var summary = [];
-  Object.keys(STORE_TABS).forEach(function(k){
-    var name = STORE_TABS[k], db = constants[k];
-    var info = notion_http('get', 'databases/' + db, null, constants);
-    var props = {};
-    Object.keys(info.properties).forEach(function(p){
-      var def = info.properties[p];
-      if (STORE_TYPES.indexOf(def.type) < 0) return;  // formulas, rollups and back-links stay behind
-      props[p] = {id: def.id, type: def.type};
-      if (def.type === 'select') props[p].options = def.select.options.map(function(o){ return o.name; });
-    });
-    schema[name] = {db: normalise_id(db), properties: props};
-    var header = STORE_META.slice();
-    Object.keys(props).forEach(function(p){ header.push(p); if (props[p].type === 'date') header.push(p + ' end'); });
-    var pages = [], body = {page_size: 100};
-    while (true){
-      var res = notion_http('post', 'databases/' + db + '/query', body, constants);
-      pages = pages.concat(res.results);
-      if (!res.has_more) break;
-      body.start_cursor = res.next_cursor;
-    }
-    var tab = {name: name, header: header, col: {}};
-    header.forEach(function(h, i){ tab.col[h] = i; });
-    var rows = pages.map(function(page){ return store_row_from_page(tab, page, header.map(function(){ return ''; }), {schema: schema}); });
-    var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
-    sheet.clear();
-    sheet.getRange(1, 1, rows.length + 1, header.length).setNumberFormat('@').setValues([header].concat(rows));
-    sheet.setFrozenRows(1);
-    guard_sheet(sheet);
-    summary.push(name + ': ' + rows.length);
-  });
-  if (!ss.getSheetByName('Schema')) ss.insertSheet('Schema');
-  store_save_schema({ss: ss, schema: schema});
-  guard_sheet(ss.getSheetByName('Schema'));
-  var first = ss.getSheetByName('Sheet1');
-  if (first && ss.getSheets().length > 1) ss.deleteSheet(first);
-  store_cache = null;
-  Logger.log('Copied into "Gatsby Rotas data": ' + summary.join(', '));
-  return summary.join(', ');
-}
-
-// Compares Notion with the sheet, row by row and field by field; logs and returns the differences.
-function store_check(){
+// Run from the editor (read-only): what differs between the old Notion databases and the sheet, with when each
+// side last changed. Edits people still made in Notion after the move show up here ("Notion newer") and need
+// making on the site; "sheet newer" is the site or the bot at work since. Needs the Notion token (constants
+// row 21) while it is still there.
+function notion_leftovers(){
   var constants = get_global_constants();
   store_cache = null;
   var s = store_load(constants);
@@ -454,21 +389,90 @@ function store_check(){
       if (!res.has_more) break;
       body.start_cursor = res.next_cursor;
     }
-    var seen = {};
+    var seen = {}, edited = tab.col['edited'];
     notion.forEach(function(page){
       var id = normalise_id(page.id);
       seen[id] = true;
       var hit = s.where[id];
-      if (!hit){ out.push(name + ': ' + id + ' is missing from the sheet'); return; }
+      if (!hit){ out.push(name + ' ' + id + ': only in Notion (made there ' + page.created_time + ')'); return; }
       var want = store_row_from_page(tab, page, tab.header.map(function(){ return ''; }), s);
       var have = tab.rows[hit.i];
-      tab.header.forEach(function(h, i){
-        if (h === 'edited' || h === 'created' || h === 'icon') return;
-        if (String(want[i]) !== String(have[i])) out.push(name + ' ' + id + ' ' + h + ': Notion "' + want[i] + '", sheet "' + have[i] + '"');
-      });
+      var fields = tab.header.filter(function(h, i){ return STORE_META.indexOf(h) < 0 && String(want[i]) !== String(have[i]); });
+      if (have[tab.col['archived']] === 'TRUE') fields.unshift('removed on the site');
+      if (!fields.length) return;
+      var newer = String(page.last_edited_time) > String(have[edited]) ? 'Notion newer' : 'sheet newer';
+      out.push(name + ' ' + id + ' (' + newer + ': Notion ' + page.last_edited_time + ', sheet ' + have[edited] + '): ' + fields.map(function(h){
+        var i = tab.col[h];
+        return i == null ? h : h + ' Notion "' + want[i] + '", sheet "' + have[i] + '"';
+      }).join('; '));
     });
-    tab.rows.forEach(function(r){ if (r[0] && !seen[r[0]] && r[tab.col['archived']] !== 'TRUE') out.push(name + ': ' + r[0] + ' is only in the sheet'); });
+    tab.rows.forEach(function(r){
+      if (r[0] && !seen[r[0]] && r[tab.col['archived']] !== 'TRUE') out.push(name + ' ' + r[0] + ': only in the sheet (made ' + r[tab.col['created']] + ')');
+    });
   });
-  Logger.log(out.length ? out.length + ' differences:\n' + out.slice(0, 200).join('\n') : 'Notion and the rota data sheet agree.');
+  Logger.log(out.length ? out.length + ' differences:\n' + out.slice(0, 300).join('\n') : 'Notion and the rota data sheet agree.');
   return out;
+}
+
+// Run once from the editor after the deploy that left Notion (running it again is harmless): points what still
+// led to Notion at the site.
+//   - constants row 25: the Rotas site (the Cron Jobs' email footer reads it)
+//   - Automation tab: the STORE and NOTION_MIRROR rows go, the descriptions are brought up to date
+//   - Automation reminders tab: the two default reminders get their new wording
+//   - the pages: links still written as Notion addresses become the site's own ("/<id>")
+function finish_notion_move(){
+  var done = [], settings = get_settings(), site = site_url(settings);
+  var first = const_book().getSheets()[0];
+  if (String(first.getRange(25, 2).getValue()) !== site){
+    first.getRange(25, 1, 1, 2).setValues([['Gatsby Rotas site', site]]);
+    done.push('constants row 25: ' + site);
+  }
+
+  var tab = ensure_settings_tabs().getSheetByName(SETTINGS_TAB);
+  var describe = {};
+  SETTINGS.forEach(function(r){ describe[r[0]] = r[2]; });
+  var rows = tab.getRange(1, 1, tab.getLastRow(), 3).getValues();
+  for (var i = rows.length - 1; i >= 1; i--){
+    var key = String(rows[i][0]);
+    if (key === 'STORE' || key === 'NOTION_MIRROR'){ tab.deleteRow(i + 1); done.push('setting ' + key + ' removed'); }
+    else if (describe[key] && rows[i][2] !== describe[key]){ tab.getRange(i + 1, 3).setValue(describe[key]); done.push('setting ' + key + ' described anew'); }
+  }
+
+  var rem = const_book().getSheetByName(REMINDERS_TAB);
+  if (rem && rem.getLastRow() > 1){
+    var texts = rem.getRange(2, 5, rem.getLastRow() - 1, 1).getValues();
+    texts.forEach(function(r, i){
+      var now = OLD_DATE_REMINDER_TEXTS[r[0]];
+      if (now){ rem.getRange(i + 2, 5).setValue(now); done.push('reminder row ' + (i + 2) + ' reworded'); }
+    });
+  }
+
+  var sheet = site_pages_sheet(), pages = site_pages(true);
+  Object.keys(pages).forEach(function(slug){
+    var n = 0;
+    var walk = function(blocks){
+      (blocks || []).forEach(function(b){
+        [b.rt, b.caption].concat(b.rows ? b.rows.map(function(r){ return [].concat.apply([], r.cells || []); }) : []).forEach(function(rt){
+          (rt || []).forEach(function(r){
+            var to = site_href_from_notion(r.href);
+            if (to !== r.href){ r.href = to; n++; }
+          });
+        });
+        walk(b.children);
+      });
+    };
+    walk(pages[slug].blocks);
+    if (n){ save_site_page(sheet, pages[slug], 'tea bot (move off Notion)'); done.push('page ' + slug + ': ' + n + ' link' + (n === 1 ? '' : 's')); }
+  });
+  if (sheet.getRange(1, 2).getValue() === 'Notion id'){ sheet.getRange(1, 2).setValue('Id'); done.push('pages sheet heading'); }
+  site_forget('pages');
+  Logger.log(done.length ? 'Done: ' + done.join(', ') : 'Nothing left to do.');
+  return done;
+}
+
+// "https://www.notion.so/<Title>-<id>#<block>" -> "/<id>#<block>", which the site resolves to its own page,
+// person or block; any other address as it is
+function site_href_from_notion(href){
+  var m = String(href || '').match(/^https?:\/\/([\w-]+\.)?notion\.(so|site)\/(?:[^#?]*[\/-])?([0-9a-f]{32})(?:\?[^#]*)?(#[0-9a-f-]*)?$/i);
+  return m ? '/' + m[3].toLowerCase() + (m[4] ? '#' + m[4].slice(1).replace(/-/g, '') : '') : href;
 }

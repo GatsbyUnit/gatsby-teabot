@@ -1,6 +1,6 @@
 // "Who is on which rota", for organisers and the tea tsar on their tea page. Membership comes from the same
 // rules the scheduler and the swap list use (can_do_duty): the TNJC / CSNJC / MLJC / Coffee ticks, Position
-// and the "Excluded from …" boxes on each person's Notion page, which is where it is changed.
+// and the "Excluded from …" boxes on each person's page on the site, which is where it is changed.
 // Each organiser sees only the rotas they organise (people, columns and upcoming slots); the tea tsar sees all.
 
 const ROTA_COLUMNS = [

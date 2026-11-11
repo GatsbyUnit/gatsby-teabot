@@ -27,9 +27,9 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
   var end_of_week = new Date(talk_date.getTime());
   end_of_week.setDate(end_of_week.getDate()+5);
   
-  if (email_option !== 'coffee_people'){ // coffee has a special way of filtering because coffee duties on Notion are displayed for a week
+  if (email_option !== 'coffee_people'){ // coffee has a special way of filtering because coffee duties span a week
     /* 
-          get recent talks for people from Notion
+          get recent talks for people from the rota data
       */
       var data = {
         'filter': {
@@ -111,7 +111,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
   }
 
   /* 
-      get list of active people from Notion, including those excluded from schedule
+      get list of active people from the rota data, including those excluded from schedule
   */
   var data = {
 	  'filter': {
@@ -312,7 +312,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
             "Zoom Link: " + gatsby_zoom_link + "\n" +
             "Description: " + talk_description + "\n=============\n\n" +
             "⏰ Research talks start at 3pm and should be kept to 50 minutes including audience questions \n ⏱️ Tea talks start at 3:30pm and should be kept to 15 minutes including audience questions \n\n" +
-            "Please update your talk title and description (include paper url wherever relevant) through the Notion site if you haven't already done so. They will be made available on the Google Calendar and sent out with the reminder email on the day of the presentation. For journal club presenters, it is *important* for you to include the paper url in advance." + "\n\n" + tea_page_line(email_list), constants, replyto_email );
+            "Please update your talk title and description (include paper url wherever relevant) on your tea page if you haven't already done so. They will be made available on the Google Calendar and sent out with the reminder email on the day of the presentation. For journal club presenters, it is *important* for you to include the paper url in advance." + "\n\n" + tea_page_line(email_list), constants, replyto_email );
         }
       }
     }
@@ -356,7 +356,7 @@ function send_http_request_tr(url, data, params, email, constants){
   params['muteHttpExceptions'] = true;
   params['payload'] = JSON.stringify(data);
 
-  var response = UrlFetchApp.fetch(url, params);
+  var response = TeaBot.store_fetch(url, params);  // the rota data sheet, through the automation (Store.js)
 
   var responseCode = response.getResponseCode();
   var responseBody = response.getContentText();
@@ -375,7 +375,7 @@ function send_http_request_tr(url, data, params, email, constants){
       results = results.concat(next_results); 
     }
   } else {    
-    send_email(email, 'Notion API Failed When Sending Reminder On ' + fmt_date(new Date()), 'Notion does not seem to be responding. Please try again later or contact the tea tsar. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody , constants );  
+    send_email(email, 'Rota data unavailable when sending reminder on ' + fmt_date(new Date()), 'The rota data could not be read. Please try again later or contact the tea tsar. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody , constants );  
   }
   return results;
 }
