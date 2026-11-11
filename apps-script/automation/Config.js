@@ -63,7 +63,6 @@ function get_global_constants(){
       'gatsby_zoom_link': row(11),
       'identity_mapping_id': row(19),
       'google_calendar_id': row(20),
-      'notion_token': row(21),         // only for notion_leftovers (Store.js), until the token is gone
       'notion_people_db_id': row(22),  // 22-24: the old Notion database ids, now names of the rota data tables (Store.js)
       'notion_rota_rules_db_id': row(23),
       'notion_talk_db_id': row(24),

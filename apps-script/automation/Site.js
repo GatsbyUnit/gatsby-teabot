@@ -515,37 +515,6 @@ function site_photo_files(person, small, full){
   }
 }
 
-// Once, from the editor, after the "Gatsby Rotas photos" folder was put into the bot's Drive (2026-11-11): photos
-// changed on the site since 31 Oct (they were in the Photos tab of the pages sheet) replace the folder's, "No
-// photo" removes a person's files, and the tab goes. Running it again does nothing. Also asks for the permission
-// to use Drive the first time.
-function site_photos_from_sheet(){
-  var ss = site_pages_sheet().getParent(), tab = ss.getSheetByName('Photos'), done = [];
-  var folder = site_photos_folder(), smalls = site_photos_small();
-  if (tab && tab.getLastRow() > 1){
-    var rows = tab.getRange(2, 1, tab.getLastRow() - 1, 4).getValues();
-    var count = {};  // the move from Notion saved every row at the same moment; later moments are changes on the site
-    rows.forEach(function(r){ count[String(r[2])] = (count[String(r[2])] || 0) + 1; });
-    var imported = Object.keys(count).sort(function(a, b){ return count[b] - count[a]; })[0];
-    var people = load_people(get_global_constants()), have = {};
-    site_photo_list(smalls).forEach(function(f){ var m = f.getName().match(/^([0-9a-f]{32})\./); if (m) have[m[1]] = true; });
-    rows.forEach(function(r){
-      var id = String(r[0]), uri = String(r[1] || ''), person = people[id] || {id: id, name: ''};
-      if (!/^[0-9a-f]{32}$/.test(id)) return;
-      if (uri === 'none' || !uri){ if (have[id]){ site_photo_files(person, null, null); done.push('removed ' + id); } return; }
-      if (!site_photo_ok(uri)) return;
-      if (have[id] && String(r[2]) === imported) return;  // the folder has this photo at full size
-      site_photo_files(person, site_photo_blob(uri, ''), site_photo_blob(uri, ''));
-      done.push('from the site ' + id);
-    });
-  }
-  if (tab){ ss.deleteSheet(tab); done.push('Photos tab removed'); }
-  site_photos_changed();
-  var n = site_photo_list(smalls).length;
-  Logger.log('Photos: ' + n + ' people in ' + folder.getUrl() + (done.length ? '; ' + done.join(', ') : ''));
-  return done;
-}
-
 // ---- the rota data ----
 
 function site_data(constants, fresh){

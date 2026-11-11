@@ -2,47 +2,10 @@
 // asks for it in the shape of Notion's API, where the data came from in 2026: notion_request answers every such
 // call from the sheet. Notion itself is no longer used.
 
-const NOTION_VERSION = '2022-06-28';
-
 function notion_request(method, path, payload, constants){
   var out = store_request(method, path, payload, constants);
   if (String(method).toLowerCase() !== 'get' && !/\/query$/.test(path)) site_stale();  // the Rotas site's copy of the data (Site.js)
   return out;
-}
-
-// Notion's own API: only to look back at the old databases after the move (notion_leftovers in Store.js)
-function notion_http(method, path, payload, constants){
-  var params = {
-    method: method,
-    muteHttpExceptions: true,
-    headers: {
-      'Authorization': 'Bearer ' + constants['notion_token'],
-      'Notion-Version': NOTION_VERSION,
-      'Content-Type': 'application/json'
-    }
-  };
-  if (payload) params.payload = JSON.stringify(payload);
-  for (var attempt = 0; attempt < 4; attempt++){
-    var response;
-    try {
-      response = UrlFetchApp.fetch('https://api.notion.com/v1/' + path, params);
-    } catch (e) {
-      // network hiccups ("Address unavailable", timeouts) come as exceptions: wait and try again
-      if (attempt === 3) throw e;
-      Utilities.sleep(2000 * (attempt + 1));
-      continue;
-    }
-    var code = response.getResponseCode();
-    if (code === 429 || code >= 500){
-      Utilities.sleep(1000 * (attempt + 1));
-      continue;
-    }
-    if (code !== 200){
-      throw new Error('Notion ' + method + ' ' + path + ' failed (' + code + '): ' + response.getContentText().slice(0, 500));
-    }
-    return JSON.parse(response.getContentText());
-  }
-  throw new Error('Notion ' + method + ' ' + path + ' kept failing (rate limit or server error)');
 }
 
 function notion_query(db_id, filter, sorts, constants){

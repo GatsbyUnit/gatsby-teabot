@@ -10,7 +10,7 @@ it was renamed to `gatsby-teabot-old` and archived as a private repo. Delete it 
 (its Settings → Delete); never push its history, or the local tag `pre-public-history`, to the public repo.
 
 What keeps this repo safe to be public:
-- **No secrets.** The old Notion token lives only in the constants sheet (row 21, until it is revoked); the deploy credentials are the bot's clasp
+- **No secrets.** The old Notion token was removed from the constants sheet on 2026-11-11; the deploy credentials are the bot's clasp
   login in `~/.clasprc.json`, never in the repo. `backups/` (live edits saved by `deploy.py`, raw copies of old
   scripts, which can contain the old token) is git-ignored.
 - **IDs are harmless while nothing is shared by link.** The sheets, forms and scripts named in the code belong to
@@ -21,9 +21,9 @@ What keeps this repo safe to be public:
 - **Licence:** MIT (`LICENSE`); the scheduling algorithm is published with Kevin's agreement.
 
 ## What is already public, or close to it
-- **The old Notion Rotas pages are still published** on gcnu.notion.site until a workspace owner unpublishes
-  them (see the move below). Anyone with the link can read them without a Gatsby or Notion login, including the
-  internal Zoom link. The Gatsby Rotas site that replaced them shows nothing without signing in.
+- **The old Notion Rotas pages** on gcnu.notion.site were handed to the workspace admins on 2026-11-11 to lock,
+  export and unpublish (they showed the internal Zoom link to anyone). The Gatsby Rotas site that replaced them
+  shows nothing without signing in.
 - **The gatsby.tea calendar is not public** (its public feed returns 404); people see it because it is shared with
   them. Event descriptions contain the internal Zoom link, and with calendar invitations on (`INVITE_TYPES`) the
   guests' registered emails, so keep it that way.
@@ -44,8 +44,8 @@ the bot's sheets; nothing calls Notion.
 
 How: the "Gatsby Rotas data" sheet was filled from the three databases with all their history (the fair rota
 counts past turns) and kept in step with every change the bot made for ten days. Right before the deploy that
-made it the only store it was filled once more; `finish_notion_move()` then pointed what was left (constants row
-25, five links in the pages, the setting and reminder texts) at the site.
+made it the only store it was filled once more; a one-off function then pointed what was left (constants row 25,
+five links in the pages, the setting and reminder texts) at the site.
 
 Kept on purpose:
 - Every row keeps its Notion page id as its id, and the tables keep the Notion database ids (constants rows
@@ -59,12 +59,10 @@ Kept on purpose:
 - Guest speakers are an empty Presenter plus the Guest speaker field, so the bumped presenter keeps their turn.
   The GCal ID on each slot is the only link to its calendar event: losing it makes the bot create duplicates.
 
-Left to do:
-1. Run `notion_leftovers()` in the automation's editor: it lists anything changed in Notion after the move
-   ("Notion newer"); make those changes on the site. Again a week or two later.
-2. Then a Notion workspace owner revokes the bot's integration (Settings → Connections) and unpublishes
-   gcnu.notion.site, or leaves one page there pointing to the Rotas site; archive the databases. Clear constants
-   row 21 (the token). After that `notion_http` and `notion_leftovers` can go.
+Finished the same day: `notion_leftovers()` found no edits made in Notion after the move (twice), `backup_all()`
+made a snapshot, the bot's token left the constants sheet (`forget_notion_token()`) and the move's one-off tools
+went from the code. The Notion workspace admins were asked to lock and export the old pages, unpublish
+gcnu.notion.site, disconnect the bot's integration and remove the guest gatsby.teabot@gmail.com.
 
 Ideas not done: dropdowns that offer only people eligible for a rota, refusing a slot save when someone else
 changed the slot since it was loaded, the edit log as an undo, and Google sign-in.

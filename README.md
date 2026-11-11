@@ -71,8 +71,6 @@ API, verifies it and moves the tea page to the new version. It uses the bot acco
 Useful from the Apps Script editor:
 - `send_examples()` in `Checks.js` emails the TNJC organiser one example of every bot email.
 - `backup_all()` in `Backup.js` snapshots the calendar and the sheets (rota data included) into a new spreadsheet.
-- `notion_leftovers()` in `Store.js` compares the old Notion databases with the rota data (while the Notion
-  token is still in the constants sheet).
 
 ## Agents (MCP)
 `mcp/server.js` lets an AI agent (Claude Code, Claude Desktop, …) use the tea bot the way a person uses the tea page

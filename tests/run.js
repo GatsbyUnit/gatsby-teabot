@@ -39,7 +39,6 @@ var Utilities = {
 `;
 const tests = `
 var results = [];
-var real_notion_request = notion_http;
 // the real Notion helpers, before tests below replace some of them
 var REAL = {notion_request: notion_request, notion_patch_page: notion_patch_page, notion_get_page: notion_get_page, notion_query: notion_query, to_row: to_row};
 function t(name, fn){ try { fn(); results.push('ok   ' + name); } catch (e) { results.push('FAIL ' + name + ': ' + e.message); } }
@@ -309,7 +308,6 @@ t('coffee: Mon-Fri weeks, water filter continues the 4-week cycle, texts copied'
 t('bank holidays are skipped when creating slots', () => { var c = slot_ctx(); UrlFetchApp_stub(() => ({getResponseCode: () => 200, getContentText: () => JSON.stringify({'england-and-wales': {events: [{date: '2026-11-09', title: 'Test Day'}]}})})); var r = create_slots('MLJC', {from: '2026-11-01', to: '2026-11-15'}, c); UrlFetchApp = null; assert.deepStrictEqual(made.map(p => p.Date.date.start.slice(0, 10)), ['2026-11-02']); assert.deepStrictEqual(r.holidays, ['2026-11-09 (Test Day)']); });
 t('swap list: who usually does a duty', () => { var p = {active: true, name: 'X', tnjc: true, csnjc: false, mljc: false, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false}; assert.ok(can_do_duty(p, row({}), 'presenter')); assert.ok(!can_do_duty(p, row({csnjc: true}), 'presenter')); assert.ok(!can_do_duty(p, row({type: 'Research Talk'}), 'presenter')); assert.ok(can_do_duty(p, row({type: 'Research Talk'}), 'tea')); assert.ok(!can_do_duty(Object.assign({}, p, {position: 'Included only for JCs / coffee'}), row({type: 'Tea Talk'}), 'presenter')); assert.ok(!can_do_duty(Object.assign({}, p, {active: false}), row({}), 'presenter')); });
 // network blips
-t('Notion call retries after a network exception', () => { var calls = 0; var saved = UrlFetchApp_stub(() => { calls++; if (calls < 3) throw new Error('Address unavailable'); return {getResponseCode: () => 200, getContentText: () => '{"ok":1}'}; }); Utilities.sleep = function(){}; var r = real_notion_request('get', 'x', null, {notion_token: 't'}); assert.strictEqual(r.ok, 1); assert.strictEqual(calls, 3); });
 t('hourly sync emails only after 3 failures in a row', () => { var m = []; send_mail = function(to, subj){ m.push(subj); }; clear_failures('Calendar sync'); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); assert.strictEqual(m.length, 0); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); assert.strictEqual(m.length, 1); clear_failures('Calendar sync'); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); assert.strictEqual(m.length, 1); });
 t('other jobs email on the first failure', () => { var m = []; send_mail = function(to, subj){ m.push(subj); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'a'}); assert.strictEqual(m.length, 1); });
 // error mails
@@ -534,32 +532,30 @@ function store_fill(book){
     Object.keys(props).forEach(n => { header.push(n); if (props[n].type === 'date') header.push(n + ' end'); });
     var tab = {name: name, header: header, col: {}};
     header.forEach((h, i) => { tab.col[h] = i; });
-    book.insertSheet(name).cells = [header].concat(STORE_NOTION[db].pages.map(pg => store_row_from_page(tab, pg, header.map(() => ''), {schema: schema})));
+    book.insertSheet(name).cells = [header].concat(STORE_NOTION[db].pages.map(function(pg){
+      var row = header.map(() => '');
+      row[0] = normalise_id(pg.id); row[tab.col['created']] = pg.created_time; row[tab.col['edited']] = pg.last_edited_time;
+      return store_cells(tab, pg.properties, row, {schema: schema});
+    }));
   });
   book.insertSheet('Schema');
   store_save_schema({ss: book, schema: schema});
 }
 function store_stubs(){
-  store_saved = {gc: get_global_constants, gs: get_settings, nh: notion_http, ss: SpreadsheetApp,
+  store_saved = {gc: get_global_constants, gs: get_settings, ss: SpreadsheetApp,
                  nr: notion_request, np: notion_patch_page, gp: notion_get_page, nq: notion_query, tr: to_row};
   notion_request = REAL.notion_request; notion_patch_page = REAL.notion_patch_page; notion_get_page = REAL.notion_get_page; notion_query = REAL.notion_query; to_row = REAL.to_row;
   var book = new FakeBook(), calls = [];
   store_fill(book);
   SpreadsheetApp = {openById: (id) => book, ProtectionType: {SHEET: 'SHEET'}};
   __props.STORE_SHEET_ID = 'book';
-  get_global_constants = () => Object.assign({notion_token: 't'}, STORE_DBS);
+  get_global_constants = () => Object.assign({}, STORE_DBS);
   get_settings = () => ({PAGE_URL: 'https://gatsbyunit.github.io/gatsby-teabot/'});
-  notion_http = function(method, path, body){
-    calls.push(method + ' ' + path);
-    var m;
-    if (method === 'post' && (m = path.match(/^databases\\/(\\w+)\\/query$/))) return {results: STORE_NOTION[m[1]].pages, has_more: false};
-    throw new Error('unexpected ' + method + ' ' + path);
-  };
   store_cache = null;
   return {book: book, calls: calls};
 }
 function store_restore(){
-  get_global_constants = store_saved.gc; get_settings = store_saved.gs; notion_http = store_saved.nh;
+  get_global_constants = store_saved.gc; get_settings = store_saved.gs;
   SpreadsheetApp = store_saved.ss; store_cache = null; delete __props.STORE_SHEET_ID;
   notion_request = store_saved.nr; notion_patch_page = store_saved.np; notion_get_page = store_saved.gp; notion_query = store_saved.nq; to_row = store_saved.tr;
 }
@@ -660,67 +656,16 @@ t('store: the Cron Jobs get Notion-like answers from the sheet, and their change
     assert.deepStrictEqual(st.calls, []);
   } finally { CacheService = saved; store_restore(); }
 });
-t('store: the look back at Notion lists what was changed there after the move, and what the site changed since', () => {
-  var st = store_stubs();
-  try {
-    var cells = st.book.getSheetByName('Schedule').cells;
-    cells[2][5] = 'Changed on the site';
-    cells[2][3] = '2026-11-12T10:00:00.000Z';
-    cells[1][9] = 'ffffffffffffffffffffffffffffffff';
-    cells[1][3] = '2025-12-31T00:00:00.000Z';
-    store_cache = null;
-    var diffs = notion_leftovers();
-    assert.strictEqual(diffs.length, 2, diffs.join('\\n'));
-    assert.ok(/^Schedule 1+ \\(Notion newer.*Presenter Notion "d+", sheet "f+"/.test(diffs[0]), diffs[0]);
-    assert.ok(/^Schedule 2+ \\(sheet newer.*Title Notion "Spikes", sheet "Changed on the site"/.test(diffs[1]), diffs[1]);
-  } finally { store_restore(); }
-});
-t('store: old Notion addresses in the pages become the site\\'s own', () => {
-  assert.strictEqual(site_href_from_notion('https://www.notion.so/8db62d404bf14fa5b90a6a3a3707e80a'), '/8db62d404bf14fa5b90a6a3a3707e80a');
-  assert.strictEqual(site_href_from_notion('https://www.notion.so/gcnu/Gatsby-Tea-System-2444835e8eab46fa9a7c792877e09620?pvs=4#b336808b691c4e25b407103950f50d6d'), '/2444835e8eab46fa9a7c792877e09620#b336808b691c4e25b407103950f50d6d');
-  assert.strictEqual(site_href_from_notion('https://gcnu.notion.site/Coffee-cb2adc1a95294900a825b366d65b369b'), '/cb2adc1a95294900a825b366d65b369b');
-  ['https://example.org/notion.so/x', '/556a292407ac488e91ef3b70a69768ce', 'mailto:a@b', undefined].forEach(h => assert.strictEqual(site_href_from_notion(h), h));
-});
-t('store: finishing the move points the constants, settings, reminders and pages at the site; a second run does nothing', () => {
-  var saved = {cb: const_book, est: ensure_settings_tabs, gs: get_settings, sps: site_pages_sheet, sp: site_pages, ssp: save_site_page, sf: site_forget};
-  var book = new FakeBook();
-  var first = book.tabs[0];
-  first.cells = Array.from({length: 28}, (_, i) => ['row ' + (i + 1), '']);
-  first.cells[24] = ['Notion site URL', 'https://gcnu.notion.site'];
-  var tab = book.insertSheet(SETTINGS_TAB);
-  tab.cells = [['Setting', 'Value', 'What it does'], ['DRY_RUN', 'FALSE', 'old words'], ['STORE', 'notion', 'x'], ['NOTION_MIRROR', 'TRUE', 'y'], ['PAGE_KEY', 'k', SETTINGS.filter(r => r[0] === 'PAGE_KEY')[0][2]]];
-  tab.deleteRow = function(n){ this.cells.splice(n - 1, 1); };
-  var rem = book.insertSheet(REMINDERS_TAB);
-  rem.cells = [['Month', 'Day', 'Rota', 'Subject', 'Text']].concat(Object.keys(OLD_DATE_REMINDER_TEXTS).map(t => [4, 22, 'TNJC', 's', t])).concat([[1, 1, 'TNJC', 'mine', 'In Notion, my own words']]);
-  var pages = {home: {slug: 'home', blocks: [{id: 'b1', type: 'p', rt: [{text: 'Jan', href: 'https://www.notion.so/bd83d35783aa4e728d0e77679924e9b5'}, {text: ' and '}, {text: 'MLJC', href: '/556a292407ac488e91ef3b70a69768ce'}],
-                                              children: [{id: 'b2', type: 'table', rows: [{id: 'r', cells: [[{text: 'x', href: 'https://www.notion.so/Coffee-cb2adc1a95294900a825b366d65b369b'}]]}]}]}]},
-               coffee: {slug: 'coffee', blocks: [{id: 'c1', type: 'p', rt: [{text: 'plain'}]}]}};
-  var pages_sheet = new FakeSheet('Pages');
-  pages_sheet.cells = [['Page', 'Notion id', 'Title']];
-  var written = [];
+t('store: the old Notion token leaves the constants sheet, once', () => {
+  var saved = const_book, book = new FakeBook(), first = book.tabs[0];
+  first.cells = Array.from({length: 28}, (_, i) => ['row ' + (i + 1), 'v' + (i + 1)]);
   const_book = () => book;
-  ensure_settings_tabs = () => book;
-  get_settings = () => ({PAGE_URL: 'https://gatsbyunit.github.io/gatsby-teabot/'});
-  site_pages_sheet = () => pages_sheet;
-  site_pages = () => pages;
-  save_site_page = (sheet, page, by) => written.push(page.slug + ' by ' + by);
-  site_forget = () => {};
   try {
-    var done = finish_notion_move();
-    assert.deepStrictEqual(first.cells[24], ['Gatsby Rotas site', 'https://gatsbyunit.github.io/gatsby-teabot/rotas/']);
-    assert.deepStrictEqual(tab.cells.map(r => r[0]), ['Setting', 'DRY_RUN', 'PAGE_KEY']);
-    assert.strictEqual(tab.cells[1][1], 'FALSE');
-    assert.ok(/rota data/.test(tab.cells[1][2]));
-    assert.deepStrictEqual(rem.cells.slice(1).map(r => r[4]), DEFAULT_DATE_REMINDERS.map(r => r.body).concat(['In Notion, my own words']));
-    assert.deepStrictEqual(pages.home.blocks[0].rt.map(r => r.href), ['/bd83d35783aa4e728d0e77679924e9b5', undefined, '/556a292407ac488e91ef3b70a69768ce']);
-    assert.strictEqual(pages.home.blocks[0].children[0].rows[0].cells[0][0].href, '/cb2adc1a95294900a825b366d65b369b');
-    assert.deepStrictEqual(written, ['home by tea bot (move off Notion)']);
-    assert.strictEqual(pages_sheet.cells[0][1], 'Id');
-    assert.ok(done.length >= 6, done.join(', '));
-    assert.deepStrictEqual(finish_notion_move(), []);
-  } finally {
-    const_book = saved.cb; ensure_settings_tabs = saved.est; get_settings = saved.gs; site_pages_sheet = saved.sps; site_pages = saved.sp; save_site_page = saved.ssp; site_forget = saved.sf;
-  }
+    assert.strictEqual(forget_notion_token(), true);
+    assert.deepStrictEqual(first.cells[20], ['(Notion token, removed 2026-11-11)', '']);
+    assert.deepStrictEqual(first.cells[21], ['row 22', 'v22']);
+    assert.strictEqual(forget_notion_token(), false);
+  } finally { const_book = saved; }
 });
 // the bot's Drive, as far as the photos use it
 function FakeFolder(name){ this.name = name; this.files = []; this.folders = []; }
@@ -772,31 +717,6 @@ t('site: photos are files in the bot\\'s Drive (full size and a small copy); peo
     api_site_save_photo('tok', 'b', 'data:image/jpeg;base64,BBBB');
     assert.deepStrictEqual(live(small), ['b.jpg']);
   } finally { d.restore(); site_restore(); }
-});
-t('site: the photos leave the sheet: changes made on the site since the move win, "No photo" removes, the tab goes', () => {
-  site_stubs('someone@x');
-  var d = drive_stubs();
-  var saved = {sps: site_pages_sheet};
-  var book = new FakeBook(), tab = book.insertSheet('Photos');
-  tab.cells = [['Person id', 'Photo', 'Saved', 'Saved by'],
-               ['p1', 'data:image/jpeg;base64,AAAA', 'T0', 'Jan'], ['b', 'data:image/jpeg;base64,BBBB', 'T0', 'Jan'],
-               ['cccccccccccccccccccccccccccccccc', 'data:image/jpeg;base64,CCCC', 'T0', 'Jan'],
-               ['dddddddddddddddddddddddddddddddd', 'none', 'T1', 'Dee'], ['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'data:image/jpeg;base64,RUVF', 'T2', 'Eve']];
-  site_pages_sheet = () => ({getParent: () => book});
-  try {
-    var folder = site_photos_folder(), small = site_photos_small();
-    ['cccccccccccccccccccccccccccccccc', 'dddddddddddddddddddddddddddddddd', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'].forEach(function(id){
-      folder.createFile(Utilities.newBlob([1, 2, 3], 'image/jpeg', 'Someone (' + id + ').jpg'));
-      small.createFile(Utilities.newBlob([1], 'image/jpeg', id + '.jpg'));
-    });
-    site_photos_from_sheet();
-    assert.strictEqual(book.getSheetByName('Photos'), null);
-    assert.deepStrictEqual(live(small), ['cccccccccccccccccccccccccccccccc.jpg', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.jpg']);  // the two ids that are not hex are left out
-    assert.deepStrictEqual(site_photos_read()['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'], 'data:image/jpeg;base64,RUVF');  // changed on the site after the move
-    assert.deepStrictEqual(site_photos_read()['cccccccccccccccccccccccccccccccc'], 'data:image/jpeg;base64,AQ==');  // the folder's own, full size kept
-    assert.deepStrictEqual(live(folder), ['Someone (cccccccccccccccccccccccccccccccc).jpg', 'someone (eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee).jpg'].map(n => n.replace('someone', 'Someone')));
-    assert.deepStrictEqual(site_photos_from_sheet(), []);
-  } finally { site_pages_sheet = saved.sps; d.restore(); site_restore(); }
 });
 t('site: dates for Notion', () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(site_notion_date('2026-11-02', '2026-11-06'))), {start: '2026-11-02', end: '2026-11-06'});

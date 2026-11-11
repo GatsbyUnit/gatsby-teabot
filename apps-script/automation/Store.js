@@ -360,119 +360,12 @@ function store_fetch(url, params){
 
 // ---- after the move off Notion ----
 
-// a Notion page -> a row of this tab (to compare it with the sheet)
-function store_row_from_page(tab, page, row, s){
-  row[0] = normalise_id(page.id);
-  row[tab.col['archived']] = page.archived || page.in_trash ? 'TRUE' : '';
-  row[tab.col['created']] = page.created_time || '';
-  row[tab.col['edited']] = page.last_edited_time || '';
-  row[tab.col['icon']] = page.icon ? JSON.stringify(page.icon) : '';
-  store_cells(tab, page.properties, row, s);
-  return row;
-}
-
-// Run from the editor (read-only): what differs between the old Notion databases and the sheet, with when each
-// side last changed. Edits people still made in Notion after the move show up here ("Notion newer") and need
-// making on the site; "sheet newer" is the site or the bot at work since. Needs the Notion token (constants
-// row 21) while it is still there.
-function notion_leftovers(){
-  var constants = get_global_constants();
-  store_cache = null;
-  var s = store_load(constants);
-  var out = [];
-  Object.keys(STORE_TABS).forEach(function(k){
-    var name = STORE_TABS[k], tab = store_tab(s, name), db = constants[k];
-    var notion = [], body = {page_size: 100};
-    while (true){
-      var res = notion_http('post', 'databases/' + db + '/query', body, constants);
-      notion = notion.concat(res.results);
-      if (!res.has_more) break;
-      body.start_cursor = res.next_cursor;
-    }
-    var seen = {}, edited = tab.col['edited'];
-    notion.forEach(function(page){
-      var id = normalise_id(page.id);
-      seen[id] = true;
-      var hit = s.where[id];
-      if (!hit){ out.push(name + ' ' + id + ': only in Notion (made there ' + page.created_time + ')'); return; }
-      var want = store_row_from_page(tab, page, tab.header.map(function(){ return ''; }), s);
-      var have = tab.rows[hit.i];
-      var fields = tab.header.filter(function(h, i){ return STORE_META.indexOf(h) < 0 && String(want[i]) !== String(have[i]); });
-      if (have[tab.col['archived']] === 'TRUE') fields.unshift('removed on the site');
-      if (!fields.length) return;
-      var newer = String(page.last_edited_time) > String(have[edited]) ? 'Notion newer' : 'sheet newer';
-      out.push(name + ' ' + id + ' (' + newer + ': Notion ' + page.last_edited_time + ', sheet ' + have[edited] + '): ' + fields.map(function(h){
-        var i = tab.col[h];
-        return i == null ? h : h + ' Notion "' + want[i] + '", sheet "' + have[i] + '"';
-      }).join('; '));
-    });
-    tab.rows.forEach(function(r){
-      if (r[0] && !seen[r[0]] && r[tab.col['archived']] !== 'TRUE') out.push(name + ' ' + r[0] + ': only in the sheet (made ' + r[tab.col['created']] + ')');
-    });
-  });
-  Logger.log(out.length ? out.length + ' differences:\n' + out.slice(0, 300).join('\n') : 'Notion and the rota data sheet agree.');
-  return out;
-}
-
-// Run once from the editor after the deploy that left Notion (running it again is harmless): points what still
-// led to Notion at the site.
-//   - constants row 25: the Rotas site (the Cron Jobs' email footer reads it)
-//   - Automation tab: the STORE and NOTION_MIRROR rows go, the descriptions are brought up to date
-//   - Automation reminders tab: the two default reminders get their new wording
-//   - the pages: links still written as Notion addresses become the site's own ("/<id>")
-function finish_notion_move(){
-  var done = [], settings = get_settings(), site = site_url(settings);
+// Once, after the Notion workspace dropped the bot's integration (2026-11-11): the old token leaves the constants
+// sheet (row 21). Running it again does nothing.
+function forget_notion_token(){
   var first = const_book().getSheets()[0];
-  if (String(first.getRange(25, 2).getValue()) !== site){
-    first.getRange(25, 1, 1, 2).setValues([['Gatsby Rotas site', site]]);
-    done.push('constants row 25: ' + site);
-  }
-
-  var tab = ensure_settings_tabs().getSheetByName(SETTINGS_TAB);
-  var describe = {};
-  SETTINGS.forEach(function(r){ describe[r[0]] = r[2]; });
-  var rows = tab.getRange(1, 1, tab.getLastRow(), 3).getValues();
-  for (var i = rows.length - 1; i >= 1; i--){
-    var key = String(rows[i][0]);
-    if (key === 'STORE' || key === 'NOTION_MIRROR'){ tab.deleteRow(i + 1); done.push('setting ' + key + ' removed'); }
-    else if (describe[key] && rows[i][2] !== describe[key]){ tab.getRange(i + 1, 3).setValue(describe[key]); done.push('setting ' + key + ' described anew'); }
-  }
-
-  var rem = const_book().getSheetByName(REMINDERS_TAB);
-  if (rem && rem.getLastRow() > 1){
-    var texts = rem.getRange(2, 5, rem.getLastRow() - 1, 1).getValues();
-    texts.forEach(function(r, i){
-      var now = OLD_DATE_REMINDER_TEXTS[r[0]];
-      if (now){ rem.getRange(i + 2, 5).setValue(now); done.push('reminder row ' + (i + 2) + ' reworded'); }
-    });
-  }
-
-  var sheet = site_pages_sheet(), pages = site_pages(true);
-  Object.keys(pages).forEach(function(slug){
-    var n = 0;
-    var walk = function(blocks){
-      (blocks || []).forEach(function(b){
-        [b.rt, b.caption].concat(b.rows ? b.rows.map(function(r){ return [].concat.apply([], r.cells || []); }) : []).forEach(function(rt){
-          (rt || []).forEach(function(r){
-            var to = site_href_from_notion(r.href);
-            if (to !== r.href){ r.href = to; n++; }
-          });
-        });
-        walk(b.children);
-      });
-    };
-    walk(pages[slug].blocks);
-    if (n){ save_site_page(sheet, pages[slug], 'tea bot (move off Notion)'); done.push('page ' + slug + ': ' + n + ' link' + (n === 1 ? '' : 's')); }
-  });
-  if (sheet.getRange(1, 2).getValue() === 'Notion id'){ sheet.getRange(1, 2).setValue('Id'); done.push('pages sheet heading'); }
-  site_forget('pages');
-  Logger.log(done.length ? 'Done: ' + done.join(', ') : 'Nothing left to do.');
-  return done;
-}
-
-// "https://www.notion.so/<Title>-<id>#<block>" -> "/<id>#<block>", which the site resolves to its own page,
-// person or block; any other address as it is
-function site_href_from_notion(href){
-  var m = String(href || '').match(/^https?:\/\/([\w-]+\.)?notion\.(so|site)\/(?:[^#?]*[\/-])?([0-9a-f]{32})(?:\?[^#]*)?(#[0-9a-f-]*)?$/i);
-  return m ? '/' + m[3].toLowerCase() + (m[4] ? '#' + m[4].slice(1).replace(/-/g, '') : '') : href;
+  if (!String(first.getRange(21, 2).getValue())){ Logger.log('No Notion token left.'); return false; }
+  first.getRange(21, 1, 1, 2).setValues([['(Notion token, removed 2026-11-11)', '']]);
+  Logger.log('The Notion token is gone from the constants sheet.');
+  return true;
 }
