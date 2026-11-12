@@ -62,7 +62,7 @@ Kept on purpose:
 Finished the same day: `notion_leftovers()` found no edits made in Notion after the move (twice), `backup_all()`
 made a snapshot, the bot's token left the constants sheet (`forget_notion_token()`) and the move's one-off tools
 went from the code. The Notion workspace admins were asked to lock and export the old pages, unpublish
-gcnu.notion.site, disconnect the bot's integration and remove the guest gatsby.teabot@gmail.com.
+gcnu.notion.site, disconnect the bot's integration and remove the gatsby.teabot guest account.
 
 Ideas not done: dropdowns that offer only people eligible for a rota, refusing a slot save when someone else
 changed the slot since it was loaded, the edit log as an undo, and Google sign-in.

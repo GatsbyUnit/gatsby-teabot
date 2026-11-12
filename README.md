@@ -2,7 +2,7 @@
 
 Automation for the Gatsby Unit tea / rota system: research and tea talks, tea, MLJC, TNJC (with CSNJC),
 coffee cleaning and external seminars. It runs as Google Apps Script under the shared bot account
-(gatsby.teabot@gmail.com), with no server of its own.
+(the gatsby.teabot account), with no server of its own.
 
 What to read where (each topic lives in one place only):
 - **Unit members:** the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/): rules, guides,
