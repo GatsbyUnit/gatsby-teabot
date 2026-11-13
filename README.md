@@ -31,7 +31,8 @@ copied back. The [handbook](docs/handbook.md) explains each part.
 - `site/`: the tea page itself, a static page on GitHub Pages (https://gatsbyunit.github.io/gatsby-teabot/),
   published by `.github/workflows/pages.yml` whenever it changes. It is not served by Apps Script because Apps
   Script web pages don't open for people signed in to several Google accounts. Its address is public, so without the
-  personal code or the unit key (`PAGE_KEY`) in the link it only offers to email your link to your registered address.
+  personal code in the link it only lists the registered people by name and emails the chosen person their link at
+  their registered address (or takes an address instead); leaving by name needs the unit key (`PAGE_KEY`).
 - `site/rotas/`: the Gatsby Rotas site (https://gatsbyunit.github.io/gatsby-teabot/rotas/): the member guides and
   the rota views, served by `apps-script/automation/Site.js`. The guides live in the "Gatsby Rotas pages" sheet in
   the bot's Drive (one row per page; moved off Notion on 2026-10-31); the schedule, people and rota rules come

@@ -188,7 +188,7 @@
   }
   function ok(msgEl, text){ msgEl.className = 'msg ok'; msgEl.textContent = text; }
 
-  // ---- no link: ask for the email ----
+  // ---- no personal link: pick your name (with or without the unit key), or else type your address ----
   function renderLanding(){
     var msg = el('div', {class: 'msg'});
     var sel = el('select', {}, [el('option', {value: '', text: 'Loading names…'})]);
@@ -204,12 +204,12 @@
       people.forEach(function(p){ sel.appendChild(el('option', {value: p.id, text: p.name})); });
       msg.className = 'msg'; msg.textContent = '';
       btn.disabled = false;
-    }, msg);
+    }, msg, null, function(){ if (KEY) return false; renderNoKey(); return true; });  // an older bot wanted the key: by email then
     app.innerHTML = '';
     app.appendChild(el('h1', {text: 'Gatsby tea'}));
     app.appendChild(el('p', {class: 'muted', text: 'Swap your slot, add your talk title and set your away dates. Pick your name, and we will email your personal link to the address you are registered with.'}));
     app.appendChild(el('div', {class: 'card'}, [el('label', {text: 'Your name'}), sel, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg,
-      el('p', {class: 'muted', style: 'margin:10px 0 0;font-size:13px', text: 'Not in the list, or registered with an old address? Ask the tea tsar.'})]));
+      el('p', {class: 'muted', style: 'margin:10px 0 0;font-size:13px'}, ['Not in the list? ', el('button', {class: 'quiet', text: 'Get your link by email address', onclick: renderNoKey}), ', or ask the tea tsar.'])]));
   }
 
   // ---- email change confirmation ----
@@ -666,7 +666,8 @@
     app.appendChild(el('p', {class: 'muted', text: 'Swap your slot, add your talk title and set your away dates on your personal tea page. Enter the email address the tea bot writes to you at (where your reminders arrive; not necessarily your UCL one), and we will send you its link.' +
       (LEAVE ? ' Leaving the tea system is at the bottom of that page.' : '')}));
     app.appendChild(el('div', {class: 'card'}, [el('label', {text: 'Your email'}), input, el('div', {class: 'row', style: 'margin-top:10px'}, [btn]), msg,
-      el('p', {class: 'muted', style: 'margin:10px 0 0;font-size:13px', text: 'The link is also in every gatsby.tea calendar event and in the tea bot\'s emails.'})]));
+      el('p', {class: 'muted', style: 'margin:10px 0 0;font-size:13px', text: 'The link is also in every gatsby.tea calendar event and in the tea bot\'s emails.'}),
+      LEAVE ? null : el('p', {class: 'muted', style: 'margin:6px 0 0;font-size:13px'}, [el('button', {class: 'quiet', text: 'Pick your name instead', onclick: renderLanding})])]));
   }
 
   // the tab icon is a setting (FAVICON_URL in the constants sheet); without it the tab has none
@@ -686,7 +687,7 @@
     else if (LEAVE && KEY) renderLeaveLanding();
     else if (TOKEN) load();
     else if (!LEAVE && remembered()){ TOKEN = remembered(); FROM_MEMORY = true; load(); }
-    else if (KEY) renderLanding();
+    else if (KEY || !LEAVE) renderLanding();
     else renderNoKey();
   }
   route();

@@ -326,11 +326,11 @@ function api_confirm_email(code){
   return 'Done: the tea system now uses ' + req.email + '. Your personal link stays the same.';
 }
 
-// The general page (with the unit key) lists the registered people by name; the link goes only to the chosen
-// person's registered address, which the page shows half hidden. Limited to 3 links per person per 6 hours
-// and 40 per hour overall, so nobody can flood inboxes.
+// The tea page's sign-in, with or without the unit key: everyone registered, by name (the Rotas site's sign-in page
+// lists the same names publicly), and the link goes only to the chosen person's registered address, which the answer
+// shows half hidden. Limited to 3 links per person per 6 hours and 40 per hour overall, so nobody can flood inboxes.
+// key: no longer needed (links in old emails still send it); leaving by name still needs it (Leave.js).
 function api_link_people(key){
-  check_page_key(key);
   var constants = get_global_constants();
   var people = load_people(constants);
   return identity_rows(constants).rows
@@ -340,7 +340,6 @@ function api_link_people(key){
 }
 
 function api_request_link(key, person_id){
-  check_page_key(key);
   return send_personal_link(person_id, 'Your tea page', page_link_blocks);
 }
 

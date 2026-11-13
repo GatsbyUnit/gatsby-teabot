@@ -219,7 +219,18 @@ t('coffee event deleted: reported, not cancelled', () => { __props = {}; var r =
 // leaving the tea system
 t('leave link: personal for one registered recipient, general otherwise', () => { var saved = identity_rows; identity_rows = () => ({rows: [{id: 'b', email: 'Nikolai@x', token: 'tok'}]}); identity_token_cache = null; try { var base = page_url(get_settings()); assert.strictEqual(leave_url('nikolai@x', {}, {}), base + '?t=tok&leave=1'); assert.strictEqual(leave_url('nikolai@x', {cc: 'org@x'}, {}), base + '?leave=1'); assert.strictEqual(leave_url('nikolai@x,lena@x', {}, {}), base + '?leave=1'); assert.strictEqual(leave_url('list@x', {}, {}), base + '?leave=1'); } finally { identity_rows = saved; identity_token_cache = null; } });
 t('tea-page links: the general one carries the unit key, links with a personal code do not', () => { var s = {PAGE_URL: 'https://page', PAGE_KEY: 'unitkey1'}; assert.strictEqual(page_link(s), 'https://page?k=unitkey1'); assert.strictEqual(page_link(s, {leave: 1}), 'https://page?k=unitkey1&leave=1'); assert.strictEqual(personal_link('tok', s), 'https://page?t=tok'); assert.strictEqual(page_link(s, {t: 'tok', leave: 1}), 'https://page?t=tok&leave=1'); assert.strictEqual(page_link(s, {swap: 'c1'}), 'https://page?swap=c1'); assert.strictEqual(page_link({PAGE_URL: 'https://page'}, {leave: 1}), 'https://page?leave=1'); });
-t('general page: no names, links or leaving without the unit key', () => { settings_cache = Object.assign({}, get_settings(), {PAGE_KEY: 'unitkey1'}); try { assert.throws(() => api_link_people(''), /calendar event/); assert.throws(() => api_link_people('wrongkey'), /calendar event/); assert.throws(() => api_request_link('', '0123456789abcdef0123456789abcdef'), /calendar event/); assert.throws(() => api_leave_by_name('wrongkey', '0123456789abcdef0123456789abcdef'), /calendar event/); } finally { settings_cache = null; } });
+t('general page: names without the unit key (registered and active only), but no leaving by name without it', () => {
+  settings_cache = Object.assign({}, get_settings(), {PAGE_KEY: 'unitkey1'});
+  var saved = [identity_rows, load_people, get_global_constants];
+  try {
+    get_global_constants = () => ({});
+    load_people = () => ({a: {id: 'a', name: 'Zoé Martin', active: true}, b: {id: 'b', name: 'Lena Weber', active: true}, c: {id: 'c', name: 'Sam Old', active: false}, d: {id: 'd', name: 'No Address', active: true}});
+    identity_rows = () => ({rows: [{id: 'a', email: 'z@x'}, {id: 'b', email: 'l@x'}, {id: 'c', email: 'o@x'}, {id: 'd', email: ''}]});
+    assert.deepStrictEqual(api_link_people('').map(p => p.name), ['Lena Weber', 'Zoé Martin']);
+    assert.throws(() => api_leave_by_name('wrongkey', '0123456789abcdef0123456789abcdef'), /calendar event/);
+    assert.throws(() => api_leave_by_name('', '0123456789abcdef0123456789abcdef'), /calendar event/);
+  } finally { identity_rows = saved[0]; load_people = saved[1]; get_global_constants = saved[2]; settings_cache = null; }
+});
 t('link by email: sent only to an active registered address, the same answer either way', () => {
   var m = [], store = {}; var saved = [identity_rows, send_mail, load_people, get_global_constants, CacheService];
   get_global_constants = () => ({});
