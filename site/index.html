@@ -181,10 +181,23 @@
       if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = text; }
       else { app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: text})); }
     };
-    fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: fn, args: args}), credentials: 'omit', redirect: 'follow'})
-      .then(function(r){ return r.json(); })
+    post(fn, args, 1)
       .then(function(res){ if (res.ok) finish(res.result); else fail(res.error); })
       .catch(function(){ fail('Could not reach the tea bot. Please reload the page and check whether your change went through before trying again.'); });
+  }
+  // Now and then Google never delivers the bot's answer to one call (the bot was done in seconds; asking again
+  // works). Calls that only read are asked again after 15 seconds, twice; changes are never sent twice.
+  var READS = ['api_state', 'api_debug_state', 'api_link_people', 'api_rotas', 'api_leave_info'];
+  function post(fn, args, attempt){
+    var stop = READS.indexOf(fn) >= 0 && window.AbortController ? new AbortController() : null;
+    var timer = stop && setTimeout(function(){ stop.abort(); }, 15000);
+    return fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: fn, args: args}), credentials: 'omit', redirect: 'follow', signal: stop ? stop.signal : undefined})
+      .then(function(r){ return r.json(); })
+      .then(function(res){ clearTimeout(timer); return res; }, function(err){
+        clearTimeout(timer);
+        if (stop && stop.signal.aborted && attempt < 3) return post(fn, args, attempt + 1);
+        throw err;
+      });
   }
   function ok(msgEl, text){ msgEl.className = 'msg ok'; msgEl.textContent = text; }
 

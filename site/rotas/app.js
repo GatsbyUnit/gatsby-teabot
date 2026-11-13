@@ -91,11 +91,30 @@ function forget() {
 
 class SignedOut extends Error {}
 
+// Now and then Google never delivers the bot's answer to one call (the bot was done in seconds; asking again
+// works). Calls that only read are asked again after READ_PATIENCE_MS, twice; changes are never sent twice.
+const READS = new Set(['api_site_bundle', 'api_site_photos', 'api_site_people', 'api_site_access', 'api_page_icon']);
+const READ_PATIENCE_MS = 15e3;
+
 async function api(fn, ...args) {
-  const res = await fetch(CONFIG.api, { method: 'POST', body: JSON.stringify({ fn, args }), credentials: 'omit', redirect: 'follow' });
-  const out = await res.json().catch(() => ({ ok: false, error: `The server answered ${res.status}.` }));
-  if (!out.ok) throw new Error(out.error || 'Something went wrong.');
-  return out.result;
+  for (let attempt = 1; ; attempt++) {
+    const stop = READS.has(fn) ? new AbortController() : null;
+    const timer = stop && setTimeout(() => stop.abort(), READ_PATIENCE_MS);
+    try {
+      const res = await fetch(CONFIG.api, { method: 'POST', body: JSON.stringify({ fn, args }), credentials: 'omit', redirect: 'follow', signal: stop?.signal });
+      const out = await res.json().catch((err) => {
+        if (stop?.signal.aborted) throw err;
+        return { ok: false, error: `The server answered ${res.status}.` };
+      });
+      if (!out.ok) throw new Error(out.error || 'Something went wrong.');
+      return out.result;
+    } catch (err) {
+      if (!stop?.signal.aborted) throw err;
+      if (attempt === 3) throw new Error('the tea bot did not answer');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }
 
 let bundle = null;
