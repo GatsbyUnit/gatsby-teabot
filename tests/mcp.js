@@ -21,6 +21,11 @@ const fake = http.createServer((req, res) => {
   req.on('end', () => {
     const { fn, args } = JSON.parse(body);
     calls.push([fn, args]);
+    if (args[1] === 'slow' || args[0] === 'slow') {  // Google losing answers: the first read never comes, a change's connection drops
+      if (fn === 'api_site_bundle' && calls.filter((c) => c[0] === fn && c[1][1] === 'slow').length === 1) return;
+      if (fn === 'api_title') return req.socket.destroy();
+      if (fn === 'api_site_bundle') return res.end(JSON.stringify({ ok: true, result: { pages, data: { schedule, people, rota_rules: [], options: { rules: {} } }, me: null, photos_version: '' } }));
+    }
     let result, ok = true, error;
     if (args[0] === 'tok2' || args[1] === 'tok2') {  // someone who organises nothing
       if (fn === 'api_site_bundle') result = { pages, data: { schedule, people, rota_rules: [], options: { rules: {} } }, me: { person: 'b'.repeat(32), slots: [], people: [], pages: false, rules: false } };
@@ -41,8 +46,8 @@ const fake = http.createServer((req, res) => {
   });
 });
 
-function start(token) {
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'mcp', 'server.js')], { env: { ...process.env, TEABOT_TOKEN: token, TEABOT_API: `http://127.0.0.1:${fake.address().port}/` } });
+function start(token, env = {}) {
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'mcp', 'server.js')], { env: { ...process.env, TEABOT_TOKEN: token, TEABOT_API: `http://127.0.0.1:${fake.address().port}/`, ...env } });
   let buf = '', next = 1;
   const waiting = {};
   child.stdout.on('data', (c) => {
@@ -147,6 +152,17 @@ fake.listen(0, '127.0.0.1', async () => {
     assert.ok(/api_leave/.test((await m.tool('leave_tea_system', { i_have_left_the_unit: true })).text));
   });
   m.stop();
+  const slow = start('slow', { TEABOT_READ_PATIENCE_MS: '300' });
+  await t('mcp: a lost answer to a read is asked for again; a change is sent once and said to have maybe gone through', async () => {
+    calls.length = 0;
+    const r = await slow.tool('schedule', {});
+    assert.ok(!r.error, r.text);
+    assert.strictEqual(calls.filter((c) => c[0] === 'api_site_bundle').length, 2);
+    const w = await slow.tool('set_talk_title', { slot_id: '2'.repeat(32), title: 'x' });
+    assert.ok(w.error && /may well have gone through/.test(w.text), w.text);
+    assert.strictEqual(calls.filter((c) => c[0] === 'api_title').length, 1);
+  });
+  slow.stop();
   const bad = start('nope');
   await t('mcp: an unknown code is said so', async () => {
     const r = await bad.tool('whoami');

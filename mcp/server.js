@@ -17,9 +17,28 @@ const FRESH_MS = 60e3;
 
 // ---------- the bot's web API ----------
 
+// Now and then Google never delivers the bot's answer to one call (the bot was done in seconds; asking again
+// works). Calls that only read are asked again after READ_PATIENCE_MS, twice. Changes are sent once: when their
+// answer does not come, say that the change may well have gone through.
+const READS = new Set(['api_site_bundle', 'api_state', 'api_rotas', 'api_site_access']);
+const READ_PATIENCE_MS = Number(process.env.TEABOT_READ_PATIENCE_MS) || 15e3;
+const WRITE_PATIENCE_MS = 390e3; // planning a rota can take minutes; Apps Script stops a call after six
+
 async function api(fn, ...args) {
-  const r = await fetch(API, { method: 'POST', body: JSON.stringify({ fn, args }), redirect: 'follow' });
-  const text = await r.text();
+  const read = READS.has(fn);
+  let r, text;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      r = await fetch(API, { method: 'POST', body: JSON.stringify({ fn, args }), redirect: 'follow', signal: AbortSignal.timeout(read ? READ_PATIENCE_MS : WRITE_PATIENCE_MS) });
+      text = await r.text();
+      break;
+    } catch (err) {
+      if (read && attempt < 3) continue;
+      const why = err.name === 'TimeoutError' ? 'no answer' : err.message;
+      throw new Error(read ? `The tea bot did not answer (asked three times; ${why}). Try again in a minute.`
+        : `The tea bot did not answer (${why}). The change may well have gone through: check (schedule, my_tea_page) before trying again.`);
+    }
+  }
   let res;
   try { res = JSON.parse(text); } catch { throw new Error(`The tea bot did not answer properly (HTTP ${r.status}).`); }
   if (!res.ok) throw new Error(String(res.error || 'The tea bot refused.').replace(/^(Exception|Error): /, ''));
@@ -192,7 +211,7 @@ const TOOLS = [
     inputSchema: obj({ slug: str, ops: { type: 'array', items: { type: 'object' } } }, ['slug', 'ops']),
     run: async (a) => { const p = await api('api_site_edit_page', TOKEN, a.slug, a.ops); changed(); return `# ${p.title}\n\n` + pageText(p.blocks).join('\n'); } },
 
-  { name: 'set_talk_title', description: 'Everyone: your own upcoming talk: set its title and description (the calendar and the reminder emails show them). slot_id from my_tea_page.',
+  { name: 'set_talk_title', description: 'Everyone: set the title and description (abstract, paper link, speaker bio) of any upcoming talk, not only your own (the calendar and the reminder emails show them). Not for tentative or cancelled slots. slot_id from schedule or my_tea_page.',
     inputSchema: obj({ slot_id: str, title: str, description: str }, ['slot_id', 'title']),
     run: async (a) => { const r = await api('api_title', TOKEN, norm(a.slot_id), a.title, a.description || ''); changed(); return r; } },
   { name: 'ask_swap', description: 'Everyone: ask someone to take over one of your duties (my_tea_page lists who usually does it) (they accept or decline by email or on their tea page; less than a day before the slot it goes through at once).',
