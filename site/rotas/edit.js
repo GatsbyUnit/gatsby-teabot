@@ -517,11 +517,11 @@
   // =====================================================================================================
 
   const mayEditSlot = (type) => me.slots.includes(type);
-  // tsars edit their rota's slots; presenters add the title of their own talk (as on the tea page)
+  // tsars edit their rota's slots; every member adds or changes the title and description of any talk (api_title)
   R.hooks.slotButton = (s) => mayEditSlot(s.type)
     ? `<button type="button" class="icon-button" data-edit-slot="${s.id}" title="Edit this slot" aria-label="Edit this slot">✎</button>`
-    : s.presenter.includes(me.person) && !s.tentative && !s.cancelled && s.startDate > Date.now() - 864e5
-      ? `<button type="button" class="icon-button" data-edit-title="${s.id}" title="Add or change your talk title">✎ ${s.cleanTitle ? 'Edit title' : 'Add title'}</button>` : '';
+    : me.member && R.TYPES[s.type]?.talk && !s.tentative && !s.cancelled && s.startDate > Date.now() - 864e5
+      ? `<button type="button" class="icon-button" data-edit-title="${s.id}" title="Add or change the talk's title and description">✎ ${s.cleanTitle ? 'Edit title' : 'Add title'}</button>` : '';
   R.hooks.scheduleBar = () => me.slots.length ? '<button type="button" class="edit-button" data-add-slot>＋ Add a slot</button>' : '';
 
   const opts = () => R.loadData().options || {};
@@ -692,7 +692,7 @@
     }
   });
 
-  // your own talk: title and description (the tea page's api_title, which also updates the calendar)
+  // a talk's title and description, by any member (the tea page's api_title, which also updates the calendar)
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-edit-title]');
     if (!b) return;
@@ -702,7 +702,7 @@
     document.querySelectorAll('[data-title-form]').forEach((x) => x.closest('.form-host')?.remove());
     li.hidden = true;
     li.insertAdjacentHTML('afterend', `<li class="form-host"><form class="edit-form" data-title-form>
-      <label>Talk title<input class="title-input" name="title" value="${esc(s.title.replace(/\[[^\]]*tentative\]/ig, '').trim())}" placeholder="Title of your talk"></label>
+      <label>Talk title<input class="title-input" name="title" value="${esc(s.title.replace(/\[[^\]]*tentative\]/ig, '').trim())}" placeholder="Title of the talk"></label>
       <label>Description${s.type === 'TNJC' || s.type === 'MLJC' ? ' (for journal clubs, include the paper link)' : ''}<textarea name="description" placeholder="Abstract, paper link, …">${esc(s.description || '')}</textarea></label>
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div></form></li>`);

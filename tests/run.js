@@ -388,6 +388,31 @@ function site_restore(){
   get_global_constants = site_saved.gc; identity_for_token = site_saved.idt; notion_request = site_saved.nr;
   notion_patch_page = site_saved.np; notion_get_page = site_saved.gp; load_people = site_saved.lp; ensure_log_sheet = site_saved.ls; site_person = site_saved.pe;
 }
+t('talk titles: any member sets the title and description of any talk, not on tentative, cancelled or coffee slots, and cannot cancel by title', () => {
+  var saved = [page_context, notion_get_page, notion_patch_page, log_row];
+  var patched = null, logged = [];
+  var slot = (type, title) => () => ({id: 's1', properties: {Type: {select: {name: type}}, Title: {title: title ? [{plain_text: title}] : []},
+    Presenter: {relation: [{id: 'b'}]}, Date: {date: {start: '2026-11-16T13:30:00.000+00:00'}}}});
+  try {
+    page_context = () => ({me: {id: 'p1', name: 'Lena Weber'}, constants: {}, settings: {}, cal: {getEventById: () => null}});
+    notion_patch_page = (id, props) => { patched = props; };
+    log_row = (ctx, job, type, date, action, detail) => logged.push(action + ': ' + detail);
+    notion_get_page = slot('MLJC', '');  // someone else's talk
+    assert.ok(/^Saved/.test(api_title('tok', 's1', ' A map of feature learning ', 'Abstract: …')));
+    assert.strictEqual(patched.Title.title[0].text.content, 'A map of feature learning');
+    assert.deepStrictEqual(logged, ['title: Lena Weber: A map of feature learning']);
+    patched = null;
+    notion_get_page = slot('Coffee Cleaning', '');
+    assert.throws(() => api_title('tok', 's1', 'x', ''), /no talk/);
+    notion_get_page = slot('TNJC', '[TNJC Tentative]');
+    assert.throws(() => api_title('tok', 's1', 'x', ''), /tentative/);
+    notion_get_page = slot('Research Talk', 'Cancelled');
+    assert.throws(() => api_title('tok', 's1', 'x', ''), /cancelled/);
+    notion_get_page = slot('Research Talk', 'Old title');
+    assert.throws(() => api_title('tok', 's1', 'Cancelled: ill', ''), /Nobody can take over/);
+    assert.strictEqual(patched, null);
+  } finally { page_context = saved[0]; notion_get_page = saved[1]; notion_patch_page = saved[2]; log_row = saved[3]; }
+});
 t('site: who may edit what', () => {
   site_stubs('Tsar@x');
   try {

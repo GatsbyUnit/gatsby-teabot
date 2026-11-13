@@ -241,13 +241,20 @@ function api_cancel(token, row_id, reason){
   return 'Cancelled. The organiser has been told, and you will be scheduled again soon.';
 }
 
+// Any member may set the title and description of any talk, not only its presenter (a guest's host, a
+// colleague with the abstract at hand); every change is in the log with their name. Cancelling stays with the
+// presenter's tea page and the organisers.
+const TITLE_TYPES = ['Research Talk', 'Tea Talk', 'External Seminar', 'Leaving Tea', 'MLJC', 'TNJC'];
+
 function api_title(token, row_id, title, description){
   var ctx = page_context(token);
   var row = to_row(notion_get_page(row_id, ctx.constants));
-  if (row.presenter_ids.indexOf(ctx.me.id) < 0) throw new Error('Only the presenter can change the title.');
+  if (TITLE_TYPES.indexOf(row.type) < 0) throw new Error('This slot has no talk to give a title to.');
   if (is_tentative(row)) throw new Error('This slot is still tentative. You can add a title once it is confirmed.');
+  if (is_cancelled_title(row.title)) throw new Error('This talk is cancelled.');
   title = String(title || '').trim().slice(0, 300);
   description = String(description || '').trim().slice(0, 6000);
+  if (is_cancelled_title(title)) throw new Error('To cancel a talk, use "Nobody can take over?" on the presenter\'s tea page, or ask the organiser.');
   notion_patch_page(row.id, {
     'Title': {title: title ? [{text: {content: title}}] : []},
     'Description': {rich_text: chunk_text(description)}
