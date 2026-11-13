@@ -991,21 +991,22 @@
   function accessItem(e) {
     const added = e.added ? ` · added ${esc(e.added)}${e.by ? ` by ${esc(e.by)}` : ''}` : '';
     const mine = e.id === me.person || e.person === me.person;
+    const fixed = mine || (e.role === 'Unit admin' && !me.grant_admin); // only the tea tsar and unit admins change unit admins
     return `<li data-access-id="${e.id}">
       <span class="access-who"><strong>${esc(e.name)}</strong> <span class="muted">${esc(e.email)}${e.person ? ' · on the rotas' : ''}${added}</span></span>
-      <span class="access-tools"><select data-access-role aria-label="Role of ${esc(e.name)}"${mine ? ' disabled' : ''}>${Object.keys(ROLES).map((r) => `<option${r === e.role ? ' selected' : ''}${r === 'Reader' && e.person ? ' disabled' : ''}>${r}</option>`).join('')}</select>
-        ${mine ? '' : '<button type="button" class="edit-button small" data-access-remove>Remove</button>'}</span></li>`;
+      <span class="access-tools"><select data-access-role aria-label="Role of ${esc(e.name)}"${fixed ? ' disabled' : ''}>${Object.keys(ROLES).map((r) => `<option${r === e.role ? ' selected' : ''}${(r === 'Reader' && e.person) || (r === 'Unit admin' && !me.grant_admin) ? ' disabled' : ''}>${r}</option>`).join('')}</select>
+        ${fixed ? '' : '<button type="button" class="edit-button small" data-access-remove>Remove</button>'}</span></li>`;
   }
 
   function openAccess(trigger) {
     const host = panel(trigger, `<section class="edit-form access-panel">
       <h3>Site access</h3>
-      <p class="field-hint">Everyone on the rotas can read this site already. Add others here. <strong>Reader:</strong> ${ROLES.Reader} <strong>Unit admin:</strong> ${ROLES['Unit admin']}</p>
+      <p class="field-hint">Everyone on the rotas can read this site already. Add others here. <strong>Reader:</strong> ${ROLES.Reader} <strong>Unit admin:</strong> ${ROLES['Unit admin']}${me.grant_admin ? '' : ' Only the tea tsar and the unit admins make unit admins.'}</p>
       <ul class="access-list"><li class="muted">Loading…</li></ul>
       <form data-access-form>
         <div class="row"><label>Name<input name="name" required autocomplete="off"></label>
           <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@ucl.ac.uk"></label>
-          <label>Role<select name="role">${Object.keys(ROLES).map((r) => `<option>${r}</option>`).join('')}</select></label></div>
+          <label>Role<select name="role">${Object.keys(ROLES).map((r) => `<option${r === 'Unit admin' && !me.grant_admin ? ' disabled title="Only the tea tsar and the unit admins make unit admins"' : ''}>${r}</option>`).join('')}</select></label></div>
         <label class="check"><input type="checkbox" name="notify" checked> Email them a link that signs them in</label>
         <div class="actions"><button type="submit" class="edit-button primary">Add</button>
           <button type="button" class="edit-button" data-form-cancel>Close</button><span class="error" role="alert"></span></div>

@@ -318,6 +318,8 @@ function api_confirm_email(code){
   ident.sheet.getRange(mine.row, 3).setValue(req.email);
   CacheService.getScriptCache().remove('email:' + code);
   CacheService.getScriptCache().remove(PEOPLE_CACHE_KEY);
+  var person = load_people(constants)[req.id];
+  if (person) list_todo(list_moves(list_person(person, {email: old_email}), list_person(person, {email: req.email})), constants, person.name + ' changed their address on their tea page.');
   if (old_email && old_email.toLowerCase() !== req.email.toLowerCase()){
     send_mail(old_email, 'Your tea system email was changed', ['The Gatsby tea system now uses ' + req.email + ' for you instead of this address. If this was not you, reply to this email.'], constants, {reply_to: constants['admin_email']});
   }

@@ -5,7 +5,7 @@
 //    leavers, who is on which rota, their emails, and this list. Not the guide pages or the rota rules.
 //
 // The list is the "Site access" tab of the rota data sheet, one row per person, kept on the site by the tsars and
-// the unit admins. A row about a rota member (matched by their registered email, or else by their exact name)
+// the unit admins; only the tea tsar and the unit admins make someone a unit admin, or take that away. A row about a rota member (matched by their registered email, or else by their exact name)
 // only adds the role: they keep signing in as themselves. Anyone else signs in with the row's own code (column
 // Token), which the sign-in link and the welcome email hand out; removing the row ends their access.
 
@@ -145,6 +145,9 @@ function api_site_save_access(token, input){
     var entries = access_entries();
     var current = input.id ? entries.filter(function(e){ return e.id === String(input.id); })[0] : null;
     if (input.id && !current) throw new Error('This entry is not on the list any more. Please reload the page.');
+    if ((role === 'Unit admin' || (current && current.role === 'Unit admin')) && !ed.rights.grant_admin){
+      throw new Error('Only the tea tsar and the unit admins can make someone a unit admin, or change a unit admin.');
+    }
     var others = entries.filter(function(e){ return !current || e.id !== current.id; });
     var clash = others.filter(function(e){ return e.email.toLowerCase() === email.toLowerCase(); })[0];
     if (clash) throw new Error(email + ' is on the list already (' + clash.name + ').');
@@ -182,6 +185,7 @@ function api_site_remove_access(token, id){
     var e = access_entry(String(id || ''));
     if (e){
       if (e.id === ed.rights.person || e.person === ed.rights.person) throw new Error('You can\'t take yourself off the list. Ask a tsar.');
+      if (e.role === 'Unit admin' && !ed.rights.grant_admin) throw new Error('Only the tea tsar and the unit admins can remove a unit admin.');
       access_sheet().deleteRow(e.row);
       access_forget();
       log_site_edit(ed, 'site access removed: ' + e.name + ' (' + e.role + ')');

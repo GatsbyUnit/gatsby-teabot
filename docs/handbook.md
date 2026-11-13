@@ -70,6 +70,11 @@ and after every change it makes, so edits made on the site or the tea page show 
     hold, each linked, to hand over. (The Cron Jobs' people sync then removes their identity-sheet row.)
   - **Several people onto a rota** ("＋ Put people on a rota", e.g. a new cohort onto TNJC): pick the rota, tick
     everyone who should be on it (search by name, position or year), save. Organisers only for their own rota.
+  - **Mailing lists:** the TNJC, CSNJC and MLJC lists are consumer Google Groups, which no Google API can change
+    (the coffee list, constants row 26, is handled the same way). So whenever someone joins or leaves a rota (ticked or unticked on the site, a leaver,
+    someone leaving the tea system, or a new registered address), the rota's organiser gets one email saying whom
+    to add to or remove from which list, with their address and a link to the group's members page. Someone
+    unticked but still in the unit is marked "keep them if they still want its emails".
 - **Rota rules** (tea tsar): pick from the list, saved at once. The coffee duties are text on the Coffee page.
 - **Photos:** in a person's ✎ form, "Photo" (any picture; it is cut to a small square) or "No photo". Everyone
   signed in can change their own photo on their page ("Change my photo"). Photos are files in the "Gatsby Rotas
@@ -78,7 +83,8 @@ and after every change it makes, so edits made on the site or the tea page show 
   reaches the site within the hour. People without a small copy show their initials.
 
 **Site access: readers and unit admins** (People → "Site access"; tsars and unit admins). Everyone on the rotas can
-read the site. Add others by name and email:
+read the site. Add others by name and email (only the tea tsar and the unit admins make, change or remove unit
+admins; rota organisers add and remove readers):
 - **Reader:** reads everything members read (schedule, people, guides; also the toolbox's internal Zoom link),
   changes nothing. For colleagues not on the rotas, e.g. SWC's newsletter.
 - **Unit admin:** unit staff who look after the rotas without asking the tsars: switches on any slot, newcomers,
@@ -107,7 +113,7 @@ reminds you on Mondays when a rota's schedule is about to run out. In the Organi
 **Who counts for whom:** turns are counted per rota from the site's data. The swap list shows the people on that rota first (TNJC / CSNJC / MLJC / Coffee ticks, the "Excluded from …" boxes, "Included only for JCs / coffee"), then everyone else. Whoever is recorded as doing a duty has had their turn; if someone outside the rota steps in, the slot counts for nobody and the person who handed it over keeps their turn.
 
 ## Once a year
-- **October:** add new students to the gatsby-tnjc Google Group (Group → People → Add members; direct adding only works for Gmail addresses), and untick TNJC/CSNJC on the site for people who left. The bot reminds the TNJC organiser on 1 Oct.
+- **October:** tick TNJC for the new students on the site and untick TNJC/CSNJC for people who left; the bot then emails you whom to add to and remove from the gatsby-tnjc Google Group (see Mailing lists above). The bot reminds the TNJC organiser on 1 Oct.
 - **Third term:** add the first years as presenters (tick TNJC / CSNJC on their page on the site). Reminder on 22 Apr.
 
 ## Handing over: a guide for new organisers and tea tsars

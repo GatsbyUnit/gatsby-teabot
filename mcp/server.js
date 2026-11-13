@@ -179,7 +179,7 @@ const TOOLS = [
       return r.map((p) => ({ name: p.name, rotas: p.rotas })); } },
   { name: 'site_access', description: 'Tsars and unit admins: who else may use the Gatsby Rotas site besides the people on the rotas: readers (read only, e.g. for a newsletter) and unit admins (change every rota\'s slots and people, and this list).',
     inputSchema: obj({}), run: async () => api('api_site_access', TOKEN) },
-  { name: 'save_site_access', description: 'Tsars and unit admins: add someone to the site access list (name, email, role Reader or Unit admin; notify=true emails them a link that signs them in), or change an entry (id from site_access). Someone on the rotas can only be a unit admin: they read the site already.',
+  { name: 'save_site_access', description: 'Tsars and unit admins: add someone to the site access list (name, email, role Reader or Unit admin; notify=true emails them a link that signs them in), or change an entry (id from site_access). Someone on the rotas can only be a unit admin: they read the site already. Only the tea tsar and the unit admins make, change or remove unit admins; rota organisers keep the readers.',
     inputSchema: obj({ id: str, name: str, email: str, role: { ...str, description: 'Reader or Unit admin' }, notify: bool }, ['name', 'email', 'role']),
     run: async (a) => api('api_site_save_access', TOKEN, a) },
   { name: 'remove_site_access', description: 'Tsars and unit admins: take someone off the site access list (id from site_access); someone not on the rotas is signed out at once.',

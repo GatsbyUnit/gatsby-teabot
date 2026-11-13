@@ -99,6 +99,7 @@ function leave_tea_system(ctx, how){
   var ident = identity_rows(ctx.constants);
   var mine = ident.rows.filter(function(r){ return r.id === me.id; })[0];
   if (mine) ident.sheet.getRange(mine.row, 3, 1, 2).setValues([['', '']]);   // email, tea-page code
+  list_todo(list_moves(list_person(me, {email: email}), list_person(me, {active: false})), ctx.constants, me.name + ' has left the Gatsby tea system.');
   CacheService.getScriptCache().remove(PEOPLE_CACHE_KEY);
   identity_token_cache = null;
   log_row(ctx, 'page', '', null, 'left the tea system', me.name + (rows.length ? ', ' + rows.length + ' upcoming slots to reassign' : ''));

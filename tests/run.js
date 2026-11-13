@@ -847,14 +847,21 @@ t('site access: adding someone links rota members (by address, else by name), re
     assert.throws(() => api_site_save_access('tok', {name: 'Nikolai Petrov', email: 'n.petrov@ucl.ac.uk', role: 'Reader'}), /can read the site already/);
     assert.throws(() => api_site_save_access('tok', {name: 'X', email: 'nope', role: 'Reader'}), /email address/);
     assert.throws(() => api_site_save_access('tok', {name: 'X', email: 'x@y.org', role: 'Owner'}), /Reader or Unit admin/);
+    // a rota tsar keeps the readers; only the tea tsar and unit admins make unit admins
+    assert.throws(() => api_site_save_access('tok', {name: 'Nikolai Petrov', email: 'n.petrov@ucl.ac.uk', role: 'Unit admin'}), /Only the tea tsar and the unit admins/);
+    assert.throws(() => api_site_save_access('tok', {name: 'Lena Weber', email: 'tnjc@x.org', role: 'Unit admin'}), /Only the tea tsar and the unit admins/);  // not themselves either
+    identity_for_token = (tok) => (tok === 'tok' ? {id: 'p1', email: 'tsar@x'} : null);
     list = api_site_save_access('tok', {name: 'Nikolai Petrov', email: 'n.petrov@ucl.ac.uk', role: 'Unit admin', notify: true});
     var nik = list.filter(e => e.role === 'Unit admin')[0];
     assert.strictEqual(nik.person, 'b');
     assert.strictEqual(a.sh.rows[2][5], '');  // members sign in as themselves
     assert.strictEqual(a.mails[1].to, 'nikolai@x');
     assert.ok(a.mails[1].text.indexOf('?t=nikotoken') >= 0 && !a.mails[1].opts.no_leave && /make changes/.test(a.mails[1].subject));
+    identity_for_token = (tok) => (tok === 'tok' ? {id: 'p1', email: 'tnjc@x'} : null);
+    assert.throws(() => api_site_remove_access('tok', nik.id), /Only the tea tsar and the unit admins can remove/);
+    assert.throws(() => api_site_save_access('tok', {id: nik.id, name: 'Nikolai Petrov', email: 'n.petrov@ucl.ac.uk', role: 'Unit admin'}), /Only the tea tsar and the unit admins/);
     identity_for_token = (tok) => (tok === 'tok' ? {id: 'b', email: 'nikolai@x'} : null);
-    assert.ok(site_rights('tok', get_global_constants()).unit_admin);
+    assert.ok(site_rights('tok', get_global_constants()).unit_admin && site_rights('tok', get_global_constants()).grant_admin);
     assert.throws(() => api_site_remove_access('tok', nik.id), /yourself/);
     list = api_site_remove_access('tok', list.filter(e => e.role === 'Reader')[0].id);
     assert.deepStrictEqual(list.map(e => e.name), ['Nikolai Petrov']);
@@ -904,14 +911,52 @@ t('site: unit admins add newcomers with their email, take leavers off (their swa
     assert.deepStrictEqual(Object.keys(__props), ['swapreq:def']);
     assert.strictEqual(patched[0][1]['Active'].checkbox, false);
     patched = [];
+    load_people = () => ({p1: {id: 'p1', name: 'Lena Weber', active: true, email: 'someone@x', mljc: true}, b: {id: 'b', name: 'Nikolai Petrov', active: true, email: 'nikolai@x.org'}});
+    var consts = get_global_constants;
+    get_global_constants = () => Object.assign(consts(), {mljc_email: 'gatsby-mljc@googlegroups.com'});
+    a.mails.length = 0;
     api_site_set_rota('tok', 'MLJC', ['b'], ['p1']);
+    get_global_constants = consts;
     assert.deepStrictEqual(patched.map(x => [x[0].replace(/-/g, ''), x[1].MLJC.checkbox]), [['b', true], ['p1', false]]);
+    assert.deepStrictEqual(a.mails.map(m => m.to), ['mljc@x']);
+    assert.ok(a.mails[0].text.indexOf('Add Nikolai Petrov <nikolai@x.org>') >= 0 && a.mails[0].text.indexOf('Remove Lena Weber <someone@x> (taken off MLJC') >= 0);
     identity_for_token = () => ({id: 'b', email: 'tnjc@x'});
     access_forget();
     assert.throws(() => api_site_set_rota('tok', 'MLJC', ['b'], []), /Only the MLJC tsar/);
     api_site_set_rota('tok', 'CSNJC', ['p1'], []);
     assert.throws(() => api_site_save_person('tok', {name: 'Someone New'}), /tea tsar and the unit admins/);
   } finally { __props = {}; a.restore(); site_restore(); }
+});
+
+t('mailing lists: who to add, remove or re-address, from two states of a person', () => {
+  var lena = {name: 'Lena Weber', email: 'lena@ucl.ac.uk', active: true, tnjc: true, csnjc: true, mljc: false, coffee: false};
+  var j = (x) => JSON.parse(JSON.stringify(x));
+  assert.deepStrictEqual(j(list_moves(null, list_person(null, {name: 'Sam New', email: 'sam@ucl.ac.uk', tnjc: true}))), [{rota: 'TNJC', action: 'add', name: 'Sam New', email: 'sam@ucl.ac.uk'}]);
+  assert.deepStrictEqual(j(list_moves(lena, list_person(lena, {active: false}))).map(m => [m.rota, m.action, m.why]), [['TNJC', 'remove', 'left'], ['CSNJC', 'remove', 'left']]);
+  assert.deepStrictEqual(j(list_moves(lena, list_person(lena, {csnjc: false, mljc: true}))).map(m => [m.rota, m.action, m.why]), [['CSNJC', 'remove', 'off'], ['MLJC', 'add', undefined]]);
+  assert.deepStrictEqual(j(list_moves(lena, list_person(lena, {email: 'l.weber@gmail.com'}))).map(m => [m.rota, m.action, m.old, m.email]),
+    [['TNJC', 'replace', 'lena@ucl.ac.uk', 'l.weber@gmail.com'], ['CSNJC', 'replace', 'lena@ucl.ac.uk', 'l.weber@gmail.com']]);
+  assert.deepStrictEqual(list_moves(lena, list_person(lena, {name: 'Lena W.'})), []);
+  assert.deepStrictEqual(list_moves(list_person(lena, {active: false}), list_person(lena, {active: false, tnjc: false})), []);  // inactive people are on no list
+  assert.ok(/no address registered yet/.test(list_line({rota: 'TNJC', action: 'add', name: 'X', email: ''})));
+});
+t('mailing lists: one email per organiser, every list they look after, with a link to the group', () => {
+  var saved = send_mail, mails = [];
+  send_mail = (to, subject, blocks) => mails.push({to: to, subject: subject, text: JSON.stringify(blocks)});
+  try {
+    var c = {tnjc_email: 'gatsby-tnjc@googlegroups.com', csnjc_email: 'gatsby-csnjc@googlegroups.com', mljc_email: 'gatsby-mljc@googlegroups.com',
+             tnjc_admin_email: 'tnjc@x', mljc_admin_email: 'mljc@x', admin_email: 'tsar@x'};
+    var lena = {name: 'Lena Weber', email: 'lena@ucl.ac.uk', active: true, tnjc: true, csnjc: true, mljc: true};
+    list_todo(list_moves(lena, list_person(lena, {active: false})), c, 'Lena Weber has left the Gatsby tea system.');
+    assert.deepStrictEqual(mails.map(m => [m.to, m.subject]), [['tnjc@x', 'Mailing list: 2 changes to make'], ['mljc@x', 'Mailing list: 1 change to make']]);
+    assert.ok(mails[0].text.indexOf('TNJC: gatsby-tnjc@googlegroups.com') >= 0 && mails[0].text.indexOf('CSNJC: gatsby-csnjc@googlegroups.com') >= 0);
+    assert.ok(mails[0].text.indexOf('Remove Lena Weber <lena@ucl.ac.uk> (no longer on the rotas)') >= 0);
+    assert.ok(mails[0].text.indexOf('https://groups.google.com/g/gatsby-tnjc/members') >= 0);
+    mails = [];
+    list_todo([{rota: 'Coffee', action: 'add', name: 'X', email: 'x@y.org'}], c, 'x');  // no coffee list configured: nothing
+    list_todo([], c, 'x');
+    assert.strictEqual(mails.length, 0);
+  } finally { send_mail = saved; }
 });
 results.join('\\n');
 `;

@@ -106,12 +106,13 @@ function site_caller(token, constants, known){
 // What the holder of this token may change on the site. Tsars are the tea tsar (admin_email, everything)
 // and the rota organisers (the pages, their rota's slots and membership). Unit admins (site access list) change
 // every rota's slots and people and the access list, but not the pages or the rota rules; the tsars keep the
-// access list too. Readers change nothing. debug: may open anyone's tea page in the read-only debug view (the
-// tea tsar's address and the bot's own account; WebApp.js).
+// access list too, but only the tea tsar and the unit admins make (or unmake) unit admins (grant_admin). Readers
+// change nothing. debug: may open anyone's tea page in the read-only debug view (the tea tsar's address and the bot's
+// own account; WebApp.js).
 function site_rights(token, constants, known){
   var me = site_caller(token, constants, known);
   var r = {person: me ? me.id : '', member: !!(me && me.member), pages: false, rules: false, people: [], slots: [],
-           add_people: false, tea_tsar: false, unit_admin: false, access: false, debug: false};
+           add_people: false, tea_tsar: false, unit_admin: false, access: false, grant_admin: false, debug: false};
   if (!me) return r;
   var email = String(me.email || '').toLowerCase();
   // a constants cell may hold several addresses, comma-separated
@@ -120,14 +121,14 @@ function site_rights(token, constants, known){
   r.unit_admin = access_roles(me.id, email).indexOf('Unit admin') >= 0;
   r.debug = listed('admin_email') || (!!email && email === bot_email());
   if (is('admin_email')){
-    return Object.assign(r, {pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true, access: true});
+    return Object.assign(r, {pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true, access: true, grant_admin: true});
   }
   if (is('tnjc_admin_email')){ r.slots.push('TNJC'); r.people.push('TNJC', 'CSNJC'); }
   if (is('mljc_admin_email')){ r.slots.push('MLJC'); r.people.push('MLJC'); }
   if (is('coffee_admin_email')){ r.slots.push('Coffee Cleaning'); r.people.push('Coffee'); }
   r.pages = r.slots.length > 0;
   r.access = r.pages;
-  if (r.unit_admin) Object.assign(r, {people: ['all'], slots: ALL_TYPES.slice(), add_people: true, access: true});
+  if (r.unit_admin) Object.assign(r, {people: ['all'], slots: ALL_TYPES.slice(), add_people: true, access: true, grant_admin: true});
   return r;
 }
 
@@ -769,6 +770,9 @@ function api_site_save_person(token, person){
     : notion_request('post', 'pages', {parent: {database_id: constants['notion_people_db_id']}, properties: props}, constants);
   var saved = site_person(page);
   var what = (id ? 'changed ' : 'added ') + 'person ' + (person.name || id);
+  var box = function(name){ return props[name] ? props[name].checkbox : undefined; };
+  var after = list_person(before, {name: saved.name || person.name || (before && before.name), email: email || undefined, active: box('Active'),
+                                   tnjc: box('TNJC'), csnjc: box('CSNJC'), mljc: box('MLJC'), coffee: box('Coffee')});
   if (email && (!before || String(before.email || '').toLowerCase() !== email.toLowerCase())){
     var old = site_set_email(saved.id, saved.name, email, constants);
     what += ', email set';
@@ -785,6 +789,7 @@ function api_site_save_person(token, person){
   }
   site_forget('data');
   log_site_edit(ed, what);
+  list_todo(list_moves(before, after), constants, site_name(ed) + ' changed ' + after.name + ' on the Gatsby Rotas site.');
   saved.email_hint = email ? mask_email(email) : before && before.email ? mask_email(before.email) : '';
   return saved;
 }
@@ -823,13 +828,18 @@ function api_site_set_rota(token, rota, on, off){
     });
   });
   if (changes.length > 80) throw new Error('Please change at most 80 people at once.');
+  var moves = [];
   var saved = changes.map(function(c){
     var props = {};
     props[rota] = {checkbox: c[1]};
+    var flag = {};
+    flag[rota.toLowerCase()] = c[1];
+    moves = moves.concat(list_moves(people[c[0]], list_person(people[c[0]], flag)));
     return site_person(notion_patch_page(hyphenate_id(c[0]), props, ed.constants));
   });
   site_forget('data');
   if (changes.length) log_site_edit(ed, rota + ': ' + changes.map(function(c){ return (c[1] ? '+' : '-') + people[c[0]].name; }).join(', '));
+  list_todo(moves, ed.constants, site_name(ed) + ' changed who is on ' + rota + ' on the Gatsby Rotas site.');
   return saved;
 }
 
