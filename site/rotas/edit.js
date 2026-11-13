@@ -801,7 +801,7 @@
       ${all ? `<div class="row"><label>Name<input class="title-input" name="name" value="${esc(p.name || '')}" required></label>
         <label>Position<select name="position"${isNew ? ' required' : ''}><option value=""></option>${(o.positions || []).map((x) => `<option${x === p.position ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
         <label>Joined<input type="date" name="joined" value="${esc(p.joined || '')}"${isNew ? ' required' : ''}></label></div>
-        <label>Email<input type="email" name="email" autocomplete="off" placeholder="${isNew ? 'name@ucl.ac.uk' : esc(p.email_hint || 'no address yet')}"><span class="field-hint">${emailHint}</span></label>`
+        <label>Email<input type="email" name="email" autocomplete="off" placeholder="${isNew ? 'name@example.com' : esc(p.email_hint || 'no address yet')}"><span class="field-hint">${emailHint}</span></label>`
     : `<strong>${esc(p.name)}</strong>`}
       ${tsar ? `<div class="row">${mine.map((r) => `<label class="check"><input type="checkbox" name="rota" value="${r}"${(p.rotas || []).includes(r) ? ' checked' : ''}> ${r}</label>`).join('')}</div>` : ''}
       ${all ? `<div class="row"><span class="muted">Exempt from</span>${EXEMPT.map(([k, l]) => `<label class="check"><input type="checkbox" name="excluded" value="${k}"${(isNew || (p.excluded || []).includes(k)) ? ' checked' : ''}> ${l}</label>`).join('')}</div>
@@ -1005,7 +1005,7 @@
       <ul class="access-list"><li class="muted">Loading…</li></ul>
       <form data-access-form>
         <div class="row"><label>Name<input name="name" required autocomplete="off"></label>
-          <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@ucl.ac.uk"></label>
+          <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@example.com"></label>
           <label>Role<select name="role">${Object.keys(ROLES).map((r) => `<option${r === 'Unit admin' && !me.grant_admin ? ' disabled title="Only the tea tsar and the unit admins make unit admins"' : ''}>${r}</option>`).join('')}</select></label></div>
         <label class="check"><input type="checkbox" name="notify" checked> Email them a link that signs them in</label>
         <div class="actions"><button type="submit" class="edit-button primary">Add</button>
