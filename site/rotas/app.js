@@ -805,8 +805,11 @@ function renderAccount() {
   el.hidden = !p;
   if (!p) return;
   if (isMember()) el.href = personHref(p.id); else el.removeAttribute('href');
-  el.title = `Signed in as ${p.name}`;
-  el.innerHTML = `${avatar(p, 'avatar-xs')}<span class="account-name">${esc(p.name)}</span>`;
+  // a tsar's badge (the tea page's) on their portrait, top left
+  const b = bundle.me?.badge;
+  el.title = `Signed in as ${p.name}${b ? ` (${b.label})` : ''}`;
+  const face = b ? `<span class="account-face">${avatar(p, 'avatar-xs')}<img class="account-royal" src="${esc(b.src)}" alt="${esc(b.label)}"></span>` : avatar(p, 'avatar-xs');
+  el.innerHTML = `${face}<span class="account-name">${esc(p.name)}</span>`;
 }
 
 function renderNav(active) {
@@ -937,8 +940,35 @@ function footerMeta() {
     bundleAt && `Checked ${F.stamp.format(new Date(bundleAt))}`,
     (!s || isMember()) && `<a href="${esc(teaLink)}">Tea page</a>`,
     who, s && '<button type="button" class="link-button" data-sign-out>Sign out</button>',
+    bundle?.contact && `<button type="button" class="link-button" data-report>Report an issue (tea tsar${bundle.contact.name ? ' ' + esc(bundle.contact.name) : ''})</button>`,
   ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
 }
+
+// "Report an issue": an email to the tea tsar, or an issue on GitHub (public), with a link to the page it is about
+const ISSUES_URL = 'https://github.com/GatsbyUnit/gatsby-teabot/issues/new';
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('[data-report]')) return;
+  const c = bundle?.contact;
+  if (!c) return;
+  const keep = new URLSearchParams([...params].filter(([k]) => ['p', 'person', 'slot'].includes(k))).toString();
+  const page = location.origin + location.pathname + (keep ? '?' + keep : '');
+  const ask = '(What happened, and what did you expect?)';
+  const first = c.name.split(' ')[0];
+  const mail = `mailto:${c.email}?subject=${encodeURIComponent('Gatsby Rotas: a problem')}&body=${encodeURIComponent(`Hi ${first || 'there'},\n\n${ask}\n\nPage: ${page}\n`)}`;
+  const issue = `${ISSUES_URL}?body=${encodeURIComponent(`${ask}\n\nPage: ${page}\n`)}`;
+  $('.report-dialog')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<dialog class="report-dialog" aria-labelledby="report-title">
+    <h2 id="report-title">Report an issue</h2>
+    <p>Something wrong or confusing on the rotas, the tea page or in the tea bot's emails? Tell the tea tsar${c.name ? `, ${esc(c.name)},` : ''} by email, or open an issue on GitHub (public, needs a GitHub account).</p>
+    <div class="actions"><a class="edit-button primary" href="${esc(mail)}" data-report-done>Email ${esc(first || 'the tea tsar')}</a>
+      <a class="edit-button" href="${esc(issue)}" target="_blank" rel="noopener" data-report-done>Open a GitHub issue</a>
+      <button type="button" class="edit-button" data-report-done>Cancel</button></div>
+  </dialog>`);
+  const dlg = $('.report-dialog');
+  dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-report-done]')) dlg.close(); });
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.showModal();
+});
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('[data-sign-out]')) return;

@@ -9,7 +9,7 @@
 <link id="icon" rel="icon" href="data:,">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
-<link rel="stylesheet" href="rotas/site.css?v=13">
+<link rel="stylesheet" href="rotas/site.css?v=14">
 <style>
   /* The tea page in the Gatsby Rotas design (rotas/site.css); what follows is only for its own parts. */
   main#app { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
@@ -381,7 +381,7 @@
   function forgetMe(){ forget(); location.href = location.pathname + (KEY ? '?k=' + encodeURIComponent(KEY) : ''); }
 
   // top right: whose page this is; with the site's photo and a link to their page there when this browser has them
-  function showAccount(name){
+  function showAccount(name, badge){
     var a = document.getElementById('account');
     var site = null, photo = '';
     try {
@@ -392,10 +392,12 @@
       } else site = null;
     } catch (e) { site = null; }
     a.innerHTML = '';
-    a.appendChild(photo ? el('span', {class: 'avatar avatar-xs'}, [el('img', {src: photo, alt: ''})])
-      : el('span', {class: 'avatar avatar-xs avatar-mono', text: name.split(' ').map(function(w){ return w.charAt(0); }).filter(Boolean).slice(0, 1).concat(name.split(' ').length > 1 ? [name.split(' ').pop().charAt(0)] : []).join('').toUpperCase()}));
+    var face = photo ? el('span', {class: 'avatar avatar-xs'}, [el('img', {src: photo, alt: ''})])
+      : el('span', {class: 'avatar avatar-xs avatar-mono', text: name.split(' ').map(function(w){ return w.charAt(0); }).filter(Boolean).slice(0, 1).concat(name.split(' ').length > 1 ? [name.split(' ').pop().charAt(0)] : []).join('').toUpperCase()});
+    // a tsar's badge on their portrait, top left (as on the Rotas site)
+    a.appendChild(badge ? el('span', {class: 'account-face'}, [face, el('img', {class: 'account-royal', src: badge.src, alt: badge.label})]) : face);
     a.appendChild(el('span', {class: 'account-name', text: name}));
-    a.title = 'Signed in as ' + name;
+    a.title = 'Signed in as ' + name + (badge ? ' (' + badge.label + ')' : '');
     a.href = site ? 'rotas/?person=' + site.person : './';
     a.hidden = false;
   }
@@ -422,7 +424,7 @@
 
   function render(s){
     app.innerHTML = '';
-    if (!DEBUG) showAccount(s.name);
+    if (!DEBUG) showAccount(s.name, s.badge);
     var hi = el('h1', {text: 'Hi ' + (s.badge ? s.badge.label + ' ' : '') + s.name.split(' ')[0]});
     if (s.badge){
       hi.style.cssText = 'display:flex;align-items:center;gap:10px';
@@ -462,11 +464,36 @@
       'This browser remembers your page, so the tea links in calendar events and group emails open it directly. ',
       el('button', {class: 'quiet', text: 'Forget me on this browser', onclick: forgetMe}), ' ',
       el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave}), ' ',
+      s.tea_tsar ? el('button', {class: 'quiet', text: 'Report an issue (tea tsar' + (s.tea_tsar.name ? ' ' + s.tea_tsar.name : '') + ')', onclick: function(){ reportIssue(s.tea_tsar); }}) : null, s.tea_tsar ? ' ' : null,
       el('button', {class: 'quiet', text: 'Copy my code for an AI agent', title: 'For the tea bot\'s MCP server (github.com/GatsbyUnit/gatsby-teabot, mcp/): the agent can then do what you can do here', onclick: function(e){
         var b = e.currentTarget;
         navigator.clipboard.writeText(TOKEN).then(function(){ b.textContent = 'Copied: keep it to yourself'; }, function(){ b.textContent = TOKEN; });
       }})
     ]));
+  }
+
+  // "Report an issue": an email to the tea tsar, or an issue on GitHub (public). Never this page's address: it holds the code.
+  function reportIssue(c){
+    var ask = '(What happened, and what did you expect?)';
+    var first = c.name ? c.name.split(' ')[0] : '';
+    var mail = 'mailto:' + c.email + '?subject=' + encodeURIComponent('Gatsby tea page: a problem') +
+      '&body=' + encodeURIComponent('Hi ' + (first || 'there') + ',\n\n' + ask + '\n\nPage: my tea page\n');
+    var issue = 'https://github.com/GatsbyUnit/gatsby-teabot/issues/new?body=' + encodeURIComponent(ask + '\n\nPage: the tea page\n');
+    var old = document.querySelector('.report-dialog');
+    if (old) old.remove();
+    var dlg = el('dialog', {class: 'report-dialog', 'aria-labelledby': 'report-title'}, [
+      el('h2', {id: 'report-title', text: 'Report an issue'}),
+      el('p', {text: 'Something wrong or confusing on the rotas, the tea page or in the tea bot\'s emails? Tell the tea tsar' + (c.name ? ', ' + c.name + ',' : '') + ' by email, or open an issue on GitHub (public, needs a GitHub account).'}),
+      el('div', {class: 'actions'}, [
+        el('a', {class: 'edit-button primary', href: mail, 'data-report-done': ''}, ['Email ' + (first || 'the tea tsar')]),
+        el('a', {class: 'edit-button', href: issue, target: '_blank', rel: 'noopener', 'data-report-done': ''}, ['Open a GitHub issue']),
+        el('button', {type: 'button', class: 'edit-button', 'data-report-done': ''}, ['Cancel'])
+      ])
+    ]);
+    dlg.addEventListener('click', function(ev){ if (ev.target === dlg || ev.target.closest('[data-report-done]')) dlg.close(); });
+    dlg.addEventListener('close', function(){ dlg.remove(); });
+    document.body.appendChild(dlg);
+    dlg.showModal();
   }
 
   function dutyCard(d, people){

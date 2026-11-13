@@ -112,7 +112,7 @@ function site_caller(token, constants, known){
 function site_rights(token, constants, known){
   var me = site_caller(token, constants, known);
   var r = {person: me ? me.id : '', member: !!(me && me.member), pages: false, rules: false, people: [], slots: [],
-           add_people: false, tea_tsar: false, unit_admin: false, access: false, grant_admin: false, debug: false};
+           add_people: false, tea_tsar: false, unit_admin: false, access: false, grant_admin: false, debug: false, royal: ''};
   if (!me) return r;
   var email = String(me.email || '').toLowerCase();
   // a constants cell may hold several addresses, comma-separated
@@ -121,11 +121,12 @@ function site_rights(token, constants, known){
   r.unit_admin = access_roles(me.id, email).indexOf('Unit admin') >= 0;
   r.debug = listed('admin_email') || (!!email && email === bot_email());
   if (is('admin_email')){
-    return Object.assign(r, {pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true, access: true, grant_admin: true});
+    return Object.assign(r, {pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true, access: true, grant_admin: true, royal: 'tsar'});
   }
   if (is('tnjc_admin_email')){ r.slots.push('TNJC'); r.people.push('TNJC', 'CSNJC'); }
   if (is('mljc_admin_email')){ r.slots.push('MLJC'); r.people.push('MLJC'); }
   if (is('coffee_admin_email')){ r.slots.push('Coffee Cleaning'); r.people.push('Coffee'); }
+  r.royal = r.slots[0] || ''; // which badge (Badges.js): the first rota they organise
   r.pages = r.slots.length > 0;
   r.access = r.pages;
   if (r.unit_admin) Object.assign(r, {people: ['all'], slots: ALL_TYPES.slice(), add_people: true, access: true, grant_admin: true});
@@ -143,9 +144,25 @@ function api_site_bundle(key, token){
     generated: new Date().toISOString(),
     pages: site_pages(),
     data: site_data(constants),
-    me: me.identity || me.entry ? site_rights(token, constants, me.identity || me.entry) : null,
-    photos_version: site_photos_version()
+    me: me.identity || me.entry ? with_badge(site_rights(token, constants, me.identity || me.entry)) : null,
+    photos_version: site_photos_version(),
+    contact: tea_tsar_contact(constants)
   };
+}
+
+// Whom people tell about a problem ("Report an issue" on the site and the tea page): the tea tsar, by name, with the
+// first address of the tea tsar cell in the constants sheet; null when nobody is set.
+function tea_tsar_contact(constants){
+  var email = split_list(constants['admin_email'] || '')[0] || '';
+  if (!email) return null;
+  var row = identity_rows(constants).rows.filter(function(r){ return r.email.toLowerCase() === email.toLowerCase(); })[0];
+  return {name: row ? row.name : '', email: email};
+}
+
+// the tsars' badge goes on their own portrait at the top right of the site
+function with_badge(rights){
+  rights.badge = badge_of(rights.royal);
+  return rights;
 }
 
 // who may look: a member's token, the code of someone on the site access list, or the unit key ({identity},

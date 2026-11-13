@@ -413,6 +413,15 @@ t('talk titles: any member sets the title and description of any talk, not on te
     assert.strictEqual(patched, null);
   } finally { page_context = saved[0]; notion_get_page = saved[1]; notion_patch_page = saved[2]; log_row = saved[3]; }
 });
+t('report an issue: the tea tsar by the name in the identity sheet, with the first address of their cell', () => {
+  var saved = identity_rows;
+  try {
+    identity_rows = () => ({rows: [{id: 'a', name: 'Lena Weber', email: 'Lena@x'}, {id: 'b', name: 'Nikolai Petrov', email: 'nik@x'}]});
+    assert.deepStrictEqual(tea_tsar_contact({admin_email: 'lena@x,other@x'}), {name: 'Lena Weber', email: 'lena@x'});
+    assert.deepStrictEqual(tea_tsar_contact({admin_email: 'nobody@x'}), {name: '', email: 'nobody@x'});
+    assert.strictEqual(tea_tsar_contact({admin_email: ''}), null);
+  } finally { identity_rows = saved; }
+});
 t('site: who may edit what', () => {
   site_stubs('Tsar@x');
   try {
@@ -425,6 +434,7 @@ t('site: who may edit what', () => {
     identity_for_token = () => ({id: 'p1', email: 'someone@x'});
     var none = site_rights('tok', c);
     assert.ok(!none.pages && !none.slots.length && !none.people.length);
+    assert.deepStrictEqual([tea.royal, tnjc.royal, none.royal], ['tsar', 'TNJC', '']);
     assert.strictEqual(site_rights('', c).person, '');
   } finally { site_restore(); }
 });

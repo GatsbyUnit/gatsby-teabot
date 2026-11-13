@@ -154,7 +154,7 @@ function tea_state(ctx, censored){
   var out = {
     name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming,
     away: censored ? [] : read_away(me), has_away_sheet: !!me.away_sheet,
-    organiser: organiser, badge: royal_badge(ctx),
+    organiser: organiser, badge: royal_badge(ctx), tea_tsar: tea_tsar_contact(ctx.constants),
     notion_url: site_url(ctx.settings)
   };
   if (censored){

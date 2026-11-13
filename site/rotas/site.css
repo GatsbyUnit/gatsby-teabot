@@ -120,6 +120,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .account:hover { background: var(--surface-2); color: var(--text); }
 .account .avatar { margin-right: .4em; vertical-align: 0; }
 .account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a tsar's badge on their own portrait, top left */
+.account-face { position: relative; display: inline-flex; flex: none; margin-right: .4em; }
+.account .account-face .avatar { margin-right: 0; }
+.account-royal { position: absolute; top: -.55em; left: -.6em; width: 1.2em; height: 1.2em; pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / .3)); }
 
 /* ---------- page ---------- */
 
@@ -388,6 +393,15 @@ details.toggle > summary:hover { color: var(--accent); }
 .footer p { margin: 0; }
 .footer a, .footer .link-button { color: inherit; font-size: inherit; padding: 0; }
 .footer .sep { margin: 0 .55rem; }
+
+/* "Report an issue" (site footer, tea page): email the tea tsar or open a GitHub issue */
+.report-dialog { width: min(28rem, calc(100vw - 2rem)); padding: 1.2rem 1.3rem; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); font: 400 .95rem/1.5 var(--font-ui); text-align: left; box-shadow: 0 12px 40px rgb(0 0 0 / .2); }
+.report-dialog::backdrop { background: rgb(0 0 0 / .35); }
+.report-dialog h2 { margin: 0 0 .5rem; font: 650 1.1rem/1.3 var(--font-head); }
+.report-dialog p { margin: 0; color: var(--text-2); }
+.report-dialog .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+.report-dialog a.edit-button { text-decoration: none; }
 
 /* ---------- small screens ---------- */
 

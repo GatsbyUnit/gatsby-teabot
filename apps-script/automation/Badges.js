@@ -14,6 +14,11 @@ function royal_badge(ctx){
   var email = ctx.me_identity.email.toLowerCase();
   var key = email && email === String(ctx.constants['admin_email'] || '').toLowerCase() ? 'tsar'
     : ['TNJC', 'MLJC', 'Coffee Cleaning'].filter(function(rota){ return is_organiser(ctx, rota); })[0];
+  return badge_of(key);
+}
+
+// {label, src} of a badge ('tsar', 'TNJC', 'MLJC', 'Coffee Cleaning'), as a picture the page can show; null for none
+function badge_of(key){
   var b = key && ROYAL_BADGES[key];
   return b ? {label: b.label, src: 'data:image/svg+xml;base64,' + Utilities.base64Encode(b.svg, Utilities.Charset.UTF_8)} : null;
 }
