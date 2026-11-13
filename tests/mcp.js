@@ -32,6 +32,7 @@ const fake = http.createServer((req, res) => {
       if (fn === 'api_site_bundle') result = { pages, data: { schedule, people, rota_rules: [], options: { rules: {} } }, me: { person: 'a'.repeat(32), slots: ['TNJC'], people: ['TNJC', 'CSNJC'], pages: true } };
       else if (fn === 'api_site_save_slot') result = { ...args[1], id: args[1].id || '9'.repeat(32), start: args[1].start + ':00+00:00' };
       else if (fn === 'api_site_save_person') result = args[1];
+      else if (fn === 'api_site_set_rota') result = args[2].concat(args[3]).map((id) => ({ ...people.find((p) => p.id === id) }));
       else if (fn === 'api_state') result = { name: 'Lena Weber', duties: [], people: [{}], badge: {} };
       else { ok = false; error = 'Exception: Only the TNJC tsar can do that.'; }
     } else if (fn === 'api_site_bundle') result = null;
@@ -64,7 +65,7 @@ fake.listen(0, '127.0.0.1', async () => {
     assert.strictEqual(init.result.serverInfo.name, 'gatsby-teabot');
     const list = await s.rpc('tools/list', {});
     const names = list.result.tools.map((x) => x.name);
-    for (const n of ['whoami', 'schedule', 'people', 'save_slot', 'save_person', 'edit_page', 'ask_swap', 'plan_slots', 'finalise']) assert.ok(names.includes(n), n);
+    for (const n of ['whoami', 'schedule', 'people', 'save_slot', 'save_person', 'edit_page', 'ask_swap', 'plan_slots', 'finalise', 'put_on_rota', 'site_access', 'save_site_access', 'remove_site_access']) assert.ok(names.includes(n), n);
     assert.ok(list.result.tools.every((x) => x.inputSchema && x.inputSchema.type === 'object'));
   });
   await t('mcp: schedule by person name, with names instead of ids', async () => {
@@ -90,6 +91,13 @@ fake.listen(0, '127.0.0.1', async () => {
     await s.tool('save_person', { id: 'Nikolai Petrov', rotas: ['TNJC'] });
     const sent = calls.find((c) => c[0] === 'api_site_save_person')[1][1];
     assert.deepStrictEqual([sent.name, sent.position, sent.active, sent.rotas], ['Nikolai Petrov', 'Postdoc', true, ['TNJC']]);
+  });
+  await t('mcp: several people onto a rota by name; a leaver\'s answer lists the slots they still hold', async () => {
+    calls.length = 0;
+    await s.tool('put_on_rota', { rota: 'MLJC', add: ['Lena Weber'], remove: ['Nikolai Petrov'] });
+    assert.deepStrictEqual(calls.find((c) => c[0] === 'api_site_set_rota')[1].slice(1), ['MLJC', ['a'.repeat(32)], ['b'.repeat(32)]]);
+    const r = await s.tool('save_person', { id: 'Nikolai Petrov', active: false });
+    assert.deepStrictEqual(r.json.still_holds.map((x) => x.type), ['MLJC']);
   });
   await t('mcp: pages read as lines with block ids; the bot\'s refusals come back as tool errors', async () => {
     const page = await s.tool('read_page', { slug: 'home' });

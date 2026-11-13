@@ -439,10 +439,10 @@ t('site: a rota tsar can only tick their own rota on people, and only edit their
   try {
     notion_patch_page = function(id, props){ patched = props; return {id: id, properties: {}}; };
     site_person = function(page){ return page; };
-    api_site_save_person('tok', {id: 'p2', name: 'X', rotas: ['TNJC', 'MLJC'], active: false, excluded: ['tea']});
+    api_site_save_person('tok', {id: 'b', name: 'X', rotas: ['TNJC', 'MLJC'], active: false, excluded: ['tea']});
     assert.deepStrictEqual(Object.keys(patched).sort(), ['CSNJC', 'TNJC']);
     assert.strictEqual(patched.TNJC.checkbox, true);
-    assert.throws(() => api_site_save_person('tok', {name: 'New'}), /tea tsar/);
+    assert.throws(() => api_site_save_person('tok', {name: 'New'}), /tea tsar and the unit admins/);
     assert.throws(() => api_site_save_slot('tok', {type: 'MLJC', start: '2026-11-02'}), /MLJC tsar/);
     notion_get_page = function(){ return {id: 's1', properties: {Type: {select: {name: 'MLJC'}}}}; };
     assert.throws(() => api_site_save_slot('tok', {id: 's1', type: 'TNJC', start: '2026-11-02'}), /MLJC tsar/);
@@ -734,6 +734,184 @@ t('site: big values go into the cache in pieces, ASCII only', () => {
     assert.ok(Object.keys(store).every(k => k === 'k' || /^[\x00-\x7f]*$/.test(store[k])));
     assert.deepStrictEqual(cache_get_big('k'), v);
   } finally { CacheService = saved; }
+});
+
+// ---- site access (Access.js): readers and unit admins; the debug view ----
+function fake_sheet(rows){
+  var sh = {rows: rows};
+  sh.getLastRow = () => sh.rows.length;
+  sh.getRange = (r, c, nr, nc) => {
+    var range = {
+      getValues: () => sh.rows.slice(r - 1, r - 1 + (nr || 1)).map(row => { var o = []; for (var i = 0; i < (nc || 1); i++) o.push(row[c - 1 + i] === undefined ? '' : row[c - 1 + i]); return o; }),
+      setValues: (v) => { v.forEach((row, i) => { var at = r - 1 + i; while (sh.rows.length <= at) sh.rows.push([]); row.forEach((x, j) => { sh.rows[at][c - 1 + j] = x; }); }); return range; },
+      setValue: (x) => { while (sh.rows.length < r) sh.rows.push([]); sh.rows[r - 1][c - 1] = x; return range; },
+      setNumberFormat: () => range
+    };
+    return range;
+  };
+  sh.deleteRow = (r) => { sh.rows.splice(r - 1, 1); };
+  return sh;
+}
+var READER = 'b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2', LENA_ADMIN = 'a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1', READER_CODE = new Array(41).join('c');
+function access_stubs(rows){
+  var sh = fake_sheet([ACCESS_HEADER.slice()].concat(rows || []));
+  var saved = {sheet: access_sheet, ss: store_spreadsheet, lock: LockService, mail: send_mail, ir: identity_rows, cache: CacheService, bot: bot_email, uuid: Utilities.getUuid};
+  store_spreadsheet = () => ({getSheetByName: (n) => (n === ACCESS_TAB ? sh : null)});
+  access_sheet = () => sh;
+  LockService = {getScriptLock: () => ({waitLock: () => {}, releaseLock: () => {}})};
+  var store = {};
+  CacheService = {getScriptCache: () => ({get: (k) => (k in store ? store[k] : null), put: (k, v) => { store[k] = String(v); }, remove: (k) => { delete store[k]; }})};
+  bot_email = () => '';
+  Utilities.getUuid = () => require_crypto.randomUUID();
+  var mails = [];
+  send_mail = (to, subject, blocks, c, opts) => { mails.push({to: to, subject: subject, text: JSON.stringify(blocks), opts: opts || {}}); };
+  access_forget();
+  return {sh: sh, mails: mails, store: store, restore: () => {
+    access_sheet = saved.sheet; store_spreadsheet = saved.ss; LockService = saved.lock; send_mail = saved.mail; identity_rows = saved.ir;
+    CacheService = saved.cache; bot_email = saved.bot; Utilities.getUuid = saved.uuid; access_cache = null;
+  }};
+}
+t('site access: a unit admin edits every rota\\'s slots and people and the list, not pages or rules; a reader reads', () => {
+  site_stubs('someone@x');
+  var a = access_stubs([[LENA_ADMIN, 'Lena Weber', 'lena@ucl', 'Unit admin', 'p1', '', '2026-11-13', 'Jan'],
+                        [READER, 'Mira Holt', 'mira@ucl', 'Reader', '', READER_CODE, '2026-11-13', 'Jan']]);
+  try {
+    var c = get_global_constants();
+    var admin = site_rights('tok', c);
+    assert.ok(admin.unit_admin && admin.access && admin.add_people && admin.people[0] === 'all' && admin.slots.length === ALL_TYPES.length);
+    assert.ok(!admin.pages && !admin.rules && !admin.tea_tsar && !admin.debug && admin.member);
+    var reader = site_rights(READER_CODE, c);
+    assert.ok(!reader.member && reader.person === READER && !reader.access && !reader.slots.length && !reader.people.length && !reader.add_people);
+    assert.strictEqual(site_visitor('', READER_CODE, c).entry.name, 'Mira Holt');
+    assert.strictEqual(site_visitor('', new Array(41).join('d'), c), null);
+    // the access list's email never makes anyone a tsar: only a member's registered address does
+    a.sh.rows[2][2] = 'tsar@x'; access_forget();
+    assert.ok(!site_rights(READER_CODE, c).tea_tsar);
+    // rota tsars keep the list too
+    identity_for_token = () => ({id: 'b', email: 'tnjc@x'});
+    var tnjc = site_rights('tok', c);
+    assert.ok(tnjc.access && !tnjc.unit_admin && tnjc.slots.join() === 'TNJC');
+  } finally { a.restore(); site_restore(); }
+});
+t('site access: the debug view is for the tea tsar (any of the listed addresses) and the bot\\'s own account only', () => {
+  site_stubs('tsar2@x');
+  var a = access_stubs([[READER, 'Gatsby Tea Bot', 'bot@x', 'Reader', '', READER_CODE, '', '']]);
+  try {
+    var c = Object.assign(get_global_constants(), {admin_email: 'tsar@x,tsar2@x'});
+    var tsar = site_rights('tok', c);
+    assert.ok(tsar.debug && tsar.tea_tsar);
+    identity_for_token = (tok) => (tok === 'tok' ? {id: 'p1', email: 'tnjc@x'} : null);
+    assert.ok(!site_rights('tok', c).debug);
+    assert.ok(!site_rights(READER_CODE, c).debug);
+    bot_email = () => 'bot@x';
+    var bot = site_rights(READER_CODE, c);
+    assert.ok(bot.debug && !bot.access && !bot.slots.length);
+    assert.throws(() => { get_global_constants = () => c; api_debug_state('tok', 'b'); }, /only for the tea tsar/);
+  } finally { a.restore(); site_restore(); }
+});
+t('site access: the debug view shows someone\\'s tea page without their away dates, address or swap codes, and is logged', () => {
+  site_stubs('tsar@x');
+  var a = access_stubs([]);
+  var saved = [make_context, notion_query, ensure_log_sheet], logged = [];
+  try {
+    load_people = () => ({p1: {id: 'p1', name: 'Lena Weber', active: true}, b: {id: 'b', name: 'Nikolai Petrov', active: true, away_sheet: 'https://sheet'}});
+    make_context = (c, s) => ({constants: c, settings: s, people: load_people()});
+    notion_query = () => [];
+    identity_rows = () => ({rows: [{id: 'b', email: 'nikolai.petrov@ucl.ac.uk', token: 'secret'}]});
+    ensure_log_sheet = () => ({getSheetByName: () => ({appendRow: (r) => logged.push(r)})});
+    __props = {'swapreq:abc': JSON.stringify({code: 'abc', from: 'p1', to: 'b', row_id: 'r', duty: 'tea', type: 'Just Tea', start: Date.now() + 864e5})};
+    var s = api_debug_state('tok', 'b');
+    assert.strictEqual(s.name, 'Nikolai Petrov');
+    assert.ok(s.away_hidden && s.away.length === 0 && s.has_away_sheet);
+    assert.strictEqual(s.email, 'ni•••v@u•••.ac.uk');
+    assert.strictEqual(s.incoming.length, 1);
+    assert.ok(!('code' in s.incoming[0]));
+    assert.ok(JSON.stringify(s).indexOf('secret') < 0 && JSON.stringify(s).indexOf('abc') < 0);
+    assert.deepStrictEqual([logged[0][1], logged[0][5], logged[0][6]], ['debug view', 'Lena Weber', 'looked at the tea page of Nikolai Petrov']);
+    assert.throws(() => api_debug_state('tok', 'zz'), /Unknown person/);
+  } finally { make_context = saved[0]; notion_query = saved[1]; ensure_log_sheet = saved[2]; __props = {}; a.restore(); site_restore(); }
+});
+t('site access: adding someone links rota members (by address, else by name), refuses duplicates, emails a sign-in link; removing', () => {
+  site_stubs('tnjc@x');
+  var a = access_stubs([]);
+  try {
+    load_people = () => ({p1: {id: 'p1', name: 'Lena Weber', active: true, email: 'tnjc@x'}, b: {id: 'b', name: 'Nikolai Petrov', active: true, email: 'nikolai@x'}});
+    identity_rows = () => ({rows: [{id: 'p1', email: 'tnjc@x', token: 'lenatoken'}, {id: 'b', email: 'nikolai@x', token: 'nikotoken'}]});
+    var list = api_site_save_access('tok', {name: ' Mira  Holt ', email: 'mira@ucl.ac.uk', role: 'Reader', notify: true});
+    assert.deepStrictEqual(list.map(e => [e.name, e.person, e.by]), [['Mira Holt', '', 'Lena Weber']]);
+    var code = a.sh.rows[1][5];
+    assert.ok(/^[0-9a-f]{40}$/.test(code));
+    assert.strictEqual(a.mails[0].to, 'mira@ucl.ac.uk');
+    assert.ok(a.mails[0].opts.no_leave && a.mails[0].text.indexOf('?t=' + code) >= 0 && /read the Gatsby Rotas/.test(a.mails[0].subject));
+    assert.throws(() => api_site_save_access('tok', {name: 'K F', email: 'MIRA@ucl.ac.uk', role: 'Reader'}), /on the list already/);
+    assert.throws(() => api_site_save_access('tok', {name: 'Nikolai Petrov', email: 'n.petrov@ucl.ac.uk', role: 'Reader'}), /can read the site already/);
+    assert.throws(() => api_site_save_access('tok', {name: 'X', email: 'nope', role: 'Reader'}), /email address/);
+    assert.throws(() => api_site_save_access('tok', {name: 'X', email: 'x@y.org', role: 'Owner'}), /Reader or Unit admin/);
+    list = api_site_save_access('tok', {name: 'Nikolai Petrov', email: 'n.petrov@ucl.ac.uk', role: 'Unit admin', notify: true});
+    var nik = list.filter(e => e.role === 'Unit admin')[0];
+    assert.strictEqual(nik.person, 'b');
+    assert.strictEqual(a.sh.rows[2][5], '');  // members sign in as themselves
+    assert.strictEqual(a.mails[1].to, 'nikolai@x');
+    assert.ok(a.mails[1].text.indexOf('?t=nikotoken') >= 0 && !a.mails[1].opts.no_leave && /make changes/.test(a.mails[1].subject));
+    identity_for_token = (tok) => (tok === 'tok' ? {id: 'b', email: 'nikolai@x'} : null);
+    assert.ok(site_rights('tok', get_global_constants()).unit_admin);
+    assert.throws(() => api_site_remove_access('tok', nik.id), /yourself/);
+    list = api_site_remove_access('tok', list.filter(e => e.role === 'Reader')[0].id);
+    assert.deepStrictEqual(list.map(e => e.name), ['Nikolai Petrov']);
+    assert.strictEqual(site_visitor('', code, get_global_constants()), null);  // removed: signed out
+    identity_for_token = () => ({id: 'p1', email: 'someone@x'});
+    assert.throws(() => api_site_access('tok'), /Only the tsars and the unit admins/);
+  } finally { a.restore(); site_restore(); }
+});
+t('site access: someone not on the rotas picks their name, gets the link, and signs in with their own code, not the unit key', () => {
+  site_stubs('someone@x');
+  var a = access_stubs([[READER, 'Mira Holt', 'mira@ucl.ac.uk', 'Reader', '', '', '2026-11-13', 'Jan'],
+                        [LENA_ADMIN, 'Lena Weber', 'lena@ucl', 'Unit admin', 'p1', '', '', '']]);
+  try {
+    identity_rows = () => ({rows: [{id: 'p1', email: 'lena@x', token: 'x'}]});
+    assert.deepStrictEqual(api_site_people().map(p => p.name), ['Lena Weber', 'Mira Holt']);
+    assert.ok(/Sent to mi•••@u•••\\.ac\\.uk/.test(api_site_request_link(READER)));
+    assert.ok(a.mails[0].to === 'mira@ucl.ac.uk' && a.mails[0].opts.no_leave);
+    var code = Object.keys(a.store).filter(k => k.indexOf('signin:') === 0)[0].slice(7);
+    var s = api_site_sign_in(code);
+    assert.deepStrictEqual([s.key, s.person, s.name, s.member], ['', READER, 'Mira Holt', false]);
+    assert.strictEqual(a.sh.rows[1][5], s.token);
+    assert.strictEqual(api_site_sign_in_token(s.token).person, READER);
+    api_site_request_link(READER); api_site_request_link(READER);
+    assert.throws(() => api_site_request_link(READER), /several times/);
+  } finally { a.restore(); site_restore(); }
+});
+t('site: unit admins add newcomers with their email, take leavers off (their swap requests go), and put several people on a rota', () => {
+  site_stubs('someone@x');
+  var a = access_stubs([[LENA_ADMIN, 'Lena Weber', 'lena@ucl', 'Unit admin', 'p1', '', '', '']]);
+  var ident = fake_sheet([['A', 'B', 'C', 'D'], ['u1', 'Lena Weber', 'someone@x', 'tok'], ['', '', '', 'stale'], ['u2', 'Nikolai Petrov', 'nikolai@x', '']]);
+  var created = null, patched = [];
+  try {
+    load_people = () => ({p1: {id: 'p1', name: 'Lena Weber', active: true, email: 'someone@x'}, b: {id: 'b', name: 'Nikolai Petrov', active: true, email: 'nikolai@x'}});
+    identity_rows = () => ({sheet: ident, rows: [{row: 2, id: 'p1', email: 'someone@x', token: 'tok', name: 'Lena Weber'}, {row: 3, id: '', email: '', token: 'stale', name: ''},
+                                                 {row: 4, id: 'b', email: 'nikolai@x.org', token: '', name: 'Nikolai Petrov'}]});
+    notion_request = (m, path, body) => { created = body.properties; return {id: 'n1', properties: {}}; };
+    notion_patch_page = (id, props) => { patched.push([id, props]); return {id: id, properties: {}}; };
+    site_person = (page) => ({id: normalise_id(page.id), name: page.id === 'n1' ? 'Samuel Eckmann' : 'Someone'});
+    var saved = api_site_save_person('tok', {name: 'Samuel Eckmann', position: 'Postdoc', joined: '2026-06-01', active: true, rotas: [], excluded: ['research', 'tea_talk', 'tea'], email: 'sam@ucl.ac.uk'});
+    assert.strictEqual(created['Join Date'].date.start, '2026-06-01');
+    assert.strictEqual(created['Excluded from tea'].checkbox, true);
+    assert.deepStrictEqual(ident.rows[2], ['https://page/rotas/?person=n1', 'Samuel Eckmann', 'sam@ucl.ac.uk', '']);  // the first gap, stale code cleared
+    assert.strictEqual(saved.email_hint, 'sa•••@u•••.ac.uk');
+    assert.throws(() => api_site_save_person('tok', {id: 'p1', name: 'Lena Weber', active: true, email: 'NIKOLAI@x.org'}), /already registered for Nikolai Petrov/);
+    __props = {'swapreq:abc': JSON.stringify({code: 'abc', from: 'b', to: 'p1'}), 'swapreq:def': JSON.stringify({code: 'def', from: 'p1', to: 'x'})};
+    api_site_save_person('tok', {id: 'b', name: 'Nikolai Petrov', active: false, rotas: [], excluded: []});
+    assert.deepStrictEqual(Object.keys(__props), ['swapreq:def']);
+    assert.strictEqual(patched[0][1]['Active'].checkbox, false);
+    patched = [];
+    api_site_set_rota('tok', 'MLJC', ['b'], ['p1']);
+    assert.deepStrictEqual(patched.map(x => [x[0].replace(/-/g, ''), x[1].MLJC.checkbox]), [['b', true], ['p1', false]]);
+    identity_for_token = () => ({id: 'b', email: 'tnjc@x'});
+    access_forget();
+    assert.throws(() => api_site_set_rota('tok', 'MLJC', ['b'], []), /Only the MLJC tsar/);
+    api_site_set_rota('tok', 'CSNJC', ['p1'], []);
+    assert.throws(() => api_site_save_person('tok', {name: 'Someone New'}), /tea tsar and the unit admins/);
+  } finally { __props = {}; a.restore(); site_restore(); }
 });
 results.join('\\n');
 `;

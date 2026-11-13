@@ -520,3 +520,34 @@ details.toggle > summary:hover { color: var(--accent); }
   box-shadow: 0 8px 24px -10px rgba(0, 0, 0, .5);
 }
 .toast.error { background: var(--t-leaving); color: #fff; }
+
+/* people: hints in forms, the leaver notice, panels under the People view's bar */
+.edit-form .field-hint, .field-hint { font: 400 .8rem/1.4 var(--font-ui); color: var(--muted); margin: 0; }
+.notice-box {
+  margin: .6rem 0; padding: .8rem 1rem; border-radius: var(--radius); font-size: .92rem;
+  background: color-mix(in srgb, var(--t-tea-talk) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--t-tea-talk) 40%, var(--line));
+}
+.notice-box p { margin: 0 0 .4rem; }
+.notice-box ul { margin: 0 0 .6rem; padding-left: 1.2rem; }
+.view-panel { margin: .6rem 0 1rem; }
+.view-panel h3 { margin: 0; font-size: 1rem; }
+.checklist { list-style: none; margin: 0; padding: 0; max-height: 22rem; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.checklist li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .2rem .8rem; padding: .3rem .6rem; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.checklist li:last-child { border-bottom: 0; }
+.checklist .muted { font-size: .8rem; }
+.edit-form .actions .count { font-size: .85rem; }
+.access-list { list-style: none; margin: 0; padding: 0; }
+.access-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem .8rem; padding: .45rem 0; border-bottom: 1px solid var(--line); }
+.access-who { min-width: 0; overflow-wrap: anywhere; }
+.access-who .muted { font-size: .82rem; }
+.access-tools { display: flex; align-items: center; gap: .4rem; }
+.access-tools select { width: auto !important; padding: .25rem .4rem !important; font-size: .85rem !important; }
+
+/* the tea tsar's debug view of someone's tea page: never mistaken for a normal link */
+.debug-button { color: #b3261e !important; border: 2px solid #d93025 !important; text-decoration: none; font-weight: 600; }
+.debug-button:hover { background: color-mix(in srgb, #d93025 8%, var(--surface)); }
+.person-tools { display: flex; flex-wrap: wrap; gap: .5rem; }
+/* a person's form spans the whole width of the people grid */
+.people > li.form-host { grid-column: 1 / -1; list-style: none; }
+.view-panel .access-list, .view-panel .checklist { padding: 0 !important; margin: 0 !important; list-style: none; }
+.view-panel .access-list li::marker, .view-panel .checklist li::marker { content: ''; }

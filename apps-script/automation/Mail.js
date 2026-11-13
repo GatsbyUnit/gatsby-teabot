@@ -3,7 +3,8 @@
 //
 // Messages are built from a small block list so both parts come from the same content:
 //   'paragraph text'                       paragraph; [label](https://...) inside any text becomes a link
-//                                          (HTML: clickable label; plain text: "label <url>")
+//                                          (HTML: clickable label; plain text: "label <url>"); **text** is bold
+//                                          in HTML (plain text: the words alone)
 //   {heading: 'text'}                      section heading
 //   {items: ['a', 'b']}                    bullet list
 //   {link: 'label', url: 'https://...'}    link on its own line
@@ -11,7 +12,7 @@
 
 function send_mail(to, subject, blocks, constants, options){
   options = options || {};
-  var leave = leave_url(to, options, constants);
+  var leave = options.no_leave ? '' : leave_url(to, options, constants);  // no_leave: someone not on the rotas
   var footer = [
     {rule: true},
     'Gatsby Tea Bot · [Gatsby Rotas](' + site_url(get_settings()) + ')' + (leave ? ' · [Leave the tea system (no longer a member of the Unit)](' + leave + ')' : '')
@@ -60,13 +61,14 @@ function blocks_to_html(blocks){
 }
 
 const INLINE_LINK = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+const INLINE_BOLD = /\*\*([^*]+)\*\*/g;
 
 function inline_text(s){
-  return String(s).replace(INLINE_LINK, '$1 <$2>');
+  return String(s).replace(INLINE_LINK, '$1 <$2>').replace(INLINE_BOLD, '$1');
 }
 
 function inline_html(s){
-  return esc(s).replace(INLINE_LINK, '<a href="$2" style="color:#1a73e8;">$1</a>');
+  return esc(s).replace(INLINE_LINK, '<a href="$2" style="color:#1a73e8;">$1</a>').replace(INLINE_BOLD, '<strong>$1</strong>');
 }
 
 function esc(s){

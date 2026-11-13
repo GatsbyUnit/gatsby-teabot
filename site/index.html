@@ -9,7 +9,7 @@
 <link id="icon" rel="icon" href="data:,">
 <link rel="preconnect" href="https://script.google.com" crossorigin>
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
-<link rel="stylesheet" href="rotas/site.css?v=11">
+<link rel="stylesheet" href="rotas/site.css?v=13">
 <style>
   /* The tea page in the Gatsby Rotas design (rotas/site.css); what follows is only for its own parts. */
   main#app { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
@@ -56,6 +56,11 @@
   table.rotas th, table.rotas td { padding: .35rem .5rem; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
   table.rotas th:first-child, table.rotas td:first-child { text-align: left; }
   table.rotas th { font-weight: 600; color: var(--muted); }
+  /* the tea tsar's debug view of someone else's page (?as=): a red frame and banner, red cards, nothing changes */
+  body.debug-view::before { content: ''; position: fixed; inset: 0; border: 6px solid #d93025; pointer-events: none; z-index: 50; }
+  .debug-banner { position: sticky; top: 0; z-index: 40; padding: .6rem 1rem; background: #d93025; color: #fff; font: 500 .9rem/1.4 var(--font-ui); text-align: center; }
+  .debug-banner a { color: #fff; font-weight: 650; }
+  body.debug-view .card { border: 2px solid #d93025; }
 </style>
 </head>
 <body>
@@ -86,6 +91,9 @@
   var SWAP = param('swap', /^[0-9a-f]{32}$/);
   var LEAVE = QUERY.get('leave') ? '1' : '';
   var KEY = param('k', /^[\w-]{6,64}$/);
+  // the tea tsar's (and the bot account's) read-only debug view of someone's page: ?as=<person id>
+  var AS = param('as', /^[0-9a-f]{32}$/);
+  var DEBUG = false;
   // This browser remembers the last personal page opened in it (this site's local storage only), so the general
   // links in calendar events and group emails open that page directly. "Forget me" on the page clears it.
   var REMEMBER = 'gatsby-tea-page';
@@ -156,6 +164,11 @@
   // Calls go to the web app as an anonymous POST (doPost); credentials are left out, so being signed in to
   // Google (with one account or several) makes no difference.
   function call(fn, args, done, msgEl, button, failed){
+    if (DEBUG && fn !== 'api_debug_state'){
+      var no = 'Debug view: read-only, nothing was changed.';
+      if (msgEl){ msgEl.className = 'msg err'; msgEl.textContent = no; }
+      return;
+    }
     if (button) button.disabled = true;
     var t0 = Date.now(), stop = bar(fn, msgEl), stopped = false;
     var end = function(ok){ if (stopped) return; stopped = true; stop(); if (ok) took(fn, Date.now() - t0); };
@@ -374,9 +387,29 @@
     a.hidden = false;
   }
 
+  // ---- debug view (tea tsar, bot account): someone else's page, read-only, private details hidden by the bot ----
+  function siteToken(){
+    try { var s = JSON.parse(localStorage.getItem('gatsby-rotas') || 'null'); return s && /^[0-9a-f]{40}$/.test(s.token || '') ? s.token : ''; }
+    catch (e) { return ''; }
+  }
+  function renderDebug(){
+    var mine = TOKEN || siteToken() || remembered();
+    if (!mine){ app.innerHTML = ''; app.appendChild(el('p', {class: 'msg err', text: 'Sign in on the Gatsby Rotas site first, then open the debug view from the person\'s page there.'})); return; }
+    document.title = 'Debug view · Tea page';
+    call('api_debug_state', [mine, AS], function(s){
+      DEBUG = true;
+      document.body.classList.add('debug-view');
+      document.body.insertBefore(el('div', {class: 'debug-banner', role: 'status'}, [
+        'Debug view: ', el('strong', {text: s.name}), '\u2019s tea page as they see it, opened by ' + s.debug.viewer + '. Read-only; their away dates and email are hidden. ',
+        el('a', {href: 'rotas/?person=' + AS, text: 'Leave the debug view'})
+      ]), document.body.firstChild);
+      render(s);
+    });
+  }
+
   function render(s){
     app.innerHTML = '';
-    showAccount(s.name);
+    if (!DEBUG) showAccount(s.name);
     var hi = el('h1', {text: 'Hi ' + (s.badge ? s.badge.label + ' ' : '') + s.name.split(' ')[0]});
     if (s.badge){
       hi.style.cssText = 'display:flex;align-items:center;gap:10px';
@@ -410,6 +443,7 @@
     app.appendChild(el('h2', {text: 'Your email'}));
     app.appendChild(emailCard(s));
 
+    if (DEBUG) return;
     app.appendChild(el('footer', {}, [
       'Rotas and rules: ', el('a', {href: s.notion_url, text: 'Gatsby Rotas'}), '. Keep this page\'s link to yourself: anyone with it can act as you here. ',
       'This browser remembers your page, so the tea links in calendar events and group emails open it directly. ',
@@ -525,6 +559,10 @@
   function awayCard(s){
     var msg = el('div', {class: 'msg'});
     var card = el('div', {class: 'card'});
+    if (s.away_hidden){
+      card.appendChild(el('p', {class: 'muted', text: s.has_away_sheet ? 'Hidden in the debug view: their away dates are private.' : 'They have no away-dates sheet yet.'}));
+      return card;
+    }
     if (!s.away.length) card.appendChild(el('p', {class: 'muted', text: 'No upcoming away dates.'}));
     s.away.forEach(function(a){
       var right = el('button', {text: 'Remove'});
@@ -603,6 +641,7 @@
   }
 
   function emailCard(s){
+    if (DEBUG) return el('div', {class: 'card'}, [el('p', {}, ['Reminders and swap emails go to ', el('strong', {text: s.email || 'nobody (no address registered)'}), ' (half hidden in the debug view).'])]);
     var msg = el('div', {class: 'msg'});
     var input = el('input', {type: 'email', placeholder: 'new address'});
     var btn = el('button', {text: 'Change'});
@@ -640,7 +679,8 @@
     .catch(function(){});
 
   function route(){
-    if (SWAP) renderSwapAnswer();
+    if (AS) renderDebug();
+    else if (SWAP) renderSwapAnswer();
     else if (CONFIRM) renderConfirm();
     else if (LEAVE && TOKEN) renderLeave();
     else if (LEAVE && KEY) renderLeaveLanding();

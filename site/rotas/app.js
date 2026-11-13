@@ -50,7 +50,9 @@ const slotHref = (id) => href({ slot: id });
 // ---------- signing in ----------
 // The bot hands out pages and data only for the unit key (PAGE_KEY) or a member's own token. A browser gets
 // them from the emailed sign-in link (?signin=), a personal tea-page link (?t=), a general link (?k=), or the
-// tea page's own memory of its visitor, and keeps them for six months.
+// tea page's own memory of its visitor, and keeps them for six months. People on the site access list who are not
+// on the rotas (readers, some unit admins) get their own code instead, without the key (member: false); they have
+// no tea page.
 
 const SESSION = 'gatsby-rotas';
 const CACHE = 'gatsby-rotas-cache'; // where browsers used to keep pages and data; dropped
@@ -70,13 +72,16 @@ function session() {
   return s && (s.key || s.token) && Date.parse(s.until) > Date.now() ? s : null;
 }
 
-function remember({ key = '', token = '', person = '', name = '' }) {
-  memorySession = { key, token, person, name, until: new Date(Date.now() + CONFIG.rememberDays * 864e5).toISOString() };
+function remember({ key = '', token = '', person = '', name = '', member = true }) {
+  memorySession = { key, token, person, name, member, until: new Date(Date.now() + CONFIG.rememberDays * 864e5).toISOString() };
   store.set(SESSION, memorySession);
   bundle = null;
   // one site: "My tea page" then opens this person's page without a code in the address
-  if (token) { try { localStorage.setItem(TEA_PAGE_MEMORY, token); } catch { /* fine */ } }
+  if (token && member) { try { localStorage.setItem(TEA_PAGE_MEMORY, token); } catch { /* fine */ } }
 }
+
+// on the rotas (has a tea page); sessions from before the access list are all members'
+const isMember = () => session()?.member !== false;
 
 function forget() {
   memorySession = null;
@@ -777,10 +782,10 @@ function redrawViews() {
 function renderAccount() {
   const el = $('#account');
   const s = session();
-  const p = s?.person && bundle && loadData().peopleById.get(s.person);
+  const p = s?.person && bundle && (loadData().peopleById.get(s.person) || (!isMember() && { id: s.person, name: s.name || '' }));
   el.hidden = !p;
   if (!p) return;
-  el.href = personHref(p.id);
+  if (isMember()) el.href = personHref(p.id); else el.removeAttribute('href');
   el.title = `Signed in as ${p.name}`;
   el.innerHTML = `${avatar(p, 'avatar-xs')}<span class="account-name">${esc(p.name)}</span>`;
 }
@@ -788,7 +793,7 @@ function renderAccount() {
 function renderNav(active) {
   $('#nav').innerHTML = NAV.map((n) =>
     `<li><a href="${pageHref(n.slug)}"${n.slug === active ? ' aria-current="page"' : ''}>${n.label}</a></li>`).join('')
-    + `<li class="nav-tea-item"><a class="nav-tea" href="${CONFIG.teaPage}"><span aria-hidden="true">🫖</span> My tea page</a></li>`;
+    + (isMember() ? `<li class="nav-tea-item"><a class="nav-tea" href="${CONFIG.teaPage}"><span aria-hidden="true">🫖</span> My tea page</a></li>` : '');
   $('[data-home]').setAttribute('href', pageHref('home'));
 }
 
@@ -855,12 +860,12 @@ async function renderPerson(id) {
   const teaLink = CONFIG.teaPage;
   main.innerHTML = `<header class="page-head person-head">${avatar(p, 'avatar-xl')}
       <div><p class="crumbs"><a href="${pageHref('home')}">Gatsby Rotas</a> › <a href="${pageHref('home', 'v-people')}">People</a></p>
-      <h1>${esc(p.name)}</h1></div>${hooks.personButton ? `<div class="person-tools">${hooks.personButton(p, true)}</div>` : ''}</header>
+      <h1>${esc(p.name)}</h1></div>${hooks.personButton || hooks.debugButton ? `<div class="person-tools">${hooks.personButton ? hooks.personButton(p, true) : ''}${hooks.debugButton ? hooks.debugButton(p) : ''}</div>` : ''}</header>
     <article class="prose person-page">
       <dl class="facts">${facts}</dl>
       <h2>Upcoming</h2>
       ${upcoming.length ? `<ol class="slots">${upcoming.map((x) => slotItem(x, d, nextTalk(d)?.id)).join('')}</ol>` : '<p class="empty">Nothing scheduled.</p>'}
-      <p class="hint">Away, or need to swap? Use <a href="${esc(teaLink)}">${s?.person === id ? 'your' : 'the'} tea page</a>.</p>
+      ${isMember() ? `<p class="hint">Away, or need to swap? Use <a href="${esc(teaLink)}">${s?.person === id ? 'your' : 'the'} tea page</a>.</p>` : ''}
       ${past.length ? `<h2>Recently</h2><ol class="slots slots-past">${past.map((x) => slotItem(x, d)).join('')}</ol>` : ''}
     </article>`;
   footerMeta();
@@ -879,7 +884,7 @@ async function renderSlot(id) {
       <h1>${esc(TYPES[s.type].label)}, ${esc(s.allDay ? `week of ${F.date.format(s.startDate)}` : F.full.format(s.startDate))}</h1></header>
     <article class="prose">
       <div class="view view-slot" data-view="slot" data-slot-id="${esc(id)}"></div>
-      <p class="hint">Away, or need to swap? Use <a href="${esc(CONFIG.teaPage)}">your tea page</a>.</p>
+      ${isMember() ? `<p class="hint">Away, or need to swap? Use <a href="${esc(CONFIG.teaPage)}">your tea page</a>.</p>` : ''}
     </article>`;
   mountViews(main);
   footerMeta();
@@ -908,10 +913,10 @@ function footerMeta() {
   const el = $('#footer-meta');
   const s = session();
   const teaLink = CONFIG.teaPage;
-  const who = !s ? '' : s.person && s.name ? `Signed in as <a href="${personHref(s.person)}">${esc(s.name)}</a>` : 'Signed in on this browser';
+  const who = !s ? '' : s.person && s.name ? (isMember() ? `Signed in as <a href="${personHref(s.person)}">${esc(s.name)}</a>` : `Signed in as ${esc(s.name)}`) : 'Signed in on this browser';
   el.innerHTML = [
     bundleAt && `Checked ${F.stamp.format(new Date(bundleAt))}`,
-    `<a href="${esc(teaLink)}">Tea page</a>`,
+    (!s || isMember()) && `<a href="${esc(teaLink)}">Tea page</a>`,
     who, s && '<button type="button" class="link-button" data-sign-out>Sign out</button>',
   ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
 }
@@ -931,8 +936,8 @@ function signInPage({ notice = '' } = {}) {
   main.className = 'page page-signin';
   main.innerHTML = `<section class="signin">
       <h1>Sign in</h1>
-      <p class="lead">The talk, tea and coffee rotas are for members of the Gatsby Unit. Pick your name and we will
-        email you a link.</p>
+      <p class="lead">The talk, tea and coffee rotas of the Gatsby Unit, for its members and the colleagues they have
+        invited. Pick your name and we will email you a link.</p>
       <div class="signin-body">
         ${notice ? `<p class="notice">${esc(notice)}</p>` : ''}
         <form novalidate>

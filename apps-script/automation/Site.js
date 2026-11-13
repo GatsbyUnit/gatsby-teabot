@@ -9,7 +9,8 @@
 // Signing in: the visitor picks their name and gets a link by email (?signin=<code>, valid for an hour).
 // Opening it hands the browser the unit key (PAGE_KEY) and the person's tea-page token, which it keeps for
 // six months. The tea page's remembered personal code signs people in as well (same address). The key
-// opens the pages; the token says who is asking, which decides what they may edit.
+// opens the pages; the token says who is asking, which decides what they may edit. People on the site access
+// list who are not on the rotas (Access.js) sign in the same way, with their own code and without the key.
 
 const SITE = {
   slugs: ['home', 'tea-system', 'tnjc', 'mljc', 'coffee', 'away-dates', 'talk-title', 'change-presenter'],
@@ -34,23 +35,25 @@ function site_url(settings){
 
 // ---- signing in ----
 
-// everyone who can be sent a link: active, with a registered address
+// everyone who can be sent a link: active members with a registered address, and the others on the site access list
 function api_site_people(){
   var constants = get_global_constants();
   var people = load_people(constants);
-  return identity_rows(constants).rows
+  var members = identity_rows(constants).rows
     .filter(function(r){ return r.id && r.email && people[r.id] && people[r.id].active; })
-    .map(function(r){ return {id: r.id, name: people[r.id].name || r.name}; })
-    .sort(function(a, b){ return a.name.localeCompare(b.name); });
+    .map(function(r){ return {id: r.id, name: people[r.id].name || r.name}; });
+  var others = access_entries().filter(function(e){ return !e.person; }).map(function(e){ return {id: e.id, name: e.name}; });
+  return members.concat(others).sort(function(a, b){ return a.name.localeCompare(b.name); });
 }
 
 function api_site_request_link(person_id){
   var code = new_token();
   var id = normalise_id(String(person_id || '').trim());
-  var sent = send_personal_link(id, 'Your sign-in link for the Gatsby Rotas', function(){
-    return site_link_blocks(site_url(get_settings()) + '?signin=' + code);
-  });
-  CacheService.getScriptCache().put('signin:' + code, id, SITE.link_ttl);
+  var entry = access_entries().filter(function(e){ return e.id === id && !e.person; })[0];
+  var blocks = function(){ return site_link_blocks(site_url(get_settings()) + '?signin=' + code); };
+  var sent = entry ? send_access_link(entry, 'Your sign-in link for the Gatsby Rotas', blocks)
+                   : send_personal_link(id, 'Your sign-in link for the Gatsby Rotas', blocks);
+  CacheService.getScriptCache().put('signin:' + code, (entry ? 'access:' : '') + id, SITE.link_ttl);
   return sent;
 }
 
@@ -68,6 +71,7 @@ function api_site_sign_in(code){
   if (!/^[0-9a-f]{40}$/.test(String(code || ''))) return null;
   var id = CacheService.getScriptCache().get('signin:' + code);
   if (!id) return null;
+  if (id.indexOf('access:') === 0) return access_session(access_entry(id.slice(7)));
   var constants = get_global_constants();
   var find = function(){ return identity_rows(constants).rows.filter(function(r){ return r.id === id; })[0]; };
   var row = find();
@@ -78,7 +82,8 @@ function api_site_sign_in(code){
 // signs in with the tea page's personal code, which the browser may remember from there
 function api_site_sign_in_token(token){
   var constants = get_global_constants();
-  return site_session(identity_for_token(String(token || ''), constants), constants);
+  var row = identity_for_token(String(token || ''), constants);
+  return row ? site_session(row, constants) : access_session(access_for_token(token));
 }
 
 function site_session(row, constants){
@@ -88,22 +93,41 @@ function site_session(row, constants){
   return {key: get_settings().PAGE_KEY || '', token: row.token, person: row.id, name: person.name};
 }
 
+// Who is asking: a member (their tea-page token; identity row) or someone on the site access list who is not on
+// the rotas (their own code; access entry). known: either, when the caller has already looked it up.
+function site_caller(token, constants, known){
+  if (known && known.role) return {id: known.id, email: known.email, member: false};
+  var me = known || (token ? identity_for_token(String(token), constants) : null);
+  if (me) return {id: me.id, email: me.email, member: true};
+  var entry = token ? access_for_token(token) : null;
+  return entry ? {id: entry.id, email: entry.email, member: false} : null;
+}
+
 // What the holder of this token may change on the site. Tsars are the tea tsar (admin_email, everything)
-// and the rota organisers (the pages, their rota's slots and membership). identity: the token's identity row,
-// when the caller has already looked it up.
-function site_rights(token, constants, identity){
-  var me = identity || (token ? identity_for_token(String(token), constants) : null);
-  var email = me ? me.email.toLowerCase() : '';
-  var r = {person: me ? me.id : '', pages: false, rules: false, people: [], slots: [], add_people: false, tea_tsar: false};
-  if (!email) return r;
-  var is = function(key){ return String(constants[key] || '').toLowerCase() === email; };
+// and the rota organisers (the pages, their rota's slots and membership). Unit admins (site access list) change
+// every rota's slots and people and the access list, but not the pages or the rota rules; the tsars keep the
+// access list too. Readers change nothing. debug: may open anyone's tea page in the read-only debug view (the
+// tea tsar's address and the bot's own account; WebApp.js).
+function site_rights(token, constants, known){
+  var me = site_caller(token, constants, known);
+  var r = {person: me ? me.id : '', member: !!(me && me.member), pages: false, rules: false, people: [], slots: [],
+           add_people: false, tea_tsar: false, unit_admin: false, access: false, debug: false};
+  if (!me) return r;
+  var email = String(me.email || '').toLowerCase();
+  // a constants cell may hold several addresses, comma-separated
+  var listed = function(key){ return !!email && split_list(constants[key] || '').some(function(e){ return e.toLowerCase() === email; }); };
+  var is = function(key){ return me.member && listed(key); };
+  r.unit_admin = access_roles(me.id, email).indexOf('Unit admin') >= 0;
+  r.debug = listed('admin_email') || (!!email && email === bot_email());
   if (is('admin_email')){
-    return {person: me.id, pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true};
+    return Object.assign(r, {pages: true, rules: true, people: ['all'], slots: ALL_TYPES.slice(), add_people: true, tea_tsar: true, access: true});
   }
   if (is('tnjc_admin_email')){ r.slots.push('TNJC'); r.people.push('TNJC', 'CSNJC'); }
   if (is('mljc_admin_email')){ r.slots.push('MLJC'); r.people.push('MLJC'); }
   if (is('coffee_admin_email')){ r.slots.push('Coffee Cleaning'); r.people.push('Coffee'); }
   r.pages = r.slots.length > 0;
+  r.access = r.pages;
+  if (r.unit_admin) Object.assign(r, {people: ['all'], slots: ALL_TYPES.slice(), add_people: true, access: true});
   return r;
 }
 
@@ -118,16 +142,19 @@ function api_site_bundle(key, token){
     generated: new Date().toISOString(),
     pages: site_pages(),
     data: site_data(constants),
-    me: me.identity ? site_rights(token, constants, me.identity) : null,
+    me: me.identity || me.entry ? site_rights(token, constants, me.identity || me.entry) : null,
     photos_version: site_photos_version()
   };
 }
 
-// who may look: a member's token, or the unit key ({identity} or {key: true}); null for anyone else
+// who may look: a member's token, the code of someone on the site access list, or the unit key ({identity},
+// {entry} or {key: true}); null for anyone else
 function site_visitor(key, token, constants){
   var settings = get_settings();
   var identity = token ? identity_for_token(String(token), constants) : null;
   if (identity) return {identity: identity};
+  var entry = token ? access_for_token(token) : null;
+  if (entry) return {entry: entry};
   return settings.PAGE_KEY && String(key || '') === settings.PAGE_KEY ? {key: true} : null;
 }
 
@@ -524,7 +551,9 @@ function site_data(constants, fresh){
   var schedule = notion_query(constants['notion_talk_db_id'], {property: 'Date', date: {on_or_after: since}},
                               [{property: 'Date', direction: 'ascending'}], constants)
     .map(site_slot).filter(function(s){ return s.start && ALL_TYPES.indexOf(s.type) >= 0; });
-  var people = notion_query(constants['notion_people_db_id'], null, null, constants).map(site_person);
+  var hints = site_email_hints(constants);
+  var people = notion_query(constants['notion_people_db_id'], null, null, constants).map(site_person)
+    .map(function(p){ p.email_hint = hints[p.id] || ''; return p; });
   var rules_db = constants['notion_rota_rules_db_id'];
   var rules = notion_query(rules_db, null, null, constants).map(site_rule)
     .sort(function(a, b){ return rule_rank(a.position) - rule_rank(b.position); });
@@ -542,6 +571,13 @@ function site_data(constants, fresh){
   };
   cache_put_big('site:data', data, SITE.data_ttl);
   return data;
+}
+
+// {person id: their registered address, half hidden}: shown to everyone signed in, as on the tea page's name list
+function site_email_hints(constants){
+  var out = {};
+  identity_rows(constants).rows.forEach(function(r){ if (r.id && r.email) out[r.id] = mask_email(r.email); });
+  return out;
 }
 
 function rule_rank(position){
@@ -605,7 +641,7 @@ function site_editor(token, need){
 }
 
 function site_name(ed){
-  var p = load_people(ed.constants)[ed.rights.person];
+  var p = load_people(ed.constants)[ed.rights.person] || access_entry(ed.rights.person);
   return p ? p.name : ed.rights.person;
 }
 
@@ -695,13 +731,24 @@ function site_notion_date(start, end){
   return {start: a, end: b};
 }
 
-// A person, new (no id, tea tsar only) or changed. Rota tsars may only tick their own rota.
+// A person, new (no id; tea tsar and unit admins) or changed. Rota tsars may only tick their own rota. Those who edit
+// everything also set the registered email (email: a new address; left out or empty keeps it). Taking someone off
+// the rotas (active false) also drops their open swap requests; the site then lists the slots they still hold.
 function api_site_save_person(token, person){
   var ed = site_editor(token);
   var constants = ed.constants, may = ed.rights.people, all = may.indexOf('all') >= 0;
   if (!person) throw new Error('Nothing to save.');
-  if (!person.id && !ed.rights.add_people) throw new Error('Only the tea tsar can add people.');
+  if (!person.id && !ed.rights.add_people) throw new Error('Only the tea tsar and the unit admins can add people.');
   if (!all && !may.length) throw new Error('Only the tsars can change this.');
+  var id = person.id ? normalise_id(String(person.id)) : '';
+  var before = id ? load_people(constants)[id] : null;
+  if (id && !before) throw new Error('Unknown person.');
+  var email = all ? String(person.email || '').trim() : '';
+  if (email){
+    if (!EMAIL_RE.test(email)) throw new Error('That does not look like an email address.');
+    var taken = identity_rows(constants).rows.filter(function(r){ return r.id !== id && r.email.toLowerCase() === email.toLowerCase(); })[0];
+    if (taken) throw new Error(email + ' is already registered for ' + (taken.name || 'someone else') + '.');
+  }
   var props = {};
   ['TNJC', 'CSNJC', 'MLJC', 'Coffee'].forEach(function(r){
     if (all || may.indexOf(r) >= 0) props[r] = {checkbox: (person.rotas || []).indexOf(r) >= 0};
@@ -717,12 +764,73 @@ function api_site_save_person(token, person){
     });
     props['Join Date'] = {date: person.joined && /^\d{4}-\d{2}-\d{2}$/.test(person.joined) ? {start: person.joined} : null};
   }
-  var page = person.id
-    ? notion_patch_page(hyphenate_id(person.id), props, constants)
+  var page = id
+    ? notion_patch_page(hyphenate_id(id), props, constants)
     : notion_request('post', 'pages', {parent: {database_id: constants['notion_people_db_id']}, properties: props}, constants);
+  var saved = site_person(page);
+  var what = (id ? 'changed ' : 'added ') + 'person ' + (person.name || id);
+  if (email && (!before || String(before.email || '').toLowerCase() !== email.toLowerCase())){
+    var old = site_set_email(saved.id, saved.name, email, constants);
+    what += ', email set';
+    if (old && old.toLowerCase() !== email.toLowerCase()){
+      try {
+        send_mail(old, 'Your tea system email was changed', [site_name(ed) + ' changed the address the Gatsby tea system uses for you to ' + email + '. If this is wrong, reply to this email.'],
+                  constants, {reply_to: constants['admin_email']});
+      } catch (err) { Logger.log('old address note: ' + err); }
+    }
+  }
+  if (all && before && before.active && !person.active){
+    swap_requests().filter(function(r){ return r.from === id || r.to === id; }).forEach(function(r){ drop_swap_request(r.code); });
+    what += ', taken off the rotas';
+  }
   site_forget('data');
-  log_site_edit(ed, (person.id ? 'changed ' : 'added ') + 'person ' + (person.name || person.id));
-  return site_person(page);
+  log_site_edit(ed, what);
+  saved.email_hint = email ? mask_email(email) : before && before.email ? mask_email(before.email) : '';
+  return saved;
+}
+
+// The registered email in the identity sheet: their row, or a new one in the first empty row (the Cron Jobs' sync
+// reads column A down to the first gap, and keeps rows whose address names an active person). Returns the old one.
+function site_set_email(id, name, email, constants){
+  var ident = identity_rows(constants);
+  var mine = ident.rows.filter(function(r){ return r.id === id; })[0];
+  var old = mine ? mine.email : '';
+  if (mine){
+    ident.sheet.getRange(mine.row, 3).setValue(email);
+  } else {
+    var gap = ident.rows.filter(function(r){ return !r.id; })[0];
+    var at = gap ? gap.row : ident.rows.length + 2;
+    ident.sheet.getRange(at, 1, 1, TOKEN_COL).setValues([[site_url(get_settings()) + '?person=' + id, name, email, '']]);
+  }
+  CacheService.getScriptCache().remove(PEOPLE_CACHE_KEY);
+  return old;
+}
+
+// Several people onto a rota, or off it, at once: rota TNJC, CSNJC, MLJC or Coffee; on and off: person ids.
+// Returns the people changed.
+function api_site_set_rota(token, rota, on, off){
+  var ed = site_editor(token);
+  var may = ed.rights.people;
+  if (['TNJC', 'CSNJC', 'MLJC', 'Coffee'].indexOf(rota) < 0) throw new Error('Please pick a rota.');
+  if (may.indexOf('all') < 0 && may.indexOf(rota) < 0) throw new Error('Only the ' + rota + ' tsar, the tea tsar and the unit admins can change who is on ' + rota + '.');
+  var people = load_people(ed.constants);
+  var changes = [];
+  [[on || [], true], [off || [], false]].forEach(function(x){
+    x[0].forEach(function(raw){
+      var id = normalise_id(String(raw));
+      if (!people[id]) throw new Error('Unknown person.');
+      changes.push([id, x[1]]);
+    });
+  });
+  if (changes.length > 80) throw new Error('Please change at most 80 people at once.');
+  var saved = changes.map(function(c){
+    var props = {};
+    props[rota] = {checkbox: c[1]};
+    return site_person(notion_patch_page(hyphenate_id(c[0]), props, ed.constants));
+  });
+  site_forget('data');
+  if (changes.length) log_site_edit(ed, rota + ': ' + changes.map(function(c){ return (c[1] ? '+' : '-') + people[c[0]].name; }).join(', '));
+  return saved;
 }
 
 // One line of "You are added to the rota when" (tea tsar)

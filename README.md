@@ -38,8 +38,11 @@ copied back. The [handbook](docs/handbook.md) explains each part.
   from the rota data sheet. Every slot and person has an address (`?slot=<id>`, `?person=<id>`). Members sign in by picking their name and opening the link the bot emails
   them (valid for an hour); the browser then keeps the unit key and their tea-page token for six months (the tea
   page's own memory of them works too). Tsars edit the pages in place and slots, people and rota rules in small
-  forms; rota changes are written straight into the rota data, and every edit is noted in the log sheet. Static files
-  only, like the tea page; `edit.js` loads only for tsars. Developed against a local stand-in for `Site.js` that
+  forms; rota changes are written straight into the rota data, and every edit is noted in the log sheet. People who
+  are not on the rotas get in through the site access list (`Access.js`, "Site access" tab of the rota data sheet):
+  readers, and unit admins, who also edit every rota's slots and people. Static files only, like the tea page;
+  `edit.js` loads only for people signed in by name. The tea page's `?as=<person id>` is the tea tsar's read-only,
+  red-framed debug view of someone's page (`api_debug_state`: no away dates, address half hidden, no swap codes). Developed against a local stand-in for `Site.js` that
   is not part of this repo.
 - `apps-script/page/`: "Gatsby Tea Page", the tea page's back end (web app): `doPost` with thin `api_*` wrappers,
   and a `doGet` that points old links to the new address. It uses the automation as the library `TeaBot`,

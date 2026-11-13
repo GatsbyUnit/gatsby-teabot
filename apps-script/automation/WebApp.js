@@ -78,7 +78,32 @@ function page_context(token){
 }
 
 function api_state(token){
-  var ctx = page_context(token);
+  return tea_state(page_context(token), false);
+}
+
+// The read-only debug view of someone's tea page ("sudo" for the tea tsar and the bot's own account): what they
+// see there, without what is private to them: their away dates (only how many), their address (half hidden) and
+// the swap codes, which would let anyone answer a swap. Nothing can be changed from it: every other call needs
+// that person's own code. Each look is logged.
+function api_debug_state(token, person_id){
+  var constants = get_global_constants();
+  var rights = site_rights(token, constants);
+  if (!rights.debug) throw new Error('The debug view is only for the tea tsar.');
+  var id = normalise_id(String(person_id || '').trim());
+  var ctx = make_context(constants, get_settings());
+  if (!ctx.people[id]) throw new Error('Unknown person.');
+  ctx.me = ctx.people[id];
+  ctx.me_identity = identity_rows(constants).rows.filter(function(r){ return r.id === id; })[0] || {email: ''};
+  var s = tea_state(ctx, true);
+  var viewer = site_name({constants: constants, rights: rights});
+  s.debug = {viewer: viewer, person: id};
+  try { ensure_log_sheet().getSheetByName(LOG_TAB).appendRow([new Date(), 'debug view', 'live', '', '', viewer, 'looked at the tea page of ' + ctx.me.name]); }
+  catch (e) { Logger.log('debug view log: ' + e); }
+  return s;
+}
+
+// what the tea page shows for ctx.me; censored: for someone else's eyes (api_debug_state)
+function tea_state(ctx, censored){
   var me = ctx.me;
   var today = start_of_today();
   var pages = notion_query(ctx.constants['notion_talk_db_id'], {and: [
@@ -126,12 +151,34 @@ function api_state(token){
             from: range.from, to: range.to,
             tea_from: rota === 'talks' ? range.from : '', tea_to: rota === 'talks' ? fmt_iso_date(add_days(parse_iso_date(range.from), 27)) : ''};
   });
-  return {
+  var out = {
     name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming,
-    away: read_away(me), has_away_sheet: !!me.away_sheet,
+    away: censored ? [] : read_away(me), has_away_sheet: !!me.away_sheet,
     organiser: organiser, badge: royal_badge(ctx),
     notion_url: site_url(ctx.settings)
   };
+  if (censored){
+    out.email = out.email ? mask_email(out.email) : '';
+    out.away_hidden = true;
+    duties.forEach(function(d){ if (d.pending) delete d.pending.code; });
+    incoming.forEach(function(r){ delete r.code; });
+  }
+  return out;
+}
+
+// The bot's own Google account: whoever owns its rota data sheet (looked up once every six hours); '' if unknown.
+function bot_email(){
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('bot:email');
+  if (hit !== null && hit !== undefined) return hit;
+  var email = '';
+  try {
+    var id = PropertiesService.getScriptProperties().getProperty('STORE_SHEET_ID');
+    var owner = id ? DriveApp.getFileById(id).getOwner() : null;
+    email = owner ? String(owner.getEmail() || '').toLowerCase() : '';
+  } catch (e) { Logger.log('bot email: ' + e); }
+  cache.put('bot:email', email, 21600);
+  return email;
 }
 
 function api_swap(token, row_id, duty, to_id){
@@ -323,12 +370,7 @@ function api_request_link_by_email(email){
 function send_personal_link(person_id, subject, make_blocks){
   person_id = normalise_id(String(person_id || '').trim());
   if (!/^[0-9a-f]{32}$/.test(person_id)) throw new Error('Please pick your name.');
-  var cache = CacheService.getScriptCache();
-  var total = Number(cache.get('linkreq:all') || 0);
-  if (total >= 40) throw new Error('Too many links were requested in the last hour. Please try again later.');
-  var key = 'linkreq:' + person_id;
-  var count = Number(cache.get(key) || 0);
-  if (count >= 3) throw new Error('Your link was already sent several times today. Please check your inbox (and spam).');
+  var used = link_quota(person_id);
   var constants = get_global_constants();
   var find = function(){ return identity_rows(constants).rows.filter(function(r){ return r.id === person_id; })[0]; };
   var row = find();
@@ -337,10 +379,24 @@ function send_personal_link(person_id, subject, make_blocks){
     ensure_tokens(constants);
     row = find();
   }
-  cache.put(key, String(count + 1), 6 * 3600);
-  cache.put('linkreq:all', String(total + 1), 3600);
+  used();
   send_mail(row.email, subject, make_blocks(personal_link(row.token, get_settings())), constants);
   return 'Sent to ' + mask_email(row.email) + '. Check your inbox (and spam).';
+}
+
+// Anyone can ask for links, so at most 3 per person in 6 hours and 40 an hour in all. Throws when used up;
+// else returns the function that counts this one (call it once the link is about to go out).
+function link_quota(id){
+  var cache = CacheService.getScriptCache();
+  var total = Number(cache.get('linkreq:all') || 0);
+  if (total >= 40) throw new Error('Too many links were requested in the last hour. Please try again later.');
+  var key = 'linkreq:' + id;
+  var count = Number(cache.get(key) || 0);
+  if (count >= 3) throw new Error('Your link was already sent several times today. Please check your inbox (and spam).');
+  return function(){
+    cache.put(key, String(count + 1), 6 * 3600);
+    cache.put('linkreq:all', String(total + 1), 3600);
+  };
 }
 
 // "ada.lovelace@ucl.ac.uk" -> "ad•••e@u•••.ac.uk"

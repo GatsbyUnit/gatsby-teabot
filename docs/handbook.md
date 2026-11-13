@@ -21,6 +21,7 @@ than repeating it. How the code is deployed is in the [README](../README.md).
 - **Cancelling a talk (a last resort; a swap is always better):** presenters who really can't find anyone can cancel on their tea page (a small "Nobody can take over?" below the buttons; it asks who they asked and offers the swap again). Organisers cancel by deleting the calendar event or renaming it to "… CANCELLED"; a deleted event is acted on once it is still gone an hour later. Either way the slot stays on the site, titled "Cancelled", without its presenter, so they keep their turn and are scheduled again soon; tea duty stays; the presenter and tea person get one email with the organiser in cc; there is no group reminder. Writing "Cancelled" in the slot's title on the site yourself only makes the bot leave the slot alone; then take the presenter off and rename the event yourself.
 - **Cancelling a just tea:** delete or rename its calendar event the same way. The tea person is taken off (keeping their turn) and gets one email with the organiser in cc. Other tea-only slots (leaving tea, external seminars, coffee) are not cancelled this way; a deleted event is only reported.
 - **Calendar invitations:** for the rotas in `INVITE_TYPES` (Automation tab), the presenter and the tea person are guests of their slot's event, so it shows up in their own calendar. The bot keeps the guest list in step: after a swap or cancellation Google sends the old person a cancellation and the new one an invitation; guests you add by hand are left alone. **Declining changes nothing in the rota** (Outlook's out-of-office and deleting the invitation decline on their own): whoever declines gets one email that the slot is still theirs and how to swap, with the organiser in cc if the slot is less than a week away. Anyone who can see the gatsby.tea calendar's event details can see the guests' registered emails. Safety cap: one person gets at most 10 invitations or cancellations from the bot in any 24 hours; more would be a bug, so the rest is held back and the tea tsar is emailed. To stop invitations altogether, empty `INVITE_TYPES`.
+- **Someone leaves the unit:** the tea tsar or a unit admin unticks "On the rotas" on the site (see People below).
 - **Someone leaves the tea system:** every bot email ends with "Leave the tea system", which opens a page explaining that this is only about the tea system (not Gatsby's mailing lists) and asks them to confirm. Leaving marks them inactive, clears their registered email and tea-page code, drops their swap requests, and tells the organisers about any upcoming slots they still hold (else the tea tsar). To undo: tick Active on their page on the site and put their email back in column C of the identity sheet.
 - **Who is on which rota:** on your tea page, "Who is on which rota" (below the Organiser section): everyone active with the rotas they can be scheduled for (the same rules as scheduling and the swap list), their upcoming slots and whether an email is registered.
 - **Zoom:** every talk's calendar event carries the unit's Zoom link (constants sheet, row 11): in the description, and as the event's location unless someone typed a room there. There are no Zoom requests any more.
@@ -33,7 +34,8 @@ the TNJC and MLJC guides, the Coffee Rulebook, the three toolbox pages; moved of
 with the schedule, people and rota rules (moved off Notion on 2026-11-11). Every slot has its own address
 (`?slot=<id>`), which the bot's emails link to. Members sign in by
 picking their name; the bot emails a link that works for an hour, and their browser then remembers them for six
-months. Anyone who has used their tea page on the same browser is signed in already.
+months. Anyone who has used their tea page on the same browser is signed in already. People on the site access list
+(below) who are not on the rotas sign in the same way.
 
 The site only shows what the bot has just confirmed. Opening it waits for the bot, with a bar that fills over
 the time it usually takes (3–4 seconds). Moving between pages within a minute is instant; after that, or when
@@ -41,7 +43,7 @@ coming back to the tab, the bot is asked again first, and a page left open check
 itself ("Checked" at the bottom says when). The bot keeps a ready copy of the rota data, rebuilt by the hourly sync
 and after every change it makes, so edits made on the site or the tea page show straight away.
 
-**Editing (tsars).** Signed in as the tea tsar or a rota organiser, you see ✎ buttons:
+**Editing (tsars and unit admins).** Signed in as the tea tsar, a rota organiser or a unit admin, you see ✎ buttons:
 - **Pages:** "Edit this page", then click any text and type. The bar at the top makes text bold, italic, struck
   through or a link, changes the kind of block (text, headings, lists, to-do, quote, toggle), adds a block below
   or deletes one. Enter starts a new block, Shift+Enter a new line. Nothing changes for anyone else until you
@@ -49,20 +51,49 @@ and after every change it makes, so edits made on the site or the tea page show 
   you don't touch). Every saved version is in the version history of the "Gatsby Rotas pages" sheet in the bot's
   Drive (File → Version history), should something need restoring; don't edit that sheet by hand.
 - **Slots** (✎ on a slot, "＋ Add a slot"): day and time, title, presenter(s), tea, guest speaker, CSNJC, water
-  filter, description. Saved at once; the calendar and invitations follow within the hour. Rota organisers edit their own rota's slots; the tea tsar all of them.
+  filter, description. Saved at once; the calendar and invitations follow within the hour. Rota organisers edit their own rota's slots; the tea tsar and the unit admins all of them.
+  An intern's or guest's talk in a research or tea talk slot: their name in "Speaker not on the rotas", speaker left
+  empty (the calendar event shows their name); the bumped speaker keeps their turn.
   "Remove slot" (in the slot's form) is for slots that aren't needed (bank holidays, closures): the row is
   marked removed in the rota data (still in the sheet, so it can be brought back) and the calendar event is
   deleted with it. Guests the bot invited get
   Google's cancellation; nobody else is emailed. To tell the people on duty, cancel instead (see Everyday).
-- **People** (✎ on a card or a person's page): the tea tsar edits everything and adds people; rota organisers
-  tick or untick their own rota (TNJC also CSNJC). Searching the people list shows inactive people too, so you can
-  bring someone back.
+- **People** (✎ on a card or a person's page): the tea tsar and the unit admins edit everything and add people;
+  rota organisers tick or untick their own rota (TNJC also CSNJC). Searching the people list shows inactive people
+  too, so you can bring someone back.
+  - **Newcomers** ("＋ Add a person"): name, position, joined date and email. They start exempt from research talks,
+    tea talks and tea; the weekly Cron Job takes the exemptions off when the rota rules say (by position, counted
+    from the joined date). The email goes into the identity sheet, so reminders reach them from the start.
+  - **Email:** the form shows the registered address half hidden; type a new one to change it (the old address gets
+    a note). Members can still change their own on their tea page.
+  - **Leavers:** untick "On the rotas". Their open swap requests are dropped, and the site lists the slots they still
+    hold, each linked, to hand over. (The Cron Jobs' people sync then removes their identity-sheet row.)
+  - **Several people onto a rota** ("＋ Put people on a rota", e.g. a new cohort onto TNJC): pick the rota, tick
+    everyone who should be on it (search by name, position or year), save. Organisers only for their own rota.
 - **Rota rules** (tea tsar): pick from the list, saved at once. The coffee duties are text on the Coffee page.
 - **Photos:** in a person's ✎ form, "Photo" (any picture; it is cut to a small square) or "No photo". Everyone
   signed in can change their own photo on their page ("Change my photo"). Photos are files in the "Gatsby Rotas
   photos" folder in the bot's Drive: "<Name> (<person id>)" at full size, and in "small" the 160px square the site
   shows. Change them on the site and the folder follows; a small copy replaced or removed in the folder by hand
   reaches the site within the hour. People without a small copy show their initials.
+
+**Site access: readers and unit admins** (People → "Site access"; tsars and unit admins). Everyone on the rotas can
+read the site. Add others by name and email:
+- **Reader:** reads everything members read (schedule, people, guides; also the toolbox's internal Zoom link),
+  changes nothing. For colleagues not on the rotas, e.g. SWC's newsletter.
+- **Unit admin:** unit staff who look after the rotas without asking the tsars: switches on any slot, newcomers,
+  leavers, who is on which rota, emails, and this list. Not the guide pages or the rota rules.
+
+"Email them a link" sends a welcome email with a link that signs them in (replies go to you). Someone on the rotas is
+matched by their registered address, or else by their exact name, and keeps signing in as themselves; anyone else
+gets their own code and picks their name on the sign-in page like members. Removing someone signs them out at once.
+The list is the "Site access" tab of the rota data sheet (bot-managed; don't edit by hand).
+
+**Debug view (tea tsar and the bot's own account).** On a person's page on the site, "Debug: view their tea page"
+opens their tea page as they see it, framed in red and read-only: nothing can be changed from it, and their away
+dates, address and swap codes are left out. For checking what someone sees when they report a problem; every look is
+a line in the log sheet (job "debug view"). The bot's account (the owner of the rota data sheet) signs in through a
+Reader entry in Site access.
 
 Every edit is a line in the automation log sheet (job "site edit", with who did it).
 

@@ -117,10 +117,11 @@ const TOOLS = [
     inputSchema: obj({}), run: async () => { const b = await data(true); const r = b.me || {}; const me = b.data.people.find((p) => p.id === r.person);
       const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: swaps, talk titles, cancelling a talk, away dates', 'change your own photo and email'];
       if (r.slots?.length) can.push('edit the slots of ' + r.slots.join(', '));
-      if (r.people?.includes('all')) can.push('edit and add people'); else if (r.people?.length) can.push('tick or untick ' + r.people.join(', ') + ' on people');
+      if (r.people?.includes('all')) can.push('edit and add people, with their emails'); else if (r.people?.length) can.push('tick or untick ' + r.people.join(', ') + ' on people');
       if (r.pages) can.push('edit the site\'s pages');
       if (r.rules) can.push('edit the rota rules');
-      return { name: me?.name, id: r.person, tea_tsar: !!r.tea_tsar, can }; } },
+      if (r.access) can.push('decide who else may use the site (site_access: readers and unit admins)');
+      return { name: me?.name, id: r.person, tea_tsar: !!r.tea_tsar, unit_admin: !!r.unit_admin, can }; } },
   { name: 'my_tea_page', description: "Everyone: your own tea page: your upcoming duties (with each slot's id), swap requests to you and from you, away dates, and the organiser tools you have (rotas you can plan, with the next dates to plan).",
     inputSchema: obj({}), run: async () => { const s = await api('api_state', TOKEN); const who = Object.fromEntries((s.people || []).map((p) => [p.id, p.name]));
       (s.duties || []).forEach((d) => { d.usual = (d.usual || []).map((id) => who[id] || id); });  // who usually does this duty: the people to ask for a swap
@@ -158,13 +159,31 @@ const TOOLS = [
       const saved = await api('api_site_save_slot', TOKEN, slot); changed(); return slotOut(b, saved); } },
   { name: 'remove_slot', description: 'Tsars: remove a slot that is not needed (bank holiday, closure) together with its calendar event. To tell the people on duty, cancel the talk instead (title "Cancelled: …", or cancel_talk).',
     inputSchema: obj({ id: str }, ['id']), run: async (a) => { const r = await api('api_site_delete_slot', TOKEN, norm(a.id)); changed(); return r; } },
-  { name: 'save_person', description: 'Tsars: add a person (tea tsar, no id) or change one (id or name: only the fields given change). Organisers can only tick or untick their own rota; the tea tsar everything. active=false takes someone off the rotas.',
+  { name: 'save_person', description: 'Tsars and unit admins: add a person (tea tsar or unit admin, no id) or change one (id or name: only the fields given change). Organisers can only tick or untick their own rota; the tea tsar and unit admins everything, including the registered email. Newcomers: give position and joined, and leave them exempt from all three duties: the bot adds them when the rota rules say. active=false takes someone off the rotas (leavers); the answer then lists the slots they still hold.',
     inputSchema: obj({ id: { ...str, description: 'id or name' }, name: str, position: str, active: bool, rotas: { ...strs, description: 'all rotas they are on: TNJC, CSNJC, MLJC, Coffee' },
-      excluded: { ...strs, description: 'exempt from: research, tea_talk, tea' }, joined: { ...str, description: 'YYYY-MM-DD' } }),
+      excluded: { ...strs, description: 'exempt from: research, tea_talk, tea' }, joined: { ...str, description: 'YYYY-MM-DD' }, email: { ...str, description: 'new registered address (tea tsar, unit admins)' } }),
     run: async (a) => { const b = await data(true); let p = { rotas: [], excluded: [], active: true };
       if (a.id) { const id = personId(b, a.id); p = { ...b.data.people.find((x) => x.id === id) }; }
-      for (const k of ['name', 'position', 'active', 'rotas', 'excluded', 'joined']) if (a[k] !== undefined) p[k] = a[k];
-      const saved = await api('api_site_save_person', TOKEN, p); changed(); return saved; } },
+      const was = p.active;
+      for (const k of ['name', 'position', 'active', 'rotas', 'excluded', 'joined', 'email']) if (a[k] !== undefined) p[k] = a[k];
+      const saved = await api('api_site_save_person', TOKEN, p); changed();
+      if (p.id && was && p.active === false) {
+        const today = londonDay();
+        saved.still_holds = b.data.schedule.filter((s) => s.start.slice(0, 10) >= today && !/^\s*cancell?ed\b/i.test(s.title) && (s.presenter.includes(p.id) || s.tea.includes(p.id))).map((s) => slotOut(b, s));
+      }
+      return saved; } },
+  { name: 'put_on_rota', description: 'Tsars and unit admins: put several people on a rota and/or take them off at once (TNJC, CSNJC, MLJC or Coffee). People by name or id. Organisers only their own rota.',
+    inputSchema: obj({ rota: str, add: strs, remove: strs }, ['rota']),
+    run: async (a) => { const b = await data(true);
+      const r = await api('api_site_set_rota', TOKEN, a.rota, (a.add || []).map((w) => personId(b, w)), (a.remove || []).map((w) => personId(b, w))); changed();
+      return r.map((p) => ({ name: p.name, rotas: p.rotas })); } },
+  { name: 'site_access', description: 'Tsars and unit admins: who else may use the Gatsby Rotas site besides the people on the rotas: readers (read only, e.g. for a newsletter) and unit admins (change every rota\'s slots and people, and this list).',
+    inputSchema: obj({}), run: async () => api('api_site_access', TOKEN) },
+  { name: 'save_site_access', description: 'Tsars and unit admins: add someone to the site access list (name, email, role Reader or Unit admin; notify=true emails them a link that signs them in), or change an entry (id from site_access). Someone on the rotas can only be a unit admin: they read the site already.',
+    inputSchema: obj({ id: str, name: str, email: str, role: { ...str, description: 'Reader or Unit admin' }, notify: bool }, ['name', 'email', 'role']),
+    run: async (a) => api('api_site_save_access', TOKEN, a) },
+  { name: 'remove_site_access', description: 'Tsars and unit admins: take someone off the site access list (id from site_access); someone not on the rotas is signed out at once.',
+    inputSchema: obj({ id: str }, ['id']), run: async (a) => api('api_site_remove_access', TOKEN, a.id) },
   { name: 'save_rota_rule', description: 'Tea tsar: change when newcomers of a position join a duty. Values from rota_rules choices.',
     inputSchema: obj({ id: str, research: str, tea_talk: str, tea: str }, ['id']),
     run: async (a) => { const rule = { id: norm(a.id) }; for (const k of ['research', 'tea_talk', 'tea']) if (a[k] !== undefined) rule[k] = a[k];

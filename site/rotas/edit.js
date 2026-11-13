@@ -567,7 +567,7 @@
       </div>
       ${allDay ? '' : `<label>Title<input class="title-input" name="title" value="${esc(s.title || '')}" placeholder="Title to be announced"></label>`}
       ${has(o.presenter_types) ? `<label>${type === 'TNJC' || type === 'MLJC' ? 'Presenter' : 'Speaker'}${pickers(s.presenter || [], 'presenter')}</label>` : ''}
-      ${has(o.guest_types) || type === 'External Seminar' ? `<label>Guest speaker (not in the unit)<input name="guest" value="${esc(s.guest || '')}" placeholder="Name"></label>` : ''}
+      ${has(o.presenter_types) || type === 'External Seminar' ? `<label>${type === 'TNJC' || type === 'MLJC' ? 'Guest presenter (not in the unit)' : 'Speaker not on the rotas (intern, guest…)'}<input name="guest" value="${esc(s.guest || '')}" placeholder="Name; leave the ${type === 'External Seminar' ? 'field' : 'speaker above'} empty"></label>` : ''}
       ${has(o.tea_types) ? `<label>${allDay ? 'On duty' : 'Tea'}${pickers(s.tea || [], 'tea')}</label>` : ''}
       <div class="row">
         ${type === 'TNJC' ? `<label class="check"><input type="checkbox" name="csnjc"${s.csnjc ? ' checked' : ''}> CSNJC</label>` : ''}
@@ -735,8 +735,9 @@
     const items = known ? b.data[list].map((x) => (x.id === item.id ? item : x)) : b.data[list].concat([item]);
     if (list === 'schedule') items.sort((x, y) => new Date(x.start.length === 10 ? x.start + 'T00:00:00' : x.start) - new Date(y.start.length === 10 ? y.start + 'T00:00:00' : y.start));
     R.keep({ ...b, data: { ...b.data, [list]: items } });
-    if (new URLSearchParams(location.search).get('person')) R.route();
-    else R.redrawViews();
+    if (new URLSearchParams(location.search).get('person')) return R.route();
+    R.redrawViews();
+    return Promise.resolve();
   }
 
   // =====================================================================================================
@@ -747,9 +748,18 @@
   const EXEMPT = [['research', 'Research talks'], ['tea_talk', 'Tea talks'], ['tea', 'Tea']];
   const all = me.people.includes('all');
 
+  const mayTick = ROTAS.filter((r) => all || me.people.includes(r));
   R.hooks.personButton = (p, big) => me.people.length || p.id === me.person
     ? `<button type="button" class="${big ? 'edit-button' : 'icon-button'}" data-edit-person="${p.id}" title="Edit" aria-label="Edit ${esc(p.name)}">✎${big ? (me.people.length ? ' Edit' : ' Change my photo') : ''}</button>` : '';
-  R.hooks.peopleBar = () => me.add_people ? '<button type="button" class="edit-button" data-add-person>＋ Add a person</button>' : '';
+  R.hooks.peopleBar = () => [
+    me.add_people && '<button type="button" class="edit-button" data-add-person>＋ Add a person</button>',
+    mayTick.length && '<button type="button" class="edit-button" data-rota-people>＋ Put people on a rota</button>',
+    me.access && '<button type="button" class="edit-button" data-site-access>Site access</button>',
+  ].filter(Boolean).join('');
+  // the tea tsar and the bot's own account: anyone's tea page, read-only (the tea page's ?as=)
+  if (me.debug) {
+    R.hooks.debugButton = (p) => `<a class="edit-button debug-button" href="${R.CONFIG.teaPage}?as=${p.id}" title="Debug: see ${esc(p.name)}'s tea page as they do. Read-only; their away dates and address are hidden.">Debug: view their tea page</a>`;
+  }
 
   // a picked image -> a small square JPEG (the face is usually in the upper part of a portrait)
   async function thumbnail(file) {
@@ -781,16 +791,22 @@
 
   function personForm(p) {
     const o = opts();
-    const mine = ROTAS.filter((r) => all || me.people.includes(r));
+    const mine = mayTick;
     const tsar = me.people.length > 0;
+    const isNew = !p.id;
+    const emailHint = isNew ? 'Where the bot sends their reminders and swap requests. They can change it later on their tea page.'
+      : p.email_hint ? `The bot writes to ${esc(p.email_hint)}. To change it, type the new address.` : 'No address registered, so the bot can\'t email them.';
     return `<form class="edit-form" data-person-form="${p.id || ''}">
       ${p.id ? photoField(p) : ''}
       ${all ? `<div class="row"><label>Name<input class="title-input" name="name" value="${esc(p.name || '')}" required></label>
-        <label>Position<select name="position"><option value=""></option>${(o.positions || []).map((x) => `<option${x === p.position ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-        <label>Joined<input type="date" name="joined" value="${esc(p.joined || '')}"></label></div>` : `<strong>${esc(p.name)}</strong>`}
+        <label>Position<select name="position"${isNew ? ' required' : ''}><option value=""></option>${(o.positions || []).map((x) => `<option${x === p.position ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+        <label>Joined<input type="date" name="joined" value="${esc(p.joined || '')}"${isNew ? ' required' : ''}></label></div>
+        <label>Email<input type="email" name="email" autocomplete="off" placeholder="${isNew ? 'name@ucl.ac.uk' : esc(p.email_hint || 'no address yet')}"><span class="field-hint">${emailHint}</span></label>`
+    : `<strong>${esc(p.name)}</strong>`}
       ${tsar ? `<div class="row">${mine.map((r) => `<label class="check"><input type="checkbox" name="rota" value="${r}"${(p.rotas || []).includes(r) ? ' checked' : ''}> ${r}</label>`).join('')}</div>` : ''}
-      ${all ? `<div class="row"><span class="muted">Exempt from</span>${EXEMPT.map(([k, l]) => `<label class="check"><input type="checkbox" name="excluded" value="${k}"${(p.excluded || []).includes(k) ? ' checked' : ''}> ${l}</label>`).join('')}</div>
-        <label class="check"><input type="checkbox" name="active"${p.active || !p.id ? ' checked' : ''}> On the rotas (active)</label>` : ''}
+      ${all ? `<div class="row"><span class="muted">Exempt from</span>${EXEMPT.map(([k, l]) => `<label class="check"><input type="checkbox" name="excluded" value="${k}"${(isNew || (p.excluded || []).includes(k)) ? ' checked' : ''}> ${l}</label>`).join('')}</div>
+        ${isNew ? '<p class="field-hint">Newcomers start exempt: the bot puts them on research talks, tea talks and tea when the rota rules say (by position, counted from Joined).</p>' : ''}
+        <label class="check"><input type="checkbox" name="active"${p.active || !p.id ? ' checked' : ''}> On the rotas${isNew ? '' : ' (untick when they leave the unit)'}</label>` : ''}
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="error" role="alert"></span></div>
     </form>`;
@@ -822,7 +838,8 @@
       const f = form.elements;
       const checked = (name) => [...form.querySelectorAll(`[name="${name}"]:checked`)].map((x) => x.value);
       const person = { ...p, rotas: [...(p.rotas || []).filter((r) => !(all || me.people.includes(r))), ...checked('rota')] };
-      if (all) Object.assign(person, { name: f.name.value.trim(), position: f.position.value, joined: f.joined.value || null, excluded: checked('excluded'), active: f.active.checked });
+      if (all) Object.assign(person, { name: f.name.value.trim(), position: f.position.value, joined: f.joined.value || null, excluded: checked('excluded'), active: f.active.checked, email: f.email.value.trim() });
+      const leaving = all && p.id && p.active && !person.active;
       const err = $('.error', form);
       const button = $('[type=submit]', form);
       button.disabled = true;
@@ -832,7 +849,8 @@
         if (photo !== null && p.id) R.setPhoto(p.id, photo, await R.api('api_site_save_photo', token(), p.id, photo, photo ? form.fullPhoto || null : null));
         if (me.people.length) {
           const saved = await R.api('api_site_save_person', token(), person);
-          putItem('people', saved);
+          await putItem('people', saved);
+          if (leaving) leaverNotice(saved);
         } else {
           R.route();
         }
@@ -858,6 +876,190 @@
       const list = e.target.closest('[data-view]').querySelector('.people');
       if (list) openPersonForm(list, { rotas: [], excluded: [], active: true }, 'prepend');
     }
+  });
+
+  // ---- someone taken off the rotas: the slots they still hold, to hand over ----
+
+  const dayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' });
+
+  const duty = (s, id) => (s.type === 'Coffee Cleaning' ? 'coffee duty' : !s.presenter.includes(id) ? 'tea'
+    : s.type === 'TNJC' || s.type === 'MLJC' ? 'presenter' : 'speaker');
+
+  function leaverNotice(p) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const held = R.loadData().slots.filter((s) => !s.cancelled && s.startDate >= today && (s.presenter.includes(p.id) || s.tea.includes(p.id)));
+    const box = document.createElement('div');
+    box.className = 'notice-box';
+    box.setAttribute('role', 'status');
+    box.innerHTML = `<p><strong>${esc(p.name)}</strong> is off the rotas now: they won't be scheduled again${held.length ? '' : ', and they hold no upcoming slots'}.</p>
+      ${held.length ? `<p>They still hold these slots. Give each to someone else (open it and change the person):</p>
+        <ul>${held.map((s) => `<li><a href="${R.slotHref(s.id)}">${dayFmt.format(s.startDate)}, ${esc(R.TYPES[s.type]?.label || s.type)}</a> · ${duty(s, p.id)}</li>`).join('')}</ul>` : ''}
+      <button type="button" class="edit-button small" data-notice-close>OK</button>`;
+    const at = document.querySelector('[data-view="people"] .view-bar') || document.querySelector('#main .page-head');
+    if (at) at.after(box); else document.querySelector('#main').prepend(box);
+    box.querySelector('[data-notice-close]').addEventListener('click', () => box.remove());
+  }
+
+  // ---- several people onto a rota (or off it) at once ----
+
+  // a panel under the People view's bar (it stays when the list below is redrawn)
+  function panel(trigger, html) {
+    document.querySelectorAll('.view-panel').forEach((x) => x.remove());
+    const view = trigger.closest('[data-view]');
+    const host = document.createElement('div');
+    host.className = 'view-panel';
+    host.innerHTML = html;
+    (view?.querySelector('.view-bar') || trigger).after(host);
+    host.querySelector('[data-form-cancel]')?.addEventListener('click', () => host.remove());
+    return host;
+  }
+
+  const joinedFmt = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'Europe/London' });
+  const personLine = (p) => [p.position, p.joined && `joined ${joinedFmt.format(new Date(p.joined + 'T12:00:00Z'))}`].filter(Boolean).join(' · ');
+
+  function openRotaPeople(trigger) {
+    const host = panel(trigger, `<form class="edit-form" data-rota-form>
+      <div class="row"><label>Rota<select name="rota">${mayTick.map((r) => `<option>${r}</option>`).join('')}</select></label>
+        <label>Find<input type="search" name="q" placeholder="Name, position or year" autocomplete="off"></label></div>
+      <p class="field-hint">Tick everyone who should be on this rota; untick to take someone off. Only the changes are saved.</p>
+      <ul class="checklist"></ul>
+      <div class="actions"><button type="submit" class="edit-button primary">Save</button>
+        <button type="button" class="edit-button" data-form-cancel>Cancel</button><span class="count muted"></span><span class="error" role="alert"></span></div>
+    </form>`);
+    const form = $('form', host);
+    const list = $('.checklist', form);
+    const ticks = new Map(); // person id -> ticked, for everyone touched so far (survives filtering)
+    const draw = () => {
+      const rota = form.rota.value, q = form.q.value.trim().toLowerCase();
+      const people = activePeople().filter((p) => !q || `${p.name} ${personLine(p)}`.toLowerCase().includes(q));
+      list.innerHTML = people.map((p) => {
+        const on = ticks.has(`${rota}:${p.id}`) ? ticks.get(`${rota}:${p.id}`) : p.rotas.includes(rota);
+        return `<li><label class="check"><input type="checkbox" value="${p.id}"${on ? ' checked' : ''}> ${esc(p.name)}</label><span class="muted">${esc(personLine(p))}</span></li>`;
+      }).join('') || '<li class="muted">Nobody matches.</li>';
+      count();
+    };
+    const changes = () => {
+      const rota = form.rota.value, on = [], off = [];
+      for (const [k, v] of ticks) {
+        const [r, id] = k.split(':');
+        const p = R.loadData().peopleById.get(id);
+        if (r !== rota || !p) continue;
+        if (v && !p.rotas.includes(rota)) on.push(id);
+        if (!v && p.rotas.includes(rota)) off.push(id);
+      }
+      return { rota, on, off };
+    };
+    const count = () => {
+      const c = changes();
+      $('.count', form).textContent = c.on.length || c.off.length ? `${c.on.length} to add, ${c.off.length} to take off` : '';
+    };
+    list.addEventListener('change', (e) => { ticks.set(`${form.rota.value}:${e.target.value}`, e.target.checked); count(); });
+    form.rota.addEventListener('change', draw);
+    form.q.addEventListener('input', draw);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const c = changes();
+      const err = $('.error', form);
+      err.textContent = '';
+      if (!c.on.length && !c.off.length) { err.textContent = 'Nothing changed.'; return; }
+      const button = $('[type=submit]', form);
+      button.disabled = true;
+      button.textContent = 'Saving…';
+      try {
+        const saved = await R.api('api_site_set_rota', token(), c.rota, c.on, c.off);
+        const b = R.bundle();
+        const byId = new Map(saved.map((x) => [x.id, x]));
+        R.keep({ ...b, data: { ...b.data, people: b.data.people.map((x) => (byId.has(x.id) ? { ...x, ...byId.get(x.id), email_hint: x.email_hint } : x)) } });
+        R.redrawViews();
+        host.remove();
+        toast(`${c.rota}: ${c.on.length} added, ${c.off.length} taken off.`);
+      } catch (x) {
+        err.textContent = x.message;
+        button.disabled = false;
+        button.textContent = 'Save';
+      }
+    });
+    draw();
+    form.q.focus();
+  }
+
+  // ---- site access: readers and unit admins (tsars and unit admins) ----
+
+  const ROLES = { Reader: 'Reads the site, changes nothing. For colleagues not on the rotas, e.g. for a newsletter.',
+    'Unit admin': 'Changes every rota’s slots and people (switches, newcomers, leavers, who is on which rota), and this list.' };
+
+  function accessItem(e) {
+    const added = e.added ? ` · added ${esc(e.added)}${e.by ? ` by ${esc(e.by)}` : ''}` : '';
+    const mine = e.id === me.person || e.person === me.person;
+    return `<li data-access-id="${e.id}">
+      <span class="access-who"><strong>${esc(e.name)}</strong> <span class="muted">${esc(e.email)}${e.person ? ' · on the rotas' : ''}${added}</span></span>
+      <span class="access-tools"><select data-access-role aria-label="Role of ${esc(e.name)}"${mine ? ' disabled' : ''}>${Object.keys(ROLES).map((r) => `<option${r === e.role ? ' selected' : ''}${r === 'Reader' && e.person ? ' disabled' : ''}>${r}</option>`).join('')}</select>
+        ${mine ? '' : '<button type="button" class="edit-button small" data-access-remove>Remove</button>'}</span></li>`;
+  }
+
+  function openAccess(trigger) {
+    const host = panel(trigger, `<section class="edit-form access-panel">
+      <h3>Site access</h3>
+      <p class="field-hint">Everyone on the rotas can read this site already. Add others here. <strong>Reader:</strong> ${ROLES.Reader} <strong>Unit admin:</strong> ${ROLES['Unit admin']}</p>
+      <ul class="access-list"><li class="muted">Loading…</li></ul>
+      <form data-access-form>
+        <div class="row"><label>Name<input name="name" required autocomplete="off"></label>
+          <label>Email<input type="email" name="email" required autocomplete="off" placeholder="name@ucl.ac.uk"></label>
+          <label>Role<select name="role">${Object.keys(ROLES).map((r) => `<option>${r}</option>`).join('')}</select></label></div>
+        <label class="check"><input type="checkbox" name="notify" checked> Email them a link that signs them in</label>
+        <div class="actions"><button type="submit" class="edit-button primary">Add</button>
+          <button type="button" class="edit-button" data-form-cancel>Close</button><span class="error" role="alert"></span></div>
+      </form></section>`);
+    const listEl = $('.access-list', host);
+    const err = $('.error', host);
+    let entries = [];
+    const draw = (list) => {
+      entries = list;
+      listEl.innerHTML = list.length ? list.map(accessItem).join('') : '<li class="muted">Nobody yet.</li>';
+    };
+    const fail = (x) => { err.textContent = x.message; };
+    R.api('api_site_access', token()).then(draw).catch((x) => { listEl.innerHTML = ''; fail(x); });
+    $('[data-access-form]', host).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target.elements;
+      const button = $('[type=submit]', e.target);
+      err.textContent = '';
+      button.disabled = true;
+      button.textContent = 'Adding…';
+      try {
+        draw(await R.api('api_site_save_access', token(), { name: f.name.value, email: f.email.value, role: f.role.value, notify: f.notify.checked }));
+        toast(f.notify.checked ? `Added. ${f.name.value.trim().split(' ')[0]} gets an email with the link.` : 'Added.');
+        e.target.reset();
+      } catch (x) { fail(x); }
+      button.disabled = false;
+      button.textContent = 'Add';
+    });
+    listEl.addEventListener('change', async (e) => {
+      const sel = e.target.closest('[data-access-role]');
+      if (!sel) return;
+      const entry = entries.find((x) => x.id === sel.closest('li').dataset.accessId);
+      sel.disabled = true;
+      err.textContent = '';
+      try { draw(await R.api('api_site_save_access', token(), { ...entry, role: sel.value })); toast('Saved.'); }
+      catch (x) { fail(x); sel.value = entry.role; sel.disabled = false; }
+    });
+    listEl.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-access-remove]');
+      if (!b) return;
+      if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Remove: sure?'; return; }
+      b.disabled = true;
+      err.textContent = '';
+      try { draw(await R.api('api_site_remove_access', token(), b.closest('li').dataset.accessId)); toast('Removed. They are signed out.'); }
+      catch (x) { fail(x); b.disabled = false; }
+    });
+    $('[name=name]', host).focus();
+  }
+
+  document.addEventListener('click', (e) => {
+    const rp = e.target.closest('[data-rota-people]');
+    if (rp) openRotaPeople(rp);
+    const sa = e.target.closest('[data-site-access]');
+    if (sa) openAccess(sa);
   });
 
   // =====================================================================================================
