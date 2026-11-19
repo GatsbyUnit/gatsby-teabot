@@ -1,13 +1,14 @@
 // Autopilot: the bot schedules the rotas in AUTO_TYPES (Automation tab) by itself, from the daily organiser job
 // (run_daily_reminders, 8:00):
-//  - every Monday (and on its first run for a rota) it creates the slots after the rota's last one, up to the end
-//    of the week AUTO_WEEKS ahead, fills them as "Plan these dates" does, and emails the organiser the list;
+//  - every Monday (and on its first run for a rota) it creates the rota's missing slots from AUTO_FIRST_DAYS ahead
+//    to the end of the week AUTO_WEEKS ahead, fills them as "Plan these dates" does, and emails the organiser;
 //  - three days later it puts them on the calendar and emails each person on duty, with their tea-page link.
-// In between, the organiser changes people or removes slots on the site. The autopilot only extends a rota at its
-// end (it never fills gaps) and never creates a slot it made before again, so a removed slot stays removed.
+// In between, the organiser changes people or removes slots on the site. "Missing" means the date never had a slot
+// while the autopilot was looking: it remembers every slot it has seen or made, so a removed slot stays removed,
+// while dates nobody planned yet (also gaps before a slot added far ahead) are filled.
 // Nothing is planned closer than AUTO_FIRST_DAYS ahead, so everyone gets at least a week's notice.
 // Days off for every rota: CLOSED_DATES; a one-off block before it is planned: a slot titled "Cancelled: <reason>".
-// State, Script Properties auto:<rota>: {since, planned: {slot id: {k: '<type>|date', at: planned on}}, made: [keys]}.
+// State, Script Properties auto:<rota>: {since, planned: {slot id: {k: '<type>|date', at: planned on}}, seen: [keys]}.
 
 const AUTO_PREFIX = 'auto:';
 const AUTO_REVIEW_DAYS = 3;
@@ -57,58 +58,42 @@ function autopilot_rota(rota, ctx, today){
   return out;
 }
 
-// the dates to plan: after the rota's last slot (for talks: research and tea talks each), from AUTO_FIRST_DAYS
-// ahead to the end of the week AUTO_WEEKS ahead; null if nothing is due
-function auto_ranges(rota, ctx, today){
+// the window to plan: from AUTO_FIRST_DAYS ahead to the end of the week AUTO_WEEKS ahead
+function auto_window(ctx, today){
   var monday = sched_add_days(today, -((iso_weekday(today) + 6) % 7));
-  var until = sched_add_days(monday, ctx.settings.auto_weeks * 7 + 6);
-  var earliest = sched_add_days(today, AUTO_FIRST_DAYS);
-  var from_after = function(types, weekdays){
-    var last = last_slot_day(types, weekdays, ctx);
-    var from = last ? sched_next_day(last) : earliest;
-    return from < earliest ? earliest : from;
-  };
-  if (rota === 'talks'){
-    var r = {};
-    var research = from_after(['Research Talk', 'Just Tea'], [1]);
-    var tea = from_after(['Tea Talk', 'Just Tea'], [2, 4]);
-    if (research <= until){ r.research_from = research; r.research_to = until; }
-    if (tea <= until){ r.tea_from = tea; r.tea_to = until; }
-    return r.research_from || r.tea_from ? r : null;
-  }
-  var from = from_after([SLOT_PLANS[rota][0].type], null);
-  return from <= until ? {from: from, to: until} : null;
+  return {from: sched_add_days(today, AUTO_FIRST_DAYS), to: sched_add_days(monday, ctx.settings.auto_weeks * 7 + 6)};
 }
 
-// the day (yyyy-MM-dd) of the latest slot of these types, only counting these weekdays if given
-function last_slot_day(types, weekdays, ctx){
-  var last = null;
+function auto_ranges(rota, win){
+  return rota === 'talks' ? {research_from: win.from, research_to: win.to, tea_from: win.from, tea_to: win.to} : {from: win.from, to: win.to};
+}
+
+// keys ('<plan type>|date') of the rota's slots in the window now. Any talk-like slot (a just tea, leaving tea or
+// seminar in a talk's place) takes both talk keys of its day, so the day is not planned twice.
+const AUTO_TALK_TYPES = ['Research Talk', 'Tea Talk', 'Just Tea', 'Leaving Tea', 'External Seminar'];
+function auto_slot_keys(rota, win, ctx){
+  var types = rota === 'talks' ? AUTO_TALK_TYPES : [SLOT_PLANS[rota][0].type];
+  var keys = [];
   types.forEach(function(type){
-    var res = notion_request('post', 'databases/' + ctx.constants['notion_talk_db_id'] + '/query', {
-      filter: {property: 'Type', select: {equals: type}},
-      sorts: [{property: 'Date', direction: 'descending'}],
-      page_size: 20
-    }, ctx.constants);
-    (res.results || []).map(to_row).some(function(r){
-      if (!r.start) return false;
+    load_rows(type, parse_iso_date(win.from), parse_iso_date(win.to), ctx).forEach(function(r){
       var d = fmt_iso_date(r.start);
-      if (weekdays && weekdays.indexOf(iso_weekday(d)) < 0) return false;
-      if (!last || d > last) last = d;
-      return true;
+      if (rota === 'talks') keys.push('Research Talk|' + d, 'Tea Talk|' + d);
+      else keys.push(type + '|' + d);
     });
   });
-  return last;
+  return keys;
 }
 
 function auto_plan(rota, ctx, today, st){
-  var ranges = auto_ranges(rota, ctx, today);
+  var win = auto_window(ctx, today);
   var res = {created: [], skipped: [], holidays: [], made: []};
-  if (ranges){
+  if (win.from <= win.to){
+    auto_slot_keys(rota, win, ctx).forEach(function(k){ if (st.seen.indexOf(k) < 0) st.seen.push(k); });
     var skip = {};
-    st.made.forEach(function(k){ skip[k] = true; });
-    res = create_slots(rota, ranges, ctx, skip);
+    st.seen.forEach(function(k){ skip[k] = true; });
+    res = create_slots(rota, auto_ranges(rota, win), ctx, skip);
     res.made.forEach(function(m){
-      st.made.push(m.key);
+      st.seen.push(m.key);
       if (m.id) st.planned[m.id] = {k: m.key, at: today};
     });
     save_auto_state(rota, st, today);   // at once: a run that times out while filling must not forget its slots
@@ -227,12 +212,12 @@ function duty_message(row, role){
 function load_auto_state(rota){
   var raw = PropertiesService.getScriptProperties().getProperty(AUTO_PREFIX + rota);
   var st = raw ? JSON.parse(raw) : {};
-  return {since: st.since || '', planned: st.planned || {}, made: st.made || []};
+  return {since: st.since || '', planned: st.planned || {}, seen: st.seen || st.made || []};   // 'made': first version
 }
 
 // keys of past slots are dropped (the autopilot never plans the past anyway)
 function save_auto_state(rota, st, today){
   var keep_from = sched_add_days(today, -7);
-  st.made = st.made.filter(function(k){ return k.split('|')[1] >= keep_from; });
+  st.seen = st.seen.filter(function(k){ return k.split('|')[1] >= keep_from; });
   PropertiesService.getScriptProperties().setProperty(AUTO_PREFIX + rota, JSON.stringify(st));
 }

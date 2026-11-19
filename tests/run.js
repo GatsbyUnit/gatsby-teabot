@@ -1031,27 +1031,26 @@ t('slot creation leaves out the skip list and returns the new ids', () => {
   slot_ctx();
 });
 t('autopilot: rota names', () => assert.deepStrictEqual(auto_rotas_of('MLJC, talks, Coffee, research talk, nonsense'), ['MLJC', 'talks', 'Coffee Cleaning']));
-t('autopilot: plans after the last slot, at least 10 days ahead, to the end of the week AUTO_WEEKS ahead', () => {
-  var saved = last_slot_day;
+t('autopilot: plans from 10 days ahead to the end of the week AUTO_WEEKS ahead; a talk-like slot takes its day', () => {
+  var saved = load_rows;
   try {
     var c = ctx(false); c.settings.auto_weeks = 6;
-    last_slot_day = types => types[0] === 'Research Talk' ? '2026-12-14' : (types[0] === 'Tea Talk' ? '2026-11-26' : '2026-11-23');
-    assert.deepStrictEqual(auto_ranges('talks', c, '2026-11-23'), {research_from: '2026-12-15', research_to: '2027-01-10', tea_from: '2026-12-03', tea_to: '2027-01-10'});
-    assert.deepStrictEqual(auto_ranges('MLJC', c, '2026-11-20'), {from: '2026-11-30', to: '2027-01-03'});
-    last_slot_day = () => '2027-01-11';
-    assert.strictEqual(auto_ranges('MLJC', c, '2026-11-23'), null);
-    last_slot_day = () => null;
-    assert.deepStrictEqual(auto_ranges('Coffee Cleaning', c, '2026-11-23'), {from: '2026-12-03', to: '2027-01-10'});
-  } finally { last_slot_day = saved; }
+    assert.deepStrictEqual(auto_window(c, '2026-11-20'), {from: '2026-11-30', to: '2027-01-03'});
+    assert.deepStrictEqual(auto_window(c, '2026-11-23'), {from: '2026-12-03', to: '2027-01-10'});
+    assert.deepStrictEqual(auto_ranges('talks', {from: 'a', to: 'b'}), {research_from: 'a', research_to: 'b', tea_from: 'a', tea_to: 'b'});
+    load_rows = type => type === 'Just Tea' ? [{start: new Date('2026-12-08T15:30:00Z')}] : (type === 'TNJC' ? [{start: new Date('2027-01-19T13:30:00Z')}] : []);
+    assert.deepStrictEqual(auto_slot_keys('talks', {from: '2026-12-03', to: '2027-01-10'}, c), ['Research Talk|2026-12-08', 'Tea Talk|2026-12-08']);
+    assert.deepStrictEqual(auto_slot_keys('TNJC', {from: '2026-12-03', to: '2027-01-31'}, c), ['TNJC|2027-01-19']);
+  } finally { load_rows = saved; }
 });
 t('autopilot: first run plans, three days later the slots go on the calendar and their people are told', () => {
-  var saved = {create_slots: create_slots, fill_slots: fill_slots, tentative_rows: tentative_rows, finalise_rows: finalise_rows, send_mail: send_mail, last_slot_day: last_slot_day, tea_page_link_for: tea_page_link_for, start_of_today: start_of_today};
+  var saved = {create_slots: create_slots, fill_slots: fill_slots, tentative_rows: tentative_rows, finalise_rows: finalise_rows, send_mail: send_mail, load_rows: load_rows, tea_page_link_for: tea_page_link_for, start_of_today: start_of_today};
   try {
     PropertiesService.getScriptProperties().deleteProperty('auto:MLJC');
     var c = ctx(false); c.settings.auto_weeks = 6; c.constants.mljc_admin_email = 'org@x';
     c.people = {p: {id: 'p', name: 'Pat Kim', active: true, email: 'pat@x'}};
     var calls = [], mails = [], fin = [];
-    last_slot_day = () => '2026-11-23';
+    load_rows = () => [];
     create_slots = function(rota, ranges, cc, skip){ calls.push([ranges, Object.keys(skip || {})]); return calls.length === 1
       ? {created: ['2026-11-30 MLJC', '2026-12-07 MLJC'], skipped: [], holidays: [], made: [{id: 's1', key: 'MLJC|2026-11-30'}, {id: 's2', key: 'MLJC|2026-12-07'}]}
       : {created: [], skipped: [], holidays: [], made: []}; };
@@ -1086,10 +1085,23 @@ t('autopilot: first run plans, three days later the slots go on the calendar and
     tentative = []; st = load_auto_state('MLJC'); assert.deepStrictEqual(st.planned, {});
   } finally { Object.keys(saved).forEach(k => { this[k] = saved[k]; }); }
 });
+t('autopilot: fills dates that never had a slot, even before one added far ahead; a removed slot stays removed', () => {
+  var saved = {fill_slots: fill_slots, send_mail: send_mail};
+  try {
+    var c = slot_ctx([{type: 'TNJC', start: new Date('2026-12-01T13:30:00Z')}, {type: 'TNJC', start: new Date('2026-12-08T13:30:00Z')}, {type: 'TNJC', start: new Date('2027-01-19T13:30:00Z')}]);
+    c.settings.auto_weeks = 6; c.settings.closed_days = parse_closed('12-24..01-01');
+    fill_slots = () => ({filled: [], unfilled: [], warnings: []}); send_mail = () => {};
+    var st = {since: '2026-11-01', planned: {}, seen: ['TNJC|2026-12-15']};   // 15 Dec had a slot; someone removed it
+    var res = auto_plan('TNJC', c, '2026-11-20', st);
+    assert.deepStrictEqual(made.map(p => p.Date.date.start.slice(0, 10)), ['2026-12-22']);
+    assert.ok(st.seen.indexOf('TNJC|2026-12-01') >= 0 && st.seen.indexOf('TNJC|2026-12-22') >= 0);
+    assert.deepStrictEqual(res.holidays, ['2026-12-29 (closed)']);
+  } finally { fill_slots = saved.fill_slots; send_mail = saved.send_mail; }
+});
 t('autopilot: a removed slot is dropped, not finalised', () => {
   var saved = {tentative_rows: tentative_rows, finalise_rows: finalise_rows, start_of_today: start_of_today};
   try {
-    PropertiesService.getScriptProperties().setProperty('auto:TNJC', JSON.stringify({since: '2026-11-01', planned: {gone: {k: 'TNJC|2026-12-08', at: '2026-11-16'}}, made: ['TNJC|2026-12-08']}));
+    PropertiesService.getScriptProperties().setProperty('auto:TNJC', JSON.stringify({since: '2026-11-01', planned: {gone: {k: 'TNJC|2026-12-08', at: '2026-11-16'}}, seen: ['TNJC|2026-12-08']}));
     var fin = []; tentative_rows = () => []; finalise_rows = rows => rows.forEach(r => fin.push(r.id)); start_of_today = () => new Date(2026, 10, 20);
     var c = ctx(false);
     var st = load_auto_state('TNJC'); var res = auto_finalise('TNJC', c, '2026-11-20', st);
