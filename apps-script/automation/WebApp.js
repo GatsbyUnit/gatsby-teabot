@@ -284,7 +284,9 @@ function api_add_away(token, from, to, reason){
   while (row <= values.length && (values[row - 1][0] !== '' || values[row - 1][1] !== '')) row++;
   sheet.getRange(row, 2, 1, 3).setValues([[f, t, String(reason || '').slice(0, 200)]]);
   log_row(ctx, 'page', '', null, 'away dates', ctx.me.name + ': added ' + from + ' to ' + to);
-  return 'Added. The scheduler will not give you duties from ' + fmt_day(f) + ' to ' + fmt_day(t) + '.';
+  var note = '';
+  try { note = away_clash_note(ctx.me.id, f, t, ctx); } catch (err) { Logger.log('away clash note: ' + err); }
+  return 'Added. The scheduler will not give you duties from ' + fmt_day(f) + ' to ' + fmt_day(t) + '.' + note;
 }
 
 function api_remove_away(token, row_number){

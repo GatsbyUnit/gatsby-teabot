@@ -240,27 +240,9 @@ function fill_slots(rota, ctx){
   var to_fill = tentative.filter(function(r){ return r.presenter_ids.length === 0 && r.tea_ids.length === 0; });
   if (!to_fill.length) return {filled: [], unfilled: [], warnings: ['There are no empty tentative slots to fill.']};
 
-  var first = to_fill[0].start, last = to_fill[to_fill.length - 1].start;
-  var fill_ids = to_fill.map(function(r){ return r.id; });
-  var past_types = rota === 'Coffee Cleaning' ? ['Coffee Cleaning'] : ALL_TYPES;
-  var past = [];
-  past_types.forEach(function(type){
-    load_rows(type, add_days(first, -365), add_days(last, 365), ctx).forEach(function(r){
-      if (fill_ids.indexOf(r.id) < 0) past.push(sched_talk(r));
-    });
-  });
-
+  var past = sched_past(rota, to_fill[0].start, to_fill[to_fill.length - 1].start, to_fill.map(function(r){ return r.id; }), ctx);
   var warnings = [];
-  var people = eligible_people(rota, ctx).map(function(p){
-    var away = {from: [], until: []};
-    try {
-      read_away_all(p).forEach(function(a){ away.from.push(a.from); away.until.push(a.to); });
-    } catch (e) {
-      warnings.push(p.name + ': away dates could not be read (' + e.message + '), treated as always available');
-    }
-    return {id: p.id, name: p.name, away_from: away.from, away_until: away.until,
-            tea_excluded: p.tea_excluded, tt_excluded: p.tt_excluded, rt_excluded: p.rt_excluded};
-  });
+  var people = sched_people(rota, ctx, warnings);
   people.filter(function(p){ return !ctx.people[p.id].away_sheet; }).forEach(function(p){ warnings.push(p.name + ' has no away-dates sheet, treated as always available'); });
 
   var result = sched_main(to_fill.map(sched_talk), past, people, rota === 'talks' ? 'ResearchTeaTalks' : rota);
@@ -285,6 +267,55 @@ function sched_talk(row){
   var t = {id: row.id, date: fmt_iso_date(row.start), type: row.type, presenter: row.presenter_ids.slice(), tea: row.tea_ids.slice()};
   if (row.type === 'Coffee Cleaning' && row.end) t.date_end = fmt_iso_date(row.end);
   return t;
+}
+
+// the slots that count for fairness: a year either side of these dates (all rotas' slots, as a tea or talk duty
+// elsewhere counts too; coffee only counts coffee), in sched_main's form, leaving out the ids given
+function sched_past(rota, first, last, leave_out, ctx){
+  var past = [];
+  (rota === 'Coffee Cleaning' ? ['Coffee Cleaning'] : ALL_TYPES).forEach(function(type){
+    load_rows(type, add_days(first, -365), add_days(last, 365), ctx).forEach(function(r){
+      if (leave_out.indexOf(r.id) < 0) past.push(sched_talk(r));
+    });
+  });
+  return past;
+}
+
+// everyone who can be put on the rota, with their away dates, as sched_main takes them
+function sched_people(rota, ctx, warnings){
+  return eligible_people(rota, ctx).map(function(p){
+    var away = sched_away(p, warnings);
+    return {id: p.id, name: p.name, away_from: away.from, away_until: away.until,
+            tea_excluded: p.tea_excluded, tt_excluded: p.tt_excluded, rt_excluded: p.rt_excluded};
+  });
+}
+
+function sched_away(person, warnings){
+  var away = {from: [], until: []};
+  try {
+    read_away_all(person).forEach(function(a){ away.from.push(a.from); away.until.push(a.to); });
+  } catch (e) {
+    if (warnings) warnings.push(person.name + ': away dates could not be read (' + e.message + '), treated as always available');
+  }
+  return away;
+}
+
+// The next person in line for one duty ('presenter' or 'tea') of one slot t (sched_talk form), by the rules of
+// sched_main: the fairness queue of that duty, skipping anyone in exclude, anyone presenting within a week of the
+// slot and anyone away during it. past: the other slots (not t). null if nobody is free.
+function sched_pick(t, role, past, people, exclude){
+  var slot_type = role === 'tea' ? (t.type === 'Coffee Cleaning' ? 'Coffee Cleaning' : 'Tea') : t.type;
+  var flag = {'Research Talk': 'rt_excluded', 'Tea Talk': 'tt_excluded', 'Tea': 'tea_excluded'}[slot_type];
+  var ids = people.filter(function(p){ return exclude.indexOf(p.id) < 0 && !(flag && p[flag]); }).map(function(p){ return p.id; });
+  var queue = sched_priority_queue(past, people, ids, slot_type);
+  var whitelist = sched_whitelist(t.date, past.concat([t]));
+  var end = t.date_end || t.date;
+  for (var i = 0; i < queue.length; i++){
+    var p = queue[i];
+    if (whitelist.indexOf(p.id) >= 0) continue;
+    if (!sched_overlap(t.date, end, p.away_from, p.away_until)) return p.id;
+  }
+  return null;
 }
 
 // Who normally does this kind of duty (the scheduler's rules, per slot); the swap list shows them first.
