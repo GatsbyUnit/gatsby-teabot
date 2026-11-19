@@ -111,6 +111,7 @@ function auto_plan(rota, ctx, today, st){
       st.made.push(m.key);
       if (m.id) st.planned[m.id] = {k: m.key, at: today};
     });
+    save_auto_state(rota, st, today);   // at once: a run that times out while filling must not forget its slots
   }
   var fill = fill_slots(rota, ctx);
   // slots that had nobody get the full review time again once someone is on them
@@ -140,6 +141,7 @@ function auto_finalise(rota, ctx, today, st){
     }
     finalise_rows([r], ctx);
     delete st.planned[id];
+    save_auto_state(rota, st, today);
     done.push(r);
     tell_on_duty(r, ctx);
   });
