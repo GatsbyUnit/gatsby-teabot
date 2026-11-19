@@ -641,7 +641,7 @@
       var head = (res.created !== undefined ? 'Created ' + res.created + ' slot' + (res.created === 1 ? '' : 's') + (res.existing ? ' (' + res.existing + ' already existed)' : '') + '. ' : '') +
         'Filled ' + res.filled.length + '. Check them on the Gatsby Rotas site: delete any you do not need (closures, retreat, deadlines) and change anyone you like, then finalise.';
       msg.appendChild(el('div', {text: head}));
-      if (res.holidays && res.holidays.length) msg.appendChild(el('div', {class: 'muted', text: 'Skipped bank holidays: ' + res.holidays.join(', ')}));
+      if (res.holidays && res.holidays.length) msg.appendChild(el('div', {class: 'muted', text: 'Skipped (bank holidays, closures): ' + res.holidays.join(', ')}));
       var list = el('ul', {style: 'margin:6px 0 0;padding-left:18px'});
       res.filled.concat(res.unfilled).forEach(function(l){ list.appendChild(el('li', {text: l})); });
       msg.appendChild(list);
@@ -671,7 +671,8 @@
       : [el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'From'}), from]), el('div', {}, [el('label', {text: 'To'}), to])])];
     return el('div', {class: 'card'}, [
       el('div', {class: 'when', text: o.label}),
-      el('p', {class: 'muted', style: 'margin:4px 0 0', text: 'Plan creates the slots for these dates (bank holidays are skipped) and fills them fairly, respecting away dates. They stay tentative: check them on the Gatsby Rotas site, then finalise to put them on the calendar.'})
+      o.auto ? el('p', {style: 'margin:4px 0 0', text: 'Autopilot is on: every Monday the bot plans and fills the slots up to ' + o.auto + ' weeks ahead and emails you the list. Three days later they go on the calendar and everyone on duty is told; until then, change or remove slots on the Gatsby Rotas site. You can still plan by hand below.'}) : null,
+      el('p', {class: 'muted', style: 'margin:4px 0 0', text: 'Plan creates the slots for these dates (bank holidays and closures are skipped) and fills them fairly, respecting away dates. They stay tentative: check them on the Gatsby Rotas site, then finalise to put them on the calendar.'})
     ].concat(dates).concat([
       el('div', {class: 'row', style: 'margin-top:10px'}, [plan, fill]),
       el('label', {style: 'display:flex;gap:8px;align-items:center;color:inherit;font-size:14px;margin-top:12px'}, [box, 'When finalising, email the group that the schedule was updated']),

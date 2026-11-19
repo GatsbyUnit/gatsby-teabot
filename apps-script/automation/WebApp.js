@@ -147,6 +147,7 @@ function tea_state(ctx, censored){
     var tentative = tentative_rows(rota, ctx).filter(function(r){ return r.start >= start_of_today(); });
     var range = next_range(rota, ctx);
     return {rota: rota, label: ROTAS[rota].label, tentative: tentative.length,
+            auto: (ctx.settings.auto_rotas || []).indexOf(rota) >= 0 ? ctx.settings.auto_weeks : 0,
             empty: tentative.filter(function(r){ return !r.presenter_ids.length && !r.tea_ids.length; }).length,
             from: range.from, to: range.to,
             tea_from: rota === 'talks' ? range.from : '', tea_to: rota === 'talks' ? fmt_iso_date(add_days(parse_iso_date(range.from), 27)) : ''};
@@ -430,7 +431,7 @@ function api_finalise(token, rota, email_group){
   }
 }
 
-// One step for organisers: create the slots for the dates (bank holidays skipped, existing slots kept) and
+// One step for organisers: create the slots for the dates (bank holidays and closed dates skipped, existing slots kept) and
 // fill every empty one fairly. They stay tentative until the organiser has checked them and finalises.
 function api_plan_slots(token, rota, ranges){
   var ctx = page_context(token);

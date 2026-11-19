@@ -1,5 +1,7 @@
-// Daily: reminders for organisers. (Reminders for presenters and tea people stay in the old Cron Jobs.)
+// Daily: reminders for organisers, then the autopilot (Autopilot.js). (Reminders for presenters and tea people
+// stay in the old Cron Jobs.)
 //  - Mondays: if a type's schedule ends within SCHEDULE_WARNING_DAYS, nudge its organiser to run scheduling
+//    (not for rotas on autopilot)
 //  - fixed dates from the "Automation reminders" tab of the constants sheet (seeded with DEFAULT_DATE_REMINDERS)
 
 const DEFAULT_DATE_REMINDERS = [
@@ -11,12 +13,20 @@ const DEFAULT_DATE_REMINDERS = [
 
 function run_daily_reminders(){
   var constants = get_global_constants();
+  var failed = null;
   try {
     daily_reminders(constants, get_settings());
   } catch (err) {
     notify_error('Organiser reminders', err, constants);
-    throw err;
+    failed = err;
   }
+  try {
+    run_autopilot(constants, get_settings());
+  } catch (err) {
+    notify_error('Autopilot', err, constants);
+    failed = failed || err;
+  }
+  if (failed) throw failed;
 }
 
 function daily_reminders(constants, settings){
@@ -25,6 +35,7 @@ function daily_reminders(constants, settings){
 
   if (today.getDay() === 1){
     settings.reminder_types.forEach(function(type){
+      if ((settings.auto_rotas || []).indexOf(rota_of_type(type)) >= 0) return;
       var last = last_scheduled_date(type, constants);
       var days = last ? Math.round((last - today) / (24 * 3600 * 1000)) : -1;
       if (last && days > settings.schedule_warning_days) return;

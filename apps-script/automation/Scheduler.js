@@ -3,7 +3,8 @@
 //                   water-filter weeks as the notebooks); slots that already exist are not duplicated
 //   fill_slots():   assigns people to the tentative slots with the fairness algorithm below, using
 //                   everyone's away dates; slots that already have someone are left alone
-// Then the organiser checks the slots and finalises (Events.js), as before.
+// Then the organiser checks the slots and finalises (Events.js), as before; for rotas on autopilot the bot
+// does all three itself (Autopilot.js).
 //
 // The algorithm is a line-by-line port of github.com/KevHH/gatsby_tea_scheduling/script.py; tests/
 // crosscheck_scheduler.py runs both on random inputs and checks they agree. Dates are 'yyyy-MM-dd'.
@@ -124,7 +125,10 @@ const SLOT_PLANS = {
 };
 
 // ranges: {from, to} (yyyy-MM-dd); for talks {research_from, research_to, tea_from, tea_to}
-function create_slots(rota, ranges, ctx){
+// skip: optional {'<type>|yyyy-MM-dd': true} of slots not to create (the autopilot's: ones it made before and
+// someone removed). Bank holidays and CLOSED_DATES are skipped; a coffee week only when it is closed all week.
+// Returns what was created ('date type' lines, and made: [{id, key}]), what existed and the days skipped.
+function create_slots(rota, ranges, ctx, skip){
   var plans = SLOT_PLANS[rota];
   var wanted = [];
   plans.forEach(function(plan){
@@ -137,7 +141,7 @@ function create_slots(rota, ranges, ctx){
       if (iso_weekday(d) === plan.weekday) wanted.push({plan: plan, date: d});
     }
   });
-  if (!wanted.length) return {created: [], skipped: []};
+  if (!wanted.length) return {created: [], skipped: [], holidays: [], made: []};
   wanted.sort(function(a, b){ return a.date < b.date ? -1 : 1; });
 
   var first = parse_iso_date(wanted[0].date), last = parse_iso_date(wanted[wanted.length - 1].date);
@@ -147,13 +151,23 @@ function create_slots(rota, ranges, ctx){
     load_rows(type, add_days(first, -1), add_days(last, 6), ctx).forEach(function(r){ existing[type + '|' + fmt_iso_date(r.start)] = true; });
   });
   var coffee = rota === 'Coffee Cleaning' ? coffee_templates(first, ctx) : null;
-  var holidays = rota === 'Coffee Cleaning' ? {} : bank_holidays();
+  var holidays = bank_holidays();
+  var closed = (ctx.settings && ctx.settings.closed_days) || [];
+  var is_off = function(d){ return !!holidays[d] || is_closed(d, closed); };
 
-  var created = [], skipped = [], holiday_skipped = [];
+  var created = [], skipped = [], holiday_skipped = [], made = [];
   wanted.forEach(function(w, i){
     var key = w.plan.type + '|' + w.date;
-    if (existing[key]){ skipped.push(w.date + ' ' + w.plan.type); return; }
-    if (holidays[w.date]){ holiday_skipped.push(w.date + ' (' + holidays[w.date] + ')'); return; }
+    if (existing[key] || (skip && skip[key])){ skipped.push(w.date + ' ' + w.plan.type); return; }
+    if (w.plan.all_week){
+      // a coffee week goes ahead unless every day of it is a bank holiday or closed
+      var open = [0, 1, 2, 3, 4].some(function(i){ return !is_off(sched_add_days(w.date, i)); });
+      if (!open){ holiday_skipped.push(w.date + ' (closed all week)'); return; }
+    } else if (holidays[w.date]){
+      holiday_skipped.push(w.date + ' (' + holidays[w.date] + ')'); return;
+    } else if (is_closed(w.date, closed)){
+      holiday_skipped.push(w.date + ' (closed)'); return;
+    }
     var props = {
       'Type': {select: {name: w.plan.type}},
       'Title': {title: [{text: {content: TENTATIVE_TAGS[rota]}}]}
@@ -171,11 +185,32 @@ function create_slots(rota, ranges, ctx){
       // the last Tuesday of the month is a CSNJC slot
       props['CSNJC'] = {checkbox: sched_add_days(w.date, 7).slice(5, 7) !== w.date.slice(5, 7)};
     }
-    notion_request('post', 'pages', {parent: {database_id: ctx.constants['notion_talk_db_id']}, properties: props}, ctx.constants);
+    var page = notion_request('post', 'pages', {parent: {database_id: ctx.constants['notion_talk_db_id']}, properties: props}, ctx.constants);
     created.push(w.date + ' ' + w.plan.type);
+    made.push({id: page && page.id ? normalise_id(page.id) : '', key: key});
   });
-  log_row(ctx, 'schedule', rota, null, 'created slots', created.length + ' created' + (skipped.length ? ', ' + skipped.length + ' already existed' : '') + (holiday_skipped.length ? ', bank holidays skipped: ' + holiday_skipped.join(', ') : ''));
-  return {created: created, skipped: skipped, holidays: holiday_skipped};
+  log_row(ctx, 'schedule', rota, null, 'created slots', created.length + ' created' + (skipped.length ? ', ' + skipped.length + ' already existed' : '') + (holiday_skipped.length ? ', skipped (bank holidays, closures): ' + holiday_skipped.join(', ') : ''));
+  return {created: created, skipped: skipped, holidays: holiday_skipped, made: made};
+}
+
+// CLOSED_DATES: "12-24..01-01, 2027-03-15..2027-03-19, 2027-04-02" -> [{yearly, from, to}]. MM-DD repeats every
+// year (a range may run over New Year); anything unreadable is left out.
+function parse_closed(str){
+  return split_list(str || '').map(function(item){
+    var m = item.match(/^(\d{4}-)?(\d{2}-\d{2})(?:\s*(?:\.\.|–|—)\s*(\d{4}-)?(\d{2}-\d{2}))?$/);
+    if (!m) return null;
+    if (!m[1] && !m[3]) return {yearly: true, from: m[2], to: m[4] || m[2]};
+    var from = (m[1] || m[3]) + m[2];
+    return {yearly: false, from: from, to: m[4] ? (m[3] || m[1]) + m[4] : from};
+  }).filter(function(c){ return c; });
+}
+
+function is_closed(d, closed){
+  var md = d.slice(5);
+  return (closed || []).some(function(c){
+    if (!c.yearly) return c.from <= d && d <= c.to;
+    return c.from <= c.to ? (c.from <= md && md <= c.to) : (md >= c.from || md <= c.to);
+  });
 }
 
 // Water-filter weeks continue the 4-week cycle from the last filter week; descriptions are

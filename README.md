@@ -22,7 +22,7 @@ The rota data (the Gatsby Rotas site) decides who does what and when; the calend
 copied back. The [handbook](docs/handbook.md) explains each part.
 
 ## Layout
-- `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ rota sync, scheduling and
+- `apps-script/automation/`: "Gatsby Tea Automation", all the logic: calendar ↔ rota sync, scheduling (by hand or on autopilot) and
   finalising, emails, organiser reminders, and everything behind the tea page and the Rotas site. The rota data
   (schedule, people, rota rules) lives in the bot's "Gatsby Rotas data" sheet (`Store.js`); the code reaches it
   through `notion_request` (`Notion.js`) in the shape of Notion's API, where it came from (moved off Notion on

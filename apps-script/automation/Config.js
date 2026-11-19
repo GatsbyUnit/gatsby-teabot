@@ -31,7 +31,10 @@ const SETTINGS = [
   ['HANDBOOK_URL', '', 'Link to the organiser handbook, included in reminder emails.'],
   ['PAGE_URL', '', 'Address of the tea page (GitHub Pages: https://gatsbyunit.github.io/gatsby-teabot/; also read by the reminder emails of the old Cron Jobs).'],
   ['PAGE_KEY', '', 'Unit key in the general tea-page link (calendar events, emails to several people); without it, the page shows nothing to someone who only knows its public address. Any random letters and digits. Changing it breaks the general links already sent; the calendar events get the new one within the hour.'],
-  ['FAVICON_URL', '', 'Optional browser-tab icon of the tea page: an image address ending in .png (a Drive image shared by link: https://lh3.googleusercontent.com/d/<file id>#.png). Kept here rather than in the public repo.']
+  ['FAVICON_URL', '', 'Optional browser-tab icon of the tea page: an image address ending in .png (a Drive image shared by link: https://lh3.googleusercontent.com/d/<file id>#.png). Kept here rather than in the public repo.'],
+  ['AUTO_TYPES', '', 'Rotas the bot schedules by itself (comma-separated: TNJC, MLJC, Coffee Cleaning, talks). Every Monday it plans and fills the slots up to AUTO_WEEKS ahead and emails the organiser the list; three days later they go on the calendar and the people on duty are told. Empty = organisers plan by hand on their tea page.'],
+  ['AUTO_WEEKS', '6', 'How many weeks ahead the autopilot keeps a rota planned.'],
+  ['CLOSED_DATES', '12-24..01-01', 'Days no slots are planned on, for every rota (bank holidays are skipped anyway): dates or ranges, comma-separated. MM-DD repeats every year, YYYY-MM-DD is one date. E.g. 12-24..01-01 (UCL Christmas closure), 2027-03-15..2027-03-19 (retreat).']
 ];
 
 // managed by the script itself, kept in Script Properties
@@ -92,6 +95,9 @@ function get_settings(){
   s.swap_horizon_days = parseInt(s.SWAP_HORIZON_DAYS, 10);
   s.schedule_warning_days = parseInt(s.SCHEDULE_WARNING_DAYS, 10);
   s.links_in_events = s.LINKS_IN_EVENTS.toLowerCase() === 'true';
+  s.auto_rotas = auto_rotas_of(s.AUTO_TYPES);
+  s.auto_weeks = parseInt(s.AUTO_WEEKS, 10) || 6;
+  s.closed_days = parse_closed(s.CLOSED_DATES);
   s.date_reminders = read_reminders_tab();
   settings_cache = s;
   return s;

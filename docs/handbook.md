@@ -107,9 +107,26 @@ Every edit is a line in the automation log sheet (job "site edit", with who did 
 ## Scheduling
 When: as promised to members in the guides on the site (Gatsby Tea System, TNJC Guide, MLJC Guide). The bot also
 reminds you on Mondays when a rota's schedule is about to run out. In the Organiser section of your tea page:
-1. **Plan these dates:** creates the slots (same days, times, CSNJC rule and coffee water-filter weeks as the old notebooks; England and Wales bank holidays are skipped; existing slots are kept) and fills them with Kevin's fairness algorithm and everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
+1. **Plan these dates:** creates the slots (same days, times, CSNJC rule and coffee water-filter weeks as the old notebooks; England and Wales bank holidays and CLOSED_DATES are skipped; existing slots are kept) and fills them with Kevin's fairness algorithm and everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
 2. **Check on the site:** remove slots that are not needed (UCL closures, retreat, conference deadlines such as COSYNE) and change anyone you like. "Fill … empty slots again" refills any slot you cleared.
 3. **Finalise:** puts them on the calendar; optionally emails the group the usual "schedule updated" email.
+
+**Autopilot (rotas in AUTO_TYPES, Automation tab; MLJC since Nov 2026).** The bot schedules the rota by itself, so
+the steps above are only needed by hand for something unusual:
+- **Every Monday** (and on the first morning after a rota is switched on) it creates the slots after the rota's last
+  one, up to the end of the week AUTO_WEEKS (default 6) ahead, fills them as "Plan these dates" does and emails the
+  organiser the list. Nothing is planned less than 10 days ahead, and it never fills gaps in the middle.
+- **Three days later** they go on the calendar and each person on duty gets an email with their tea-page link.
+- **Before that, on the site:** change anyone, or remove a slot you don't need: a slot the autopilot made and you
+  removed is not planned again. To keep a date free before it is planned, add a slot titled "Cancelled: <reason>";
+  a guest speaker goes in the slot's guest field (or add the guest's slot before the autopilot gets there).
+- **Days off for every rota:** CLOSED_DATES in the Automation tab (default `12-24..01-01`, the UCL Christmas
+  closure; add retreat weeks etc. as `2027-03-15..2027-03-19`). Bank holidays are skipped anyway; a coffee week only
+  when the whole week is off. Manual planning skips them too.
+- A slot nobody could be found for stays off the calendar; the organiser gets one email about it, and the next
+  Monday's run tries again.
+- The Monday "time to schedule" reminder is not sent for rotas on autopilot. To switch a rota back to manual, take
+  it out of AUTO_TYPES. State: Script Properties `auto:<rota>` (what it planned and made).
 
 **Who counts for whom:** turns are counted per rota from the site's data. The swap list shows the people on that rota first (TNJC / CSNJC / MLJC / Coffee ticks, the "Excluded from …" boxes, "Included only for JCs / coffee"), then everyone else. Whoever is recorded as doing a duty has had their turn; if someone outside the rota steps in, the slot counts for nobody and the person who handed it over keeps their turn.
 

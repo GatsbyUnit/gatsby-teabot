@@ -240,7 +240,7 @@ const TOOLS = [
     inputSchema: obj({ i_have_left_the_unit: { type: 'boolean', description: 'must be true' } }, ['i_have_left_the_unit']),
     run: async (a) => { if (a.i_have_left_the_unit !== true) throw new Error('Only for someone who has left the Unit.'); return api('api_leave', TOKEN); } },
 
-  { name: 'plan_slots', description: 'Organisers: create the slots for these dates (bank holidays skipped, existing slots kept) and fill them fairly. They stay tentative until finalise. rota: TNJC, MLJC, Coffee Cleaning or talks (talks take research_from/research_to and tea_from/tea_to instead of from/to).',
+  { name: 'plan_slots', description: 'Organisers: create the slots for these dates (bank holidays and closed dates skipped, existing slots kept) and fill them fairly. They stay tentative until finalise. rota: TNJC, MLJC, Coffee Cleaning or talks (talks take research_from/research_to and tea_from/tea_to instead of from/to).',
     inputSchema: obj({ rota: str, from: str, to: str, research_from: str, research_to: str, tea_from: str, tea_to: str }, ['rota']),
     run: async (a) => { const { rota, ...ranges } = a; const r = await api('api_plan_slots', TOKEN, rota, ranges); changed(); return r; } },
   { name: 'fill_slots', description: 'Organisers: fill the empty tentative slots of a rota again, fairly.',

@@ -71,16 +71,20 @@ function tentative_rows(rota, ctx){
 // event IDs, and optionally email the group once.
 function finalise_rota(rota, email_group, ctx){
   var rows = tentative_rows(rota, ctx);
-  rows.forEach(function(row){
-    row.title = '';
-    create_event(row, ctx, {'Title': {title: [{text: {content: ''}}]}});
-  });
+  finalise_rows(rows, ctx);
   log_row(ctx, 'finalise', rota, null, 'finalised', rows.length + ' slots' + (email_group ? ', group emailed' : ''));
   if (email_group && rows.length > 0){
     var r = ROTAS[rota];
     send_mail(ctx.constants[r.list], r.subject, ['Hi friends,', r.text], ctx.constants, {reply_to: ctx.constants[r.admin]});
   }
   return rows.length;
+}
+
+function finalise_rows(rows, ctx){
+  rows.forEach(function(row){
+    row.title = '';
+    create_event(row, ctx, {'Title': {title: [{text: {content: ''}}]}});
+  });
 }
 
 // Swap one person's duty in a slot for another person: rota data, calendar, and one email to both.
