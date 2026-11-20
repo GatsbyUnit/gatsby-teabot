@@ -32,14 +32,14 @@ function send_examples(){
     notify_swap_from_calendar(row, {Presenter: [other.id], Tea: []}, {Presenter: [person.id]}, ['"' + person.name.replace(/e/, '') + '" was read as ' + person.name + '.'], ctx);
     // 3. the bot could not tell who a name means (sent to the tea tsar, organiser in cc)
     var f = finding(row, 'uncertain_match', 'The calendar says "TNJC: Sam", but the site says "TNJC: ' + person.name + '". I could not tell for sure who is meant: "Sam" could be Sam Smith or Sam Jones. Nothing was changed. Please record the right person on the site.', false);
-    send_mail(me, 'Could not match a name in the TNJC calendar', digest_blocks([f], false, ctx.log.getUrl()), constants);
+    send_mail(me, 'Could not match a name in the TNJC calendar', digest_blocks([f], false, ctx.log.getUrl()), constants, {as: 'tsar'});
     // 4. someone asked for their personal page link
     send_mail(me, 'Your tea page', page_link_blocks(personal_link('0'.repeat(40), ctx.settings)), constants);
     // 5. organiser reminder (Mondays, when the schedule is running out)
     send_mail(me, 'Time to schedule more TNJC slots', [
       'The TNJC schedule currently runs until Tue 22 Dec 2026 (18 days from now).',
       'Plan the next slots in the Organiser section of your tea page: create them, delete the ones you do not need on the site (bank holidays, UCL closures, retreat, conference deadlines), fill them with people, check, and finalise.'
-    ], constants);
+    ], constants, {as: 'TNJC'});
     // 6. a presenter reminder from the old Cron Jobs (plain text, as before), now ending with the tea page line
     MailApp.sendEmail(me, '[Example] [Gatsby Tea Bot] REMINDER TNJC Presentation on 10 Nov 2026',
       'Hi,\n\nThis is a reminder for your talk next week. \n\n=============\n\nTitle: \nType: TNJC\nTime: 13:30 - 14:30, 10 Nov 2026\nPresenter: ' + person.name + '\nZoom Link: ' + constants['gatsby_zoom_link'] + '\nDescription: \n=============\n\n' +

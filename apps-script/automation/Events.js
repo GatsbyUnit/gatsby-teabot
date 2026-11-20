@@ -110,8 +110,8 @@ function apply_swap(row, duty, from_id, to_id, ctx){
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var both = emails_of([from_id, to_id], ctx.people);
   var what = duty === 'tea' ? (row.type === 'Coffee Cleaning' ? 'coffee duty' : 'tea duty') : 'presenter';
-  send_mail(both.length ? both.join(',') : organiser, 'Swap done: ' + fmt_day(row.start) + ' ' + row.type, swap_done_blocks(row, what, from_name, to_name), ctx.constants, {reply_to: organiser});
-  if (both.length < 2) send_mail(organiser, 'Swap: please check', ['A swap went through, but one of the two people has no registered email, so they were not told.', {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Before', from_name], ['Now', to_name]]}], ctx.constants);
+  send_mail(both.length ? both.join(',') : organiser, 'Swap done: ' + fmt_day(row.start) + ' ' + row.type, swap_done_blocks(row, what, from_name, to_name), ctx.constants, {reply_to: organiser, as: both.length ? undefined : row.type});
+  if (both.length < 2) send_mail(organiser, 'Swap: please check', ['A swap went through, but one of the two people has no registered email, so they were not told.', {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Before', from_name], ['Now', to_name]]}], ctx.constants, {as: row.type});
   return 'Done: ' + to_name + ' now has this ' + what + '. You both got an email.';
 }
 
@@ -188,5 +188,5 @@ function cancel_slot(row, ctx, how){
   if (bumped.length) blocks.push('The ' + role + ' is no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
   if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
   blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + role + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
-  send_mail(to.length ? to.join(',') : organiser, 'Cancelled: ' + row.type + ' on ' + fmt_day(row.start), blocks, ctx.constants, to.length ? {reply_to: organiser, cc: organiser} : {});
+  send_mail(to.length ? to.join(',') : organiser, 'Cancelled: ' + row.type + ' on ' + fmt_day(row.start), blocks, ctx.constants, to.length ? {reply_to: organiser, cc: organiser} : {as: row.type});
 }

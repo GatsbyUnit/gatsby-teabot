@@ -134,7 +134,7 @@ function alert_invite_cap(email, ctx){
     'The bot was about to send ' + name + ' more than ' + INVITE_CAP + ' calendar invitations or cancellations within a day. That is almost certainly a bug, so it stopped: nothing more goes to them until a day has passed, and their other slots are unaffected.',
     'Please have a look at the "Gatsby Tea Automation log" sheet (rows "invitations"). To switch invitations off for everyone, empty INVITE_TYPES in the Automation tab of the constants sheet.',
     {link: 'Log', url: ctx.log.getUrl ? ctx.log.getUrl() : ''}
-  ], ctx.constants);
+  ], ctx.constants, {as: 'tsar'});
   log_row(ctx, 'sync', '', null, 'invitation cap reached', name);
 }
 

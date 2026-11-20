@@ -6,7 +6,7 @@ function uploadslidesreminder_wrapper(){
   try{
     uploadslidesreminder(admin_email, constants);
   } catch (err) {
-    send_email(admin_email, 'Urgent: Unknown Error When Sending Talk Reminders', 'Error message:\n\n' + err , constants );
+    send_tsar_email(admin_email, 'Urgent: Unknown Error When Sending Talk Reminders', 'Error message:\n\n' + err , constants );
     throw err;
   }
 }
@@ -20,7 +20,7 @@ function uploadslidesreminder(admin_email, constants){
 function slidesreminder(admin_email, talk_date, email_option, constants) {
   // email_option has to be "duty_people" or "group"
   if (email_option !== "duty_people"){
-    send_email(admin_email, 'Urgent: bug in talk reminder script', 'email_option is invalid; need to be "duty_people".', constants)
+    send_tsar_email(admin_email, 'Urgent: bug in talk reminder script', 'email_option is invalid; need to be "duty_people".', constants)
     Logger.log('email_option is invalid');
     return;
   }
@@ -93,7 +93,7 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
 
   // check people data        
   if (people.length == 0){
-    send_email(admin_email, 'Urgent: no people found', 'No active people found in the database.', constants)
+    send_tsar_email(admin_email, 'Urgent: no people found', 'No active people found in the database.', constants)
     Logger.log('No active people');
     return;
   }
@@ -131,7 +131,7 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
     for (var i=0; i<tea_people_ids.length; i=i+1){
       var email_response = get_email_from_notion_id(tea_people_ids[i]['id'], mapping_sheet_id);
       if (typeof email_response == "string"){
-        send_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response , constants);
+        send_tsar_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response , constants);
         Logger.log(email_response); // skip this email
       } else {
         email_list.push(email_response[0]);
@@ -144,7 +144,7 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
       for (var i=0; i<presenter_ids.length; i=i+1){
         var email_response = get_email_from_notion_id(presenter_ids[i]['id'], mapping_sheet_id);
         if (typeof email_response == "string"){
-          send_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response, constants );
+          send_tsar_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response, constants );
           Logger.log(email_response); // skip this email
         } else {
           email_list.push(email_response[0]);

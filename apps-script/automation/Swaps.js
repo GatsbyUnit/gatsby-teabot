@@ -79,7 +79,7 @@ function answer_swap(code, accept, ctx){
     send_mail(from.email || admin_email_for_type(row.type, ctx.constants), to.name + ' can\'t take over your ' + duty_word(row, req.duty), [
       to.name + ' declined your swap request, so the slot is still yours. Please ask someone else on your tea page.',
       slot_table(row)
-    ], ctx.constants, {reply_to: to.email || undefined});
+    ], ctx.constants, {reply_to: to.email || undefined, as: from.email ? undefined : row.type});
     log_row(ctx, 'swap', row.type, row.start, 'swap declined', from.name + ' -> ' + to.name);
     return 'Declined. ' + from.name.split(' ')[0] + ' has been told.';
   }

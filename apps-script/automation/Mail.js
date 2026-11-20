@@ -9,6 +9,9 @@
 //   {items: ['a', 'b']}                    bullet list
 //   {link: 'label', url: 'https://...'}    link on its own line
 //   {table: [['Date', 'Tue 20 Oct'], ...]} two-column key/value table
+//
+// options.as: the email goes to the tsars in `to` as tsars (a rota type, a ROTAS key, a constants cell or 'tsar';
+// see tsar_title). It then opens with their title, "Hi TNJC Tsar," (tsar_greeting).
 
 function send_mail(to, subject, blocks, constants, options){
   options = options || {};
@@ -17,7 +20,9 @@ function send_mail(to, subject, blocks, constants, options){
     {rule: true},
     'Gatsby Tea Bot · [Gatsby Rotas](' + site_url(get_settings()) + ')' + (leave ? ' · [Leave the tea system (no longer a member of the Unit)](' + leave + ')' : '')
   ];
-  var all = blocks.concat(footer);
+  var hi = '';
+  try { hi = tsar_greeting(to, options.cc, options.as, constants); } catch (err) { Logger.log('greeting: ' + err); }
+  var all = (hi ? [hi] : []).concat(blocks, footer);
   var mail = {
     to: to,
     subject: '[Gatsby Tea Bot] ' + subject,
@@ -28,6 +33,38 @@ function send_mail(to, subject, blocks, constants, options){
   if (options.reply_to) mail.replyTo = options.reply_to;
   if (options.cc) mail.cc = options.cc;
   MailApp.sendEmail(mail);
+}
+
+// ---- greeting the tsars ----
+
+// the constants cell of each tsar, and the badge (Badges.js) whose label is their title
+const TSAR_CELLS = [['admin_email', 'tsar'], ['tnjc_admin_email', 'TNJC'], ['mljc_admin_email', 'MLJC'], ['coffee_admin_email', 'Coffee Cleaning']];
+
+// This address's title as a tsar ('TNJC Tsar'), '' for none. role (a rota type or ROTAS key, a constants cell, or
+// 'tsar') picks the title for someone who holds several; any other role (the talks) is the tea tsar's.
+function tsar_title(email, role, constants){
+  email = String(email || '').trim().toLowerCase();
+  if (!email) return '';
+  var own = TSAR_CELLS.filter(function(c){ return c[0] === role || c[1] === role; })[0] || TSAR_CELLS[0];
+  var cells = [own].concat(TSAR_CELLS.filter(function(c){ return c !== own; }));
+  for (var i = 0; i < cells.length; i++){
+    var holds = split_list(constants[cells[i][0]] || '').some(function(e){ return e.toLowerCase() === email; });
+    if (holds) return ROYAL_BADGES[cells[i][1]].label;
+  }
+  return '';
+}
+
+// The first line of an email sent to tsars as tsars (as, see tsar_title), by their title only, so they see at once
+// why it came to them: "Hi TNJC Tsar," or, with the tea tsar in cc, "Hi TNJC Tsar and Tea Tsar,". '' when nobody in
+// to is a tsar. Also used by the Cron Jobs (TeaBot.tsar_greeting, without constants).
+function tsar_greeting(to, cc, as, constants){
+  if (!as) return '';
+  constants = constants || get_global_constants();
+  var titles = function(list){ return split_list(list || '').map(function(e){ return tsar_title(e, as, constants); }).filter(Boolean); };
+  var parts = titles(to);
+  if (!parts.length) return '';
+  parts = parts.concat(titles(cc)).filter(function(t, i, a){ return a.indexOf(t) === i; });
+  return 'Hi ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0]) + ',';
 }
 
 function blocks_to_text(blocks){

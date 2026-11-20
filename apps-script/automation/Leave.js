@@ -118,5 +118,5 @@ function leave_tea_system(ctx, how){
     blocks.push('They had no upcoming slots.');
   }
   blocks.push('To undo: tick Active on their page on the site and put their email back in column C of the identity sheet.');
-  send_mail(tsar || ctx.constants['tnjc_admin_email'], me.name + ' has left the tea system', blocks, ctx.constants, cc.length ? {cc: cc.join(',')} : {});
+  send_mail(tsar || ctx.constants['tnjc_admin_email'], me.name + ' has left the tea system', blocks, ctx.constants, cc.length ? {cc: cc.join(','), as: 'tsar'} : {as: 'tsar'});
 }

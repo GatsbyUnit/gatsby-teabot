@@ -280,7 +280,7 @@ function handover_mail(rota, handed, stuck, ctx){
     blocks.push({items: stuck.map(function(c){ return line(c.row, c.role) + ': ' + names_of([c.id], ctx.people)[0]; })});
   }
   blocks.push({link: 'Gatsby Rotas site', url: site_url(ctx.settings)});
-  send_mail(to, label + ': ' + (handed.length ? 'slots handed on because of away dates' : 'nobody free for a slot'), blocks, ctx.constants);
+  send_mail(to, label + ': ' + (handed.length ? 'slots handed on because of away dates' : 'nobody free for a slot'), blocks, ctx.constants, {as: rota});
 }
 
 function auto_plan_mail(rota, res, fill, ctx, today){
@@ -300,7 +300,7 @@ function auto_plan_mail(rota, res, fill, ctx, today){
   blocks.push('Every Monday the autopilot keeps ' + label + ' planned ' + ctx.settings.auto_weeks + ' weeks ahead. To switch it off, take ' + rota + ' out of AUTO_TYPES in the Automation tab of the constants sheet (or ask the tea tsar).');
   blocks.push({link: 'Gatsby Rotas site', url: site_url(ctx.settings)});
   if (ctx.settings.HANDBOOK_URL) blocks.push({link: 'Organiser handbook', url: ctx.settings.HANDBOOK_URL});
-  send_mail(to, label + ': next slots planned, on the calendar on ' + live, blocks, ctx.constants);
+  send_mail(to, label + ': next slots planned, on the calendar on ' + live, blocks, ctx.constants, {as: rota});
 }
 
 function auto_empty_mail(rota, rows, ctx){
@@ -312,7 +312,7 @@ function auto_empty_mail(rota, rows, ctx){
     {items: rows.map(function(r){ return fmt_day(r.start) + ' · ' + r.type; })},
     'Put someone (or a guest speaker) on them on the Gatsby Rotas site, or remove them. The autopilot tries to fill them again on Monday, and puts them on the calendar once someone is on duty.',
     {link: 'Gatsby Rotas site', url: site_url(ctx.settings)}
-  ], ctx.constants);
+  ], ctx.constants, {as: rota});
 }
 
 function duty_message(row, role){

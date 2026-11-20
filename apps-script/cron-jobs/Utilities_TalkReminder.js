@@ -1,7 +1,7 @@
 function talkreminder(admin_email, talk_date, email_option, talk_date_name, constants) {
   // email_option has to be "duty_people" or "group"
   if (email_option !== "group" && email_option !== "duty_people" && email_option !== "coffee_people"){
-    send_email(admin_email, 'Urgent: bug in talk reminder script', 'email_option is invalid; need to be "duty_people" or "group".', constants)
+    send_tsar_email(admin_email, 'Urgent: bug in talk reminder script', 'email_option is invalid; need to be "duty_people" or "group".', constants)
     Logger.log('email_option is invalid');
     return;
   }
@@ -138,7 +138,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
 
   // check people data        
   if (people.length == 0){
-    send_email(admin_email, 'Urgent: no people found', 'No active people found in the database.', constants)
+    send_tsar_email(admin_email, 'Urgent: no people found', 'No active people found in the database.', constants)
     Logger.log('No active people');
     return;
   }
@@ -154,7 +154,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
     } else {
       // a row without a type and nobody on duty is a note ("No unit wide activity"): nothing to remind anyone of
       if (relevant_talk['properties']['Presenter']['relation'].length + relevant_talk['properties']['Tea']['relation'].length > 0){
-        send_email(admin_email, 'Skipped a talk reminder for ' + talk_date_string, 'Skipped a talk reminder for ' + talk_date_string + ' as the type of talk is not specified', constants );
+        send_tsar_email(admin_email, 'Skipped a talk reminder for ' + talk_date_string, 'Skipped a talk reminder for ' + talk_date_string + ' as the type of talk is not specified', constants );
       }
       continue;
     }
@@ -261,7 +261,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
       for (var i=0; i<tea_people_ids.length; i=i+1){
         var email_response = get_email_from_notion_id(tea_people_ids[i]['id'], mapping_sheet_id);
         if (typeof email_response == "string"){
-          send_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response, constants );
+          send_tsar_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response, constants );
           Logger.log(email_response); // skip this email
         } else {
           email_list.push(email_response[0]);
@@ -295,7 +295,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
         for (var i=0; i<presenter_ids.length; i=i+1){
           var email_response = get_email_from_notion_id(presenter_ids[i]['id'], mapping_sheet_id);
           if (typeof email_response == "string"){
-            send_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response , constants);
+            send_tsar_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response , constants);
             Logger.log(email_response); // skip this email
           } else {
             email_list.push(email_response[0]);
@@ -324,7 +324,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
       for (var i=0; i<tea_people_ids.length; i=i+1){
         var email_response = get_email_from_notion_id(tea_people_ids[i]['id'], mapping_sheet_id);
         if (typeof email_response == "string"){
-          send_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response, constants );
+          send_tsar_email(admin_email, 'Invalid Email When Sending Talk Reminders for ' + talk_date_string, email_response, constants );
           Logger.log(email_response); // skip this email
         } else {
           email_list.push(email_response[0]);
@@ -375,7 +375,7 @@ function send_http_request_tr(url, data, params, email, constants){
       results = results.concat(next_results); 
     }
   } else {    
-    send_email(email, 'Rota data unavailable when sending reminder on ' + fmt_date(new Date()), 'The rota data could not be read. Please try again later or contact the tea tsar. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody , constants );  
+    send_tsar_email(email, 'Rota data unavailable when sending reminder on ' + fmt_date(new Date()), 'The rota data could not be read. Please try again later or contact the tea tsar. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody , constants );  
   }
   return results;
 }

@@ -7,7 +7,7 @@ function add_new_people_to_rota_wrapper(){
   try{
     add_new_people_to_rota(admin_email, constants);
   } catch (err) {
-    send_email(admin_email, 'Urgent: Unknown Error When Adding New People to Rota', 'Error message:\n\n' + err, constants );
+    send_tsar_email(admin_email, 'Urgent: Unknown Error When Adding New People to Rota', 'Error message:\n\n' + err, constants );
     throw err;
   }
 
@@ -143,7 +143,7 @@ function add_new_people_to_rota(admin_email, constants) {
   /*
       email notification
   */
-  send_email(admin_email, 'Weekly New People Addition to Rota Success', 'Total number of people to be added: ' + count + '\nTotal number of successful additions: ' + success_count + '\nTotal number of failed additions: ' + fail_count, constants);
+  send_tsar_email(admin_email, 'Weekly New People Addition to Rota Success', 'Total number of people to be added: ' + count + '\nTotal number of successful additions: ' + success_count + '\nTotal number of failed additions: ' + fail_count, constants);
 
 }
 
@@ -170,7 +170,7 @@ function send_http_request_anptr(url, data, params, email, constants){
       results = results.concat(next_results); 
     }
   } else {
-    send_email(email, 'Rota data unavailable when adding new people to rota', 'The rota data could not be read or written. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
+    send_tsar_email(email, 'Rota data unavailable when adding new people to rota', 'The rota data could not be read or written. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
   }
   return results;
 }

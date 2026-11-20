@@ -5,7 +5,7 @@ function putawaydate_wrapper(){
   try{
     putawaydatereminder(admin_email, constants);
   } catch (err) {
-    send_email(admin_email, 'Urgent: Unknown Error When Sending Away Date Reminders', 'Error message:\n\n' + err, constants );
+    send_tsar_email(admin_email, 'Urgent: Unknown Error When Sending Away Date Reminders', 'Error message:\n\n' + err, constants );
     throw err;
   }
 }
@@ -45,7 +45,7 @@ function scheduletalksreminder_wrapper(){
   const today = new Date();
   const today_date = today.getDate();
   if (today_date == 18 && !auto_rota_on('talks')){
-    send_email(admin_email, "Reminder: Schedule Talks",
+    send_tsar_email(admin_email, "Reminder: Schedule Talks",
     "Please schedule tea talks for next month and research talks for the month after.", constants);
   }
 }

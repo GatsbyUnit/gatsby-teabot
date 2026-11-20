@@ -10,7 +10,7 @@ function sync_people_wrapper() {
   try{
     sync_people(admin_email, constants);
   } catch (err) {
-    send_email(admin_email, 'Urgent: Unknown Error When Saving People to Old Format', 'Error message:\n\n' + err, constants );
+    send_tsar_email(admin_email, 'Urgent: Unknown Error When Saving People to Old Format', 'Error message:\n\n' + err, constants );
     throw err;
   }
 
@@ -31,28 +31,28 @@ function sync_people(admin_email, constants){
   try {
     names_file = DriveApp.getFileById(names_file_id);
   } catch (err) {
-    send_email(admin_email, 'Names file not found in Drive when saving people to old format', 'If you have uploaded another names file, please update the names_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
+    send_tsar_email(admin_email, 'Names file not found in Drive when saving people to old format', 'If you have uploaded another names file, please update the names_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
     return;    
   }
 
   try {
     rt_file = DriveApp.getFileById(research_talk_people_file_id);
   } catch (err) {
-    send_email(admin_email, 'Researchpeople file not found in Drive when saving people to old format', 'If you have uploaded another researchpeople file, please update the names_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
+    send_tsar_email(admin_email, 'Researchpeople file not found in Drive when saving people to old format', 'If you have uploaded another researchpeople file, please update the names_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
     return;    
   }
   
   try {
     tt_file = DriveApp.getFileById(tea_talk_people_file_id);
   } catch (err) {
-    send_email(admin_email, 'Talkpeople file not found in Drive when saving people to old format', 'If you have uploaded another talkpeople file, please update the names_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
+    send_tsar_email(admin_email, 'Talkpeople file not found in Drive when saving people to old format', 'If you have uploaded another talkpeople file, please update the names_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
     return;    
   }
 
   try {
     t_file = DriveApp.getFileById(tea_people_file_id);
   } catch (err) {
-    send_email(admin_email, 'Teapeople file not found in Drive when saving people to old format', 'If you have uploaded another teapeople file, please update the tea_people_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
+    send_tsar_email(admin_email, 'Teapeople file not found in Drive when saving people to old format', 'If you have uploaded another teapeople file, please update the tea_people_file_id constant in the script in Gatsby Tea Cron Jobs. \n \n Error Code: ' + err, constants);
     return;    
   }
 
@@ -196,7 +196,7 @@ function sync_identity_sheet(people, admin_email, constants){
   }
 
   // email
-  send_email(admin_email, 'Synced People with the identity sheet', 'Sync successful. ' + new_people_count.toString() + ' people added. '
+  send_tsar_email(admin_email, 'Synced People with the identity sheet', 'Sync successful. ' + new_people_count.toString() + ' people added. '
   + deleted_count.toString() + ' people deleted.', constants );
 }
 
@@ -418,7 +418,7 @@ function sync_away_date_sheets(swc_cluster_bot_email, people, admin_email, notio
   }
 
   // email
-  send_email(admin_email, 'Synced People with Away Date Sheets', 'Sync successful. ' + new_people_count.toString() + ' people added. '
+  send_tsar_email(admin_email, 'Synced People with Away Date Sheets', 'Sync successful. ' + new_people_count.toString() + ' people added. '
   + deleted_count.toString() + ' people deleted.', constants );
 }
 
@@ -566,7 +566,7 @@ function fill_in_name_files(people, admin_email, names_file, rt_file, tt_file, t
   tt_file.setContent(tt_str);
   t_file.setContent(t_str);
 
-  send_email(admin_email, 'Saved People to Old Format Success', 'Saved people to old format successful.', constants);
+  send_tsar_email(admin_email, 'Saved People to Old Format Success', 'Saved people to old format successful.', constants);
 }
 
 function form_people_str(forewords, fac, postdoc, student_dict, staff, visitor){
@@ -611,7 +611,7 @@ function send_http_request_sp(url, data, params, email, constants){
       results = results.concat(next_results); 
     }
   } else {
-    send_email(email, 'Rota data unavailable when syncing people', 'The rota data could not be read or written. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
+    send_tsar_email(email, 'Rota data unavailable when syncing people', 'The rota data could not be read or written. \n\nResponse Code: ' + responseCode + '\n\nResponse Body: ' + responseBody, constants  );
   }
   return results;
 }
@@ -632,6 +632,6 @@ function update_away_date_sheet_url(notion_id, url, admin_email, notion_token, c
   };
   results = send_http_request_sp('https://api.notion.com/v1/pages/' + notion_id, data, params, admin_email, constants);  
   if ( results === false ){ 
-    send_email(admin_email, 'SyncPeople: Failed to update away date url for notion_id ' + notion_id, constants);
+    send_tsar_email(admin_email, 'SyncPeople: Failed to update away date url for notion_id ' + notion_id, 'The away-date sheet link could not be saved for this person; the response is in the Cron Jobs log.', constants);
   }
 }

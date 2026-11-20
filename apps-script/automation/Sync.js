@@ -58,7 +58,7 @@ function maybe_go_live(ctx){
     'To pause it, set DRY_RUN to TRUE in the Automation tab of the constants sheet.',
     {link: 'Constants sheet', url: SpreadsheetApp.openById(CONST_SHEET_ID).getUrl()},
     {link: 'Log', url: ctx.log.getUrl()}
-  ], ctx.constants);
+  ], ctx.constants, {as: 'TNJC'});
 }
 
 function make_context(constants, settings){
@@ -336,7 +336,7 @@ function report_findings(findings, ctx){
     var watching = list.every(function(f){ return !is_live(ctx, f.row.type); });
     var blocks = digest_blocks(list, watching, ctx.log.getUrl());
     var subject = cc ? 'Could not match a name in the ' + list[0].row.type + ' calendar' : list.length + ' calendar / site ' + (list.length === 1 ? 'item' : 'items') + ' to look at';
-    send_mail(admin, (watching ? 'Dry run: ' : '') + subject, blocks, ctx.constants, cc ? {cc: cc, reply_to: cc} : {});
+    send_mail(admin, (watching ? 'Dry run: ' : '') + subject, blocks, ctx.constants, cc ? {cc: cc, reply_to: cc, as: 'tsar'} : {as: list[0].row.type});
   });
 }
 
@@ -370,7 +370,7 @@ function notify_swap_from_calendar(row, old_ids, plan, notes, ctx){
   ];
   if (notes.length) blocks.push(notes.join(' '));
   blocks.push('If this is wrong, just reply to this email.');
-  send_mail(to.length ? to.join(',') : admin, row.type + ' updated for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin});
+  send_mail(to.length ? to.join(',') : admin, row.type + ' updated for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : row.type});
 }
 
 function notify_guest_from_calendar(row, bumped_ids, ctx){
@@ -381,10 +381,10 @@ function notify_guest_from_calendar(row, bumped_ids, ctx){
     {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Guest', row.guest]]},
     'If this is wrong, just reply to this email.'
   ];
-  send_mail(to.length ? to.join(',') : admin, 'Guest speaker in your ' + row.type + ' slot on ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin});
+  send_mail(to.length ? to.join(',') : admin, 'Guest speaker in your ' + row.type + ' slot on ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : row.type});
 }
 
-// Emails the TNJC organiser about a failed run. Hourly jobs pass a threshold so that a one-off network
+// Emails the tea tsar about a failed run (the TNJC organiser when there is none). Hourly jobs pass a threshold so that a one-off network
 // blip (which fixes itself on the next run) does not email anyone; only repeated failures do.
 function notify_error(job, err, constants, threshold){
   var props = PropertiesService.getScriptProperties();
@@ -393,12 +393,11 @@ function notify_error(job, err, constants, threshold){
   props.setProperty(key, String(count));
   if (count < (threshold || 1)) return;
   try {
-    var tsar = constants['admin_email'];
-    send_mail(constants['tnjc_admin_email'], 'Error in ' + job, [
+    send_mail(constants['admin_email'] || constants['tnjc_admin_email'], 'Error in ' + job, [
       (count > 1 ? 'The last ' + count + ' runs failed. ' : '') + 'The automation hit an error and stopped this run. It will try again on its next scheduled run.',
       {heading: 'Error'},
       String(err && err.stack ? err.stack : err)
-    ], constants, tsar && tsar !== constants['tnjc_admin_email'] ? {cc: tsar} : {});
+    ], constants, {as: 'tsar'});
   } catch (e) {
     Logger.log('Could not send error email: ' + e);
   }

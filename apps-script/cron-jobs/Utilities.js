@@ -141,6 +141,15 @@ function send_email(email, title, body, constants, replyto_email){
   );
 }
 
+// An email to the tea tsar as tea tsar (errors, notices, the schedule-talks reminder): it opens with "Hi Tea Tsar
+// <name>," (TeaBot.tsar_greeting, Mail.js of the automation) so they see at once why it came to them. A greeting
+// that fails is left out; the email still goes.
+function send_tsar_email(email, title, body, constants, replyto_email){
+  var hi = '';
+  try { hi = TeaBot.tsar_greeting(email, '', 'tsar'); } catch (e) { Logger.log('tsar_greeting: ' + e); }
+  send_email(email, title, (hi ? hi + '\n\n' : '') + body, constants, replyto_email);
+}
+
 function get_names_from_ids(ids, people){
   var names = [];
   for (var i=0; i<ids.length; i=i+1){

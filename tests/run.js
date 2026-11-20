@@ -40,7 +40,7 @@ var Utilities = {
 const tests = `
 var results = [];
 // the real Notion helpers, before tests below replace some of them
-var REAL = {notion_request: notion_request, notion_patch_page: notion_patch_page, notion_get_page: notion_get_page, notion_query: notion_query, to_row: to_row};
+var REAL = {notion_request: notion_request, notion_patch_page: notion_patch_page, notion_get_page: notion_get_page, notion_query: notion_query, to_row: to_row, send_mail: send_mail};
 function t(name, fn){ try { fn(); results.push('ok   ' + name); } catch (e) { results.push('FAIL ' + name + ': ' + e.message); } }
 
 var people = {
@@ -322,7 +322,36 @@ t('swap list: who usually does a duty', () => { var p = {active: true, name: 'X'
 t('hourly sync emails only after 3 failures in a row', () => { var m = []; send_mail = function(to, subj){ m.push(subj); }; clear_failures('Calendar sync'); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); assert.strictEqual(m.length, 0); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); assert.strictEqual(m.length, 1); clear_failures('Calendar sync'); notify_error('Calendar sync', new Error('x'), {tnjc_admin_email: 'a'}, 3); assert.strictEqual(m.length, 1); });
 t('other jobs email on the first failure', () => { var m = []; send_mail = function(to, subj){ m.push(subj); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'a'}); assert.strictEqual(m.length, 1); });
 // error mails
-t('errors go to the TNJC organiser with the tea tsar in cc', () => { var m = []; send_mail = function(to, subj, b, c, o){ m.push([to, o && o.cc]); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'lena@x', admin_email: 'tsar@x'}); assert.deepStrictEqual(m[0], ['lena@x', 'tsar@x']); });
+t('errors go to the tea tsar (the TNJC organiser when there is none), greeted by title', () => { var m = []; send_mail = function(to, subj, b, c, o){ m.push([to, o && o.cc, o && o.as]); }; notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'lena@x', admin_email: 'tsar@x'}); notify_error('Daily maintenance', new Error('x'), {tnjc_admin_email: 'lena@x', admin_email: ''}); assert.deepStrictEqual(m, [['tsar@x', undefined, 'tsar'], ['lena@x', undefined, 'tsar']]); });
+t('tsars are greeted by their title, so they see why an email came to them', () => {
+  var k = {admin_email: 'tsar@x', tnjc_admin_email: 'mc@x', mljc_admin_email: 'b@x, c@x', coffee_admin_email: ''};
+  assert.strictEqual(tsar_greeting('mc@x', '', 'TNJC', k), 'Hi TNJC Tsar,');
+  assert.strictEqual(tsar_greeting('tsar@x', '', 'Research Talk', k), 'Hi Tea Tsar,');           // the talks are the tea tsar's
+  assert.strictEqual(tsar_greeting('tsar@x', '', 'talks', k), 'Hi Tea Tsar,');
+  assert.strictEqual(tsar_greeting('tsar@x', '', 'TNJC', k), 'Hi Tea Tsar,');                    // not the TNJC tsar: their own title
+  assert.strictEqual(tsar_greeting('MC@x', '', 'TNJC', k), 'Hi TNJC Tsar,');
+  assert.strictEqual(tsar_greeting('c@x', '', 'mljc_admin_email', k), 'Hi MLJC Tsar,');         // second address of a cell
+  assert.strictEqual(tsar_greeting('tsar@x', 'mc@x, c@x', 'tsar', k), 'Hi Tea Tsar, TNJC Tsar and MLJC Tsar,');
+  assert.strictEqual(tsar_greeting('b@x, c@x', 'b@x', 'MLJC', k), 'Hi MLJC Tsar,');              // one title once
+  assert.strictEqual(tsar_greeting('lena@x,nikolai@x', 'mc@x', undefined, k), '');               // to people on duty: no greeting
+  assert.strictEqual(tsar_greeting('tsar@x', '', undefined, k), '');                             // the tea tsar on duty, not as tsar
+  assert.strictEqual(tsar_greeting('lena@x', '', 'TNJC', k), '');                                // no tsar among them
+});
+t('send_mail opens with the greeting for tsars, and leaves other emails as they were', () => {
+  var sent = [], saved = [get_settings, leave_url];
+  get_settings = () => ({PAGE_URL: 'https://page/'}); leave_url = () => '';
+  MailApp = {sendEmail: m => sent.push(m)};
+  var k = {admin_email: 'tsar@x', tnjc_admin_email: 'mc@x'};
+  try {
+    REAL.send_mail('mc@x', 'Time to schedule more TNJC slots', ['The TNJC schedule runs out.'], k, {as: 'TNJC'});
+    REAL.send_mail('lena@x', 'Swap done', ['Done.'], k);
+    REAL.send_mail('lena@x', 'Cancelled', ['Cancelled.'], k, {cc: 'mc@x'});
+  } finally { get_settings = saved[0]; leave_url = saved[1]; }
+  assert.ok(sent[0].body.startsWith('Hi TNJC Tsar,\\n\\nThe TNJC schedule runs out.'), sent[0].body);
+  assert.ok(sent[0].htmlBody.indexOf('>Hi TNJC Tsar,</p>') > 0);
+  assert.ok(sent[1].body.startsWith('Done.'), sent[1].body);
+  assert.ok(sent[2].body.startsWith('Cancelled.'), sent[2].body);
+});
 // the Gatsby Rotas site (Site.js)
 var SITE_PAGE = '2444835e8eab46fa9a7c792877e09620';
 function site_page(){ return {id: SITE_PAGE, slug: 'tea-system', title: 'Tea', blocks: [

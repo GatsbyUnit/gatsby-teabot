@@ -155,8 +155,8 @@ new person can see their tools. Work through it together with the person you tak
 
 **1. Make the bot know you (outgoing and incoming together)**
 1. In the constants sheet, first tab, column B, replace the outgoing address with yours: row 2 = tea tsar (also
-   gets the research / tea talk, just tea, leaving tea and external seminar mail), 3 = MLJC, 4 = TNJC (also gets
-   the bot's error emails), 5 = coffee. This decides who gets reminders, digests and cancellations, and who sees
+   gets the research / tea talk, just tea, leaving tea and external seminar mail, and the bot's error emails),
+   3 = MLJC, 4 = TNJC, 5 = coffee. This decides who gets reminders, digests and cancellations, and who sees
    the Organiser section on the tea page.
 2. Use the same address in the identity sheet (column C, your row): the tea page shows organiser tools only when
    your registered email matches column B. Then get your link from the tea page (pick your name).

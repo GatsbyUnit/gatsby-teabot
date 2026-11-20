@@ -43,13 +43,13 @@ function daily_reminders(constants, settings){
       send_mail(admin_email_for_type(type, constants), 'Time to schedule more ' + type + ' slots', [
         when,
         'Plan the next slots in the Organiser section of your tea page: create them, delete the ones you do not need on the site (bank holidays, UCL closures, retreat, conference deadlines), fill them with people, check, and finalise.'
-      ].concat(handbook), constants);
+      ].concat(handbook), constants, {as: type});
     });
   }
 
   settings.date_reminders.forEach(function(r){
     if (today.getMonth() + 1 === r.month && today.getDate() === r.day){
-      send_mail(admin_email_for_type(r.type, constants), r.subject, [r.body].concat(handbook), constants);
+      send_mail(admin_email_for_type(r.type, constants), r.subject, [r.body].concat(handbook), constants, {as: r.type});
     }
   });
 }

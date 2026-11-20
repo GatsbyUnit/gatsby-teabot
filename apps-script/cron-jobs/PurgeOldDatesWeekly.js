@@ -7,7 +7,7 @@ function purgeolddates_wrapper(){
   try{
     purgeolddates(admin_email, constants);
   } catch (err) {
-    send_email(admin_email, 'Urgent: Unknown Error When Updating Away Dates', 'Error message:\n\n' + err, constants);
+    send_tsar_email(admin_email, 'Urgent: Unknown Error When Updating Away Dates', 'Error message:\n\n' + err, constants);
     throw err;
   }
 }
@@ -60,7 +60,7 @@ function purgeolddates(admin_email, constants) {
   /*
       email notification
   */
-  send_email(admin_email, 'Weekly Away Date Purge Success', 'Total number of people checked: ' + count + '\n', constants);
+  send_tsar_email(admin_email, 'Weekly Away Date Purge Success', 'Total number of people checked: ' + count + '\n', constants);
 
 
 }

@@ -6,7 +6,7 @@ function coffeereminder_wrapper(){
   try{
     coffeereminder(admin_email, constants);
   } catch (err) {
-    send_email(admin_email, 'Urgent: Unknown Error When Sending Talk Reminders', 'Error message:\n\n' + err, constants );
+    send_tsar_email(admin_email, 'Urgent: Unknown Error When Sending Talk Reminders', 'Error message:\n\n' + err, constants );
     throw err;
   }
 }

@@ -40,7 +40,7 @@ function list_todo(moves, constants, intro){
     var list = String(constants[keys[0]] || '').trim();
     var to = String(constants[keys[1]] || constants['admin_email'] || '').trim();
     if (!list || !to) return;
-    var mail = mails[to] = mails[to] || {lists: {}, order: [], n: 0};
+    var mail = mails[to] = mails[to] || {lists: {}, order: [], n: 0, as: keys[1]};
     if (!mail.lists[list]){ mail.lists[list] = {rota: m.rota, lines: []}; mail.order.push(list); }
     mail.lists[list].lines.push(list_line(m));
     mail.n++;
@@ -55,7 +55,7 @@ function list_todo(moves, constants, intro){
       if (g) blocks.push('[Open its members](https://groups.google.com/g/' + g[1] + '/members)');
     });
     blocks.push('In the group: "Add members" (Gmail addresses can be added directly, other addresses get an invitation they accept); to remove someone, tick them on the members page and remove them.');
-    try { send_mail(to, 'Mailing list: ' + mail.n + ' change' + (mail.n === 1 ? '' : 's') + ' to make', blocks, constants); }
+    try { send_mail(to, 'Mailing list: ' + mail.n + ' change' + (mail.n === 1 ? '' : 's') + ' to make', blocks, constants, {as: mail.as}); }
     catch (err) { Logger.log('mailing list note to ' + to + ': ' + err); }
   });
 }
