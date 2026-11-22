@@ -719,12 +719,16 @@ function site_cancel_refusal(row){
 }
 
 // A tsar cancels a talk or just tea (the presenter asked, or it can't happen), as a presenter's "Nobody can take
-// over?" on the tea page does (cancel_slot): the slot stays, titled "Cancelled", without its presenter (a just tea:
-// its tea people), who keep their turn; tea duty stays; the calendar shows it as cancelled; the presenter and the
-// tea people get one email with the reason, the organiser in cc. The email names the tsar by title ("The Tea Tsar").
-// {slot, emailed: [names], no_address: [names]}
-function api_site_cancel_slot(token, id, reason){
+// over?" on the tea page does (cancel_slot): the slot stays, titled "Cancelled", without its presenter, who keeps
+// their turn; the calendar shows it as cancelled. options (all optional):
+//   keep_tea  true (default): only the talk is cancelled, tea goes ahead (just tea); false: the tea people come off
+//             too (and keep their turn). A just tea always loses its tea people.
+//   email     ids of the people on the slot to email (default: all of them; []: none of them). The organiser is in
+//             cc; with nobody chosen they alone are emailed, unless they are the one cancelling.
+// The email names the tsar by title ("The Tea Tsar") and gives the reason. {slot, emailed: [names], no_address: [names]}
+function api_site_cancel_slot(token, id, reason, options){
   var ed = site_editor(token);
+  options = options || {};
   var page = notion_get_page(hyphenate_id(id), ed.constants);
   var row = to_row(page);
   if (ed.rights.slots.indexOf(row.type) < 0) throw new Error('Only the ' + row.type + ' tsar or the tea tsar can cancel this slot.');
@@ -734,10 +738,22 @@ function api_site_cancel_slot(token, id, reason){
   if (!is_live(ctx, row.type)) throw new Error('The bot is paused for ' + row.type + ' (DRY_RUN or LIVE_TYPES), so it can\'t cancel this slot or email anyone.');
   reason = String(reason || '').trim().slice(0, 1000);
   if (reason.length < 5) throw new Error('Please give a short reason; it goes into the email.');
+  var on_slot = row.presenter_ids.concat(row.tea_ids);
+  var email = null;
+  if (options.email){
+    email = options.email.map(function(x){ return normalise_id(String(x)); });
+    email.forEach(function(x){
+      if (on_slot.indexOf(x) < 0) throw new Error((ctx.people[x] ? ctx.people[x].name : 'That person') + ' is not on this slot, so the bot does not email them.');
+    });
+  }
+  var me = site_caller(token, ed.constants);
+  var mine = String(me && me.email || '').toLowerCase();
+  var by_organiser = !!mine && split_list(admin_email_for_type(row.type, ed.constants) || '').some(function(e){ return e.toLowerCase() === mine; });
   var badge = ROYAL_BADGES[ed.rights.royal];
-  var told = cancel_slot(row, ctx, {source: 'site', by: badge ? 'The ' + badge.label : site_name(ed), reason: reason});
+  var told = cancel_slot(row, ctx, {source: 'site', by: badge ? 'The ' + badge.label : site_name(ed), reason: reason,
+                                    keep_tea: options.keep_tea !== false, email: email, by_organiser: by_organiser});
   site_forget('data');
-  log_site_edit(ed, 'cancelled ' + row.type + ' slot ' + site_date(page.properties['Date'].date.start));
+  log_site_edit(ed, 'cancelled ' + row.type + (options.keep_tea === false ? ' and tea' : '') + ' slot ' + site_date(page.properties['Date'].date.start));
   return {slot: site_slot(notion_get_page(hyphenate_id(id), ed.constants)), emailed: told.emailed, no_address: told.no_address};
 }
 

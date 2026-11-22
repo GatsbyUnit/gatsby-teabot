@@ -581,7 +581,7 @@
       ${allDay ? '' : `<label>Description<textarea name="description" placeholder="Abstract, paper, room…">${esc(s.description || '')}</textarea></label>`}
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button>
-        ${mayCancel(s) ? `<button type="button" class="edit-button" data-slot-cancel title="The slot stays, titled Cancelled; the people on it get an email with your reason, and the presenter keeps their turn. Tea duty stays.">Cancel ${s.type === 'Just Tea' ? 'just tea' : 'talk'}</button>` : ''}
+        ${mayCancel(s) ? `<button type="button" class="edit-button" data-slot-cancel title="The slot stays, titled Cancelled, and whoever comes off keeps their turn. You choose what to cancel and who gets an email.">${s.type === 'Just Tea' ? 'Cancel this tea…' : 'Cancel talk…'}</button>` : ''}
         ${s.id ? '<button type="button" class="edit-button" data-slot-delete title="For slots not needed (bank holidays, closures). Its calendar event goes too, and nobody is emailed. A talk whose people should hear about it is better cancelled (Cancel talk).">Remove slot</button>' : ''}
         <span class="error" role="alert"></span></div>
     </form>`;
@@ -663,30 +663,55 @@
             : done?.calendar === 'kept' ? 'Slot removed. The bot is paused, so its calendar event is still there.' : 'Slot removed.');
         } catch (x) { $('.error', fm).textContent = x.message; b.disabled = false; }
       });
-      // cancelling asks for a reason first (it goes into the email to the people on the slot)
+      // cancelling: what to cancel (a talk with tea: only the talk, i.e. just tea, or talk and tea), who gets an
+      // email (everyone on the slot by default; the organiser is in cc) and the reason, which goes into the email
       $('[data-slot-cancel]', fm)?.addEventListener('click', (e) => {
         e.currentTarget.disabled = true;
-        $('.actions', fm).insertAdjacentHTML('afterend', `<div class="row cancel-row">
-          <label>Reason (goes into the email to the people on it)<input name="cancel_reason" maxlength="1000" placeholder="e.g. the speaker can't make it, so it is just tea this week"></label>
-          <button type="button" class="edit-button primary" data-slot-cancel-go>Cancel it and email them</button></div>`);
-        const input = $('[name=cancel_reason]', fm), go = $('[data-slot-cancel-go]', fm);
+        const justTea = s.type === 'Just Tea';
+        const rawName = (id) => R.loadData().peopleById.get(id)?.name || 'someone';
+        const name = (id) => esc(rawName(id));
+        const onSlot = (justTea ? [] : (s.presenter || []).map((id) => [id, s.type === 'TNJC' || s.type === 'MLJC' ? 'presenter' : 'speaker']))
+          .concat((s.tea || []).map((id) => [id, 'tea']));
+        const hasTea = !justTea && (s.tea || []).length > 0;
+        $('.actions', fm).insertAdjacentHTML('afterend', `<fieldset class="cancel-box">
+          <legend>${justTea ? 'Cancel this tea' : 'Cancel the talk'}</legend>
+          ${justTea ? '<p class="muted">The tea person comes off the slot and keeps their turn.</p>'
+    : hasTea ? `<label class="check"><input type="radio" name="cancel_what" value="talk" checked> Only the talk: tea still happens (just tea)</label>
+          <label class="check"><input type="radio" name="cancel_what" value="all"> The talk and the tea</label>`
+      : '<p class="muted">The speaker comes off the slot and keeps their turn.</p>'}
+          <p class="muted">Email (the organiser is in cc):</p>
+          ${onSlot.length ? onSlot.map(([id, role]) => `<label class="check"><input type="checkbox" name="cancel_email" value="${id}" checked> ${name(id)} (${role})</label>`).join('')
+    : '<p class="muted">Nobody on the rotas is on this slot; only the organiser is told.</p>'}
+          <label>Reason (goes into the email)<input name="cancel_reason" maxlength="1000" placeholder="e.g. the speaker can't make it, so it is just tea this week"></label>
+          <div class="actions"><button type="button" class="edit-button primary" data-slot-cancel-go></button></div></fieldset>`);
+        const box = $('.cancel-box', fm), input = $('[name=cancel_reason]', box), go = $('[data-slot-cancel-go]', box);
+        const keepTea = () => !hasTea || $('[name=cancel_what]:checked', box).value === 'talk';
+        const emailIds = () => [...box.querySelectorAll('[name=cancel_email]:checked')].map((x) => x.value);
+        const label = () => {
+          const what = justTea ? 'Cancel the tea' : keepTea() ? (hasTea ? 'Cancel the talk (just tea)' : 'Cancel the talk') : 'Cancel talk and tea';
+          const n = emailIds().length;
+          go.textContent = what + (n ? `, email ${n === 1 ? rawName(emailIds()[0]) : n === 2 && onSlot.length === 2 ? 'both' : n === onSlot.length ? `all ${n}` : `${n} people`}` : onSlot.length ? ', no email' : '');
+        };
+        box.addEventListener('change', label);
+        label();
         input.addEventListener('keydown', (k) => { if (k.key === 'Enter') { k.preventDefault(); go.click(); } });
         go.addEventListener('click', async () => {
           const err = $('.error', fm);
           err.textContent = '';
           if (input.value.trim().length < 5) { err.textContent = 'Please give a short reason; it goes into the email.'; input.focus(); return; }
           go.disabled = true;
+          const was = go.textContent;
           go.textContent = 'Cancelling…';
           try {
-            const done = await R.api('api_site_cancel_slot', token(), s.id, input.value.trim());
+            const done = await R.api('api_site_cancel_slot', token(), s.id, input.value.trim(), { keep_tea: keepTea(), email: emailIds() });
             putItem('schedule', done.slot);
             const list = (xs) => xs.join(', ');
-            toast('Cancelled.' + (done.emailed.length ? ' Emailed ' + list(done.emailed) + ', the organiser in cc.' : ' The organiser was emailed.') +
+            toast('Cancelled.' + (done.emailed.length ? ' Emailed ' + list(done.emailed) + ', the organiser in cc.' : ' Nobody on the slot was emailed.') +
               (done.no_address.length ? ' No address registered for ' + list(done.no_address) + ': please tell them.' : ''), !!done.no_address.length);
           } catch (x) {
             err.textContent = x.message;
             go.disabled = false;
-            go.textContent = 'Cancel it and email them';
+            go.textContent = was;
           }
         });
         input.focus();

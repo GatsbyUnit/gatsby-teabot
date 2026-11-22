@@ -523,17 +523,44 @@ t('site: a rota tsar can only tick their own rota on people, and only edit their
     assert.throws(() => api_site_save_slot('tok', {id: 's1', type: 'TNJC', start: '2026-11-02'}), /MLJC tsar/);
   } finally { site_restore(); }
 });
-t('cancel by a tsar on the site: the email names them by title, gives the reason, and says tea goes ahead; who was emailed comes back', () => {
-  __props = {}; var e = cev('TEA TALK: Nikolai Petrov TEA: Zoé Martin'); var c = cctx(e); var m = []; var saved = send_mail;
-  send_mail = function(to, subj, blocks, k, o){ m.push({to: to, subj: subj, text: JSON.stringify(blocks), o: o}); };
+function tsar_cancel(how, tea){
+  __props = {}; var e = cev('TEA TALK: Nikolai Petrov TEA: x'); var c = cctx(e); var m = []; var saved = send_mail;
+  send_mail = function(to, subj, blocks, k, o){ m.push({to: to, subj: subj, text: JSON.stringify(blocks), o: o || {}}); };
   try {
-    var told = cancel_slot(row({type: 'Tea Talk', tea_ids: ['c'], start: soon}), c, {source: 'site', by: 'The Tea Tsar', reason: 'Nikolai cannot make it'});
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(told)), {emailed: ['Nikolai Petrov'], no_address: ['Zoé Martin']});
-    assert.strictEqual(m.length, 1); assert.strictEqual(m[0].to, 'nikolai@x'); assert.strictEqual(m[0].o.cc, 'tsar@x');
-    assert.ok(m[0].text.includes('The Tea Tsar has cancelled this talk.') && m[0].text.includes('Nikolai cannot make it') && m[0].text.includes('Tea still goes ahead'), m[0].text);
-    assert.strictEqual(e.title, 'TEA TALK: CANCELLED TEA: Zoé Martin');
-    assert.ok(logged.some(l => l.indexOf('cancelled: The Tea Tsar: Nikolai cannot make it (was: Nikolai Petrov)') === 0), logged.join('; '));
+    var told = cancel_slot(row({type: 'Tea Talk', tea_ids: tea || ['a', 'c'], start: soon}), c, Object.assign({source: 'site', by: 'The Tea Tsar', reason: 'Nikolai cannot make it'}, how));
+    return {told: JSON.parse(JSON.stringify(told)), m: m, e: e, patch: patched[0], logged: logged};
   } finally { send_mail = saved; }
+}
+t('tsar cancels the talk, tea stays (just tea): named by title, reason given, tea said to go ahead; who was emailed comes back', () => {
+  var r = tsar_cancel({});
+  assert.deepStrictEqual(r.told, {emailed: ['Nikolai Petrov', 'Lena Weber'], no_address: ['Zoé Martin']});
+  assert.strictEqual(r.m.length, 1); assert.strictEqual(r.m[0].to, 'nikolai@x,lena@x'); assert.strictEqual(r.m[0].o.cc, 'tsar@x');
+  assert.ok(/^Cancelled: Tea Talk on .* \\(just tea now\\)$/.test(r.m[0].subj), r.m[0].subj);
+  assert.ok(r.m[0].text.includes('The Tea Tsar has cancelled the talk. Tea still goes ahead: it is just tea this time.') && r.m[0].text.includes('Nikolai cannot make it') && r.m[0].text.includes('(still on)'), r.m[0].text);
+  assert.deepStrictEqual([r.patch.Presenter.relation, r.patch.Tea], [[], undefined]);
+  assert.strictEqual(r.e.title, 'TEA TALK: CANCELLED TEA: Lena Weber, Zoé Martin');
+  assert.ok(r.logged.some(l => l.indexOf('cancelled: The Tea Tsar: Nikolai cannot make it (was: Nikolai Petrov); emailed Nikolai Petrov, Lena Weber') === 0), r.logged.join('; '));
+});
+t('tsar cancels talk and tea: both come off (keeping their turn), calendar without tea, the email says so', () => {
+  var r = tsar_cancel({keep_tea: false}, ['a']);
+  assert.deepStrictEqual([r.patch.Presenter.relation, r.patch.Tea.relation], [[], []]);
+  assert.strictEqual(r.e.title, 'TEA TALK: CANCELLED');
+  assert.ok(/^Cancelled: Tea Talk and tea on [^(]*$/.test(r.m[0].subj), r.m[0].subj);
+  assert.ok(r.m[0].text.includes('has cancelled the talk and the tea.') && r.m[0].text.includes('(cancelled too)') && r.m[0].text.includes('The presenter and the tea person are no longer recorded'), r.m[0].text);
+  assert.ok(!r.m[0].text.includes('still goes ahead'));
+  assert.strictEqual(r.m[0].to, 'nikolai@x,lena@x');
+  assert.ok(r.logged.some(l => l.indexOf('cancelled talk and tea: ') === 0), r.logged.join('; '));
+});
+t('tsar chooses who is emailed: only them; nobody: the organiser alone, or no email when the organiser cancelled it', () => {
+  var r = tsar_cancel({email: ['b']});
+  assert.deepStrictEqual(r.told, {emailed: ['Nikolai Petrov'], no_address: []});
+  assert.deepStrictEqual([r.m.length, r.m[0].to, r.m[0].o.cc], [1, 'nikolai@x', 'tsar@x']);
+  r = tsar_cancel({email: []});
+  assert.deepStrictEqual(r.told, {emailed: [], no_address: []});
+  assert.deepStrictEqual([r.m.length, r.m[0].to], [1, 'tsar@x']);
+  assert.ok(r.logged.some(l => /nobody on the slot emailed$/.test(l)), r.logged.join('; '));
+  r = tsar_cancel({email: [], by_organiser: true});
+  assert.strictEqual(r.m.length, 0);
 });
 t('site: a tsar cancels an upcoming talk of their rota with a reason; tentative, cancelled, past, coffee and paused slots are refused', () => {
   site_stubs('tsar@x');
@@ -545,10 +572,14 @@ t('site: a tsar cancels an upcoming talk of their rota with a reason; tentative,
     var live = ['Tea Talk', 'TNJC'];
     get_settings = () => ({dry_run: false, live_types: live});
     make_context = (k, s) => ({constants: k, settings: s, people: people});
-    cancel_slot = (r, c, how) => { calls.push([r.id, r.type, how.source, how.by, how.reason]); return {emailed: ['Nikolai Petrov'], no_address: []}; };
+    cancel_slot = (r, c, how) => { calls.push([r.id, r.type, how.source, how.by, how.reason, how.keep_tea, how.email, how.by_organiser]); return {emailed: ['Nikolai Petrov'], no_address: []}; };
     notion_get_page = page({});
     var done = api_site_cancel_slot('tok', 's1', '  Alex cannot make it, just tea  ');
-    assert.deepStrictEqual(calls, [['s1', 'Tea Talk', 'site', 'The Tea Tsar', 'Alex cannot make it, just tea']]);
+    assert.deepStrictEqual(calls, [['s1', 'Tea Talk', 'site', 'The Tea Tsar', 'Alex cannot make it, just tea', true, null, true]]);
+    calls = [];
+    api_site_cancel_slot('tok', 's1', 'a good reason', {keep_tea: false, email: ['a']});
+    assert.deepStrictEqual(calls[0].slice(5), [false, ['a'], true]);
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason', {email: ['e']}), /Sam Old is not on this slot/);
     assert.strictEqual(done.slot.id, 's1'); assert.deepStrictEqual(done.emailed, ['Nikolai Petrov']);
     assert.throws(() => api_site_cancel_slot('tok', 's1', 'ill'), /short reason/);
     notion_get_page = page({Title: {title: [{plain_text: '[Tea Talk Tentative]'}]}});
@@ -569,6 +600,7 @@ t('site: a tsar cancels an upcoming talk of their rota with a reason; tentative,
     calls = [];
     api_site_cancel_slot('tok', 's1', 'room closed for works');
     assert.strictEqual(calls[0][3], 'The TNJC Tsar');
+    assert.strictEqual(calls[0][7], true, 'the TNJC tsar organises TNJC');
     assert.strictEqual(calls.length, 1);
   } finally { site_restore(); make_context = saved[0]; get_settings = saved[1]; cancel_slot = saved[2]; }
 });

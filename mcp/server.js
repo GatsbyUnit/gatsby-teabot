@@ -176,9 +176,14 @@ const TOOLS = [
       for (const k of ['presenter', 'tea']) if (a[k] !== undefined) slot[k] = a[k].map((w) => personId(b, w));
       slot.presenter ||= []; slot.tea ||= [];
       const saved = await api('api_site_save_slot', TOKEN, slot); changed(); return slotOut(b, saved); } },
-  { name: 'cancel_slot', description: 'Tsars: cancel an upcoming talk or just tea of your rota (the presenter asked, or it can\'t happen). The slot stays, titled "Cancelled", without its presenter (a just tea: its tea people), who keep their turn; tea duty stays; the calendar shows it as cancelled; the presenter and the tea people get one email with the reason, the organiser in cc. A "Cancelled" title set with save_slot tells nobody, so it is refused for slots with people on them.',
-    inputSchema: obj({ id: str, reason: { ...str, description: 'goes into the email, e.g. "Alex can\'t make it, so it is just tea this week"' } }, ['id', 'reason']),
-    run: async (a) => { const b = await data(); const r = await api('api_site_cancel_slot', TOKEN, norm(a.id), a.reason); changed();
+  { name: 'cancel_slot', description: 'Tsars: cancel an upcoming talk or just tea of your rota (the presenter asked, or it can\'t happen). The slot stays, titled "Cancelled", without its presenter, who keeps their turn; the calendar shows it as cancelled. By default only the talk is cancelled and tea goes ahead ("just tea"); keep_tea false cancels the tea too (the tea people come off and keep their turn). A just tea slot always loses its tea people. Email: by default everyone on the slot gets one email with the reason (organiser in cc); email lists only those to tell, [] tells nobody on it (the organiser is still told unless that is you). A "Cancelled" title set with save_slot tells nobody, so it is refused for slots with people on them.',
+    inputSchema: obj({ id: str, reason: { ...str, description: 'goes into the email, e.g. "Alex can\'t make it, so it is just tea this week"' },
+      keep_tea: { ...bool, description: 'talks: true (default) = just tea, only the talk is cancelled; false = the tea is cancelled too' },
+      email: { ...strs, description: 'names or ids of the people on the slot to email; leave out to email all of them, [] for none' } }, ['id', 'reason']),
+    run: async (a) => { const b = await data(); const options = {};
+      if (a.keep_tea !== undefined) options.keep_tea = a.keep_tea;
+      if (a.email !== undefined) options.email = a.email.map((w) => personId(b, w));
+      const r = await api('api_site_cancel_slot', TOKEN, norm(a.id), a.reason, options); changed();
       return { slot: slotOut(b, r.slot), emailed: r.emailed, no_address: r.no_address }; } },
   { name: 'remove_slot', description: 'Tsars: remove a slot that is not needed (bank holiday, closure) together with its calendar event. Nobody but invited guests is told: to tell the people on duty, use cancel_slot instead.',
     inputSchema: obj({ id: str }, ['id']), run: async (a) => { const r = await api('api_site_delete_slot', TOKEN, norm(a.id)); changed(); return r; } },

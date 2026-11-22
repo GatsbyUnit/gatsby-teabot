@@ -142,24 +142,28 @@ function swap_done_blocks(row, what, from_name, to_name){
 }
 
 // Cancelling a talk, a last resort: swapping is always better. The slot stays on the site, titled "Cancelled",
-// without its presenter, so they keep their turn and are scheduled again soon; tea duty stays. A just tea
-// loses its tea people instead, who keep their turn. how.source is 'page' (the presenter on their tea page),
-// 'site' (a tsar on the Rotas site; both with how.by and how.reason), 'deleted' or 'renamed' (by hand in the
-// calendar). One email to the presenter and the tea people, with the organiser in cc. Returns who was emailed
-// and who has no registered address: {emailed: [names], no_address: [names]}.
+// without its presenter, so they keep their turn and are scheduled again soon; tea duty stays, so it is just tea
+// (how.keep_tea false, from a tsar: the tea people come off too and keep their turn). A just tea loses its tea
+// people, who keep their turn. how.source is 'page' (the presenter on their tea page), 'site' (a tsar on the
+// Rotas site; both with how.by and how.reason), 'deleted' or 'renamed' (by hand in the calendar). One email to
+// the people on the slot (how.email: only these ids), with the organiser in cc; nobody chosen: the organiser
+// alone, unless they cancelled it themselves (how.by_organiser). Returns {emailed: [names], no_address: [names]}.
 function cancel_slot(row, ctx, how){
   var just_tea = row.type === 'Just Tea';
-  var thing = just_tea ? 'just tea' : 'talk';
-  var bumped = (just_tea ? row.tea_ids : row.presenter_ids).slice();
-  var was = (just_tea ? '' : row.guest) || names_of(bumped, ctx.people).join(', ');
+  var drop_tea = !just_tea && how.keep_tea === false && row.tea_ids.length > 0;
+  var thing = just_tea ? 'just tea' : drop_tea ? 'talk and tea' : 'talk';
+  var bumped = (just_tea ? row.tea_ids : row.presenter_ids.concat(drop_tea ? row.tea_ids : [])).slice();
+  var was = (just_tea ? '' : row.guest) || names_of(just_tea ? row.tea_ids : row.presenter_ids, ctx.people).join(', ');
+  var tea_was = just_tea ? '' : names_of(row.tea_ids, ctx.people).join(', ');
+  var on_duty = (just_tea ? row.tea_ids : row.presenter_ids.concat(row.tea_ids)).slice();
   var props = {'Title': {title: [{text: {content: CANCELLED_TITLE}}]}};
-  props[just_tea ? 'Tea' : 'Presenter'] = {relation: []};
+  if (just_tea || drop_tea) props['Tea'] = {relation: []};
+  if (!just_tea) props['Presenter'] = {relation: []};
   if (!just_tea && ctx.has_guest_prop && row.guest) props[GUEST_PROP] = {rich_text: []};
   notion_patch_page(row.id, props, ctx.constants);
   row.title = CANCELLED_TITLE;
-  if (just_tea){
-    row.tea_ids = [];
-  } else {
+  if (just_tea || drop_tea) row.tea_ids = [];
+  if (!just_tea){
     row.presenter_ids = [];
     row.guest = '';
   }
@@ -173,26 +177,33 @@ function cancel_slot(row, ctx, how){
     save_state(row.gcal_id, {t: title, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
     try { uninvite(row, bumped, ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
   }
+
+  var has_address = function(id){ return !!(ctx.people[id] && ctx.people[id].email); };
+  var chosen = how.email ? on_duty.filter(function(id){ return how.email.indexOf(id) >= 0; }) : on_duty;
+  var to = emails_of(chosen, ctx.people);
   var by_person = how.source === 'page' || how.source === 'site';
   var why = by_person ? how.by + ': ' + how.reason : (how.source === 'deleted' ? 'event deleted in the calendar' : 'event renamed in the calendar');
-  log_row(ctx, by_person ? how.source : 'sync', row.type, row.start, 'cancelled', why + (was ? ' (was: ' + was + ')' : ''));
+  var told = to.length ? 'emailed ' + names_of(chosen.filter(has_address), ctx.people).join(', ') : 'nobody on the slot emailed';
+  log_row(ctx, by_person ? how.source : 'sync', row.type, row.start, drop_tea ? 'cancelled talk and tea' : 'cancelled',
+          why + (was ? ' (was: ' + was + ')' : '') + '; ' + told);
 
   var organiser = admin_email_for_type(row.type, ctx.constants);
-  var on_duty = bumped.concat(row.tea_ids);
-  var has_address = function(id){ return !!(ctx.people[id] && ctx.people[id].email); };
-  var to = emails_of(on_duty, ctx.people);
   var role = just_tea ? 'tea person' : 'presenter';
   var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + ', ' + row.type], [just_tea ? 'Tea' : 'Presenter', was || '–']];
+  if (tea_was) table.push(['Tea', tea_was + (drop_tea ? ' (cancelled too)' : ' (still on)')]);
   if (by_person) table.push(['Reason', how.reason]);
-  var blocks = [
-    by_person ? how.by + ' has cancelled this ' + thing + '.'
-      : 'This ' + thing + ' was ' + (how.source === 'deleted' ? 'deleted from' : 'marked as cancelled in') + ' the calendar, so the bot has recorded it as cancelled.',
-    {table: table}
-  ];
-  if (bumped.length) blocks.push('The ' + role + ' is no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
-  if (row.tea_ids.length) blocks.push('Tea still goes ahead: tea duty stays as it is unless the organiser changes it.');
-  blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + role + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
-  send_mail(to.length ? to.join(',') : organiser, 'Cancelled: ' + row.type + ' on ' + fmt_day(row.start), blocks, ctx.constants, to.length ? {reply_to: organiser, cc: organiser} : {as: row.type});
-  return {emailed: names_of(on_duty.filter(has_address), ctx.people),
-          no_address: names_of(on_duty.filter(function(id){ return !has_address(id); }), ctx.people)};
+  var opening = !by_person
+    ? 'This ' + thing + ' was ' + (how.source === 'deleted' ? 'deleted from' : 'marked as cancelled in') + ' the calendar, so the bot has recorded it as cancelled.'
+    : just_tea ? how.by + ' has cancelled this just tea.'
+    : drop_tea ? how.by + ' has cancelled the talk and the tea.'
+    : how.by + ' has cancelled the talk.' + (row.tea_ids.length ? ' Tea still goes ahead: it is just tea this time.' : '');
+  var blocks = [opening, {table: table}];
+  if (bumped.length) blocks.push((drop_tea ? 'The presenter and the tea person are' : 'The ' + role + ' is') + ' no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
+  if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
+  blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + (drop_tea ? 'presenter and tea person' : role) + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
+  var subject = 'Cancelled: ' + row.type + (drop_tea ? ' and tea' : '') + ' on ' + fmt_day(row.start) + (!just_tea && row.tea_ids.length ? ' (just tea now)' : '');
+  if (to.length) send_mail(to.join(','), subject, blocks, ctx.constants, {reply_to: organiser, cc: organiser});
+  else if (!how.by_organiser) send_mail(organiser, subject, blocks, ctx.constants, {as: row.type});
+  return {emailed: names_of(chosen.filter(has_address), ctx.people),
+          no_address: names_of(chosen.filter(function(id){ return !has_address(id); }), ctx.people)};
 }
