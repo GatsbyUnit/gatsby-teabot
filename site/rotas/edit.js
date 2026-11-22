@@ -547,6 +547,11 @@
     return [day, time];
   };
 
+  // talks and just teas can be cancelled while upcoming and confirmed (the bot's site_cancel_refusal decides)
+  const CANCEL_TYPES = ['Research Talk', 'Tea Talk', 'MLJC', 'TNJC', 'Just Tea'];
+  const mayCancel = (s) => !!s.id && CANCEL_TYPES.includes(s.type) && new Date(s.start) > Date.now() &&
+    !/\bcancel(?:l?ed)?\b|\bno\s+(?:tnjc|mljc|csnjc|talk|tea|journal club)\b/i.test(s.title || '') && !/\[[^\]]*Tentative\]/i.test(s.title || '');
+
   const DEFAULT_TIME = { 'Research Talk': '15:00', 'Tea Talk': '15:30', 'TNJC': '13:30', 'MLJC': '13:30', 'Just Tea': '15:30', 'Leaving Tea': '15:30', 'External Seminar': '16:00' };
 
   function slotForm(s) {
@@ -576,7 +581,8 @@
       ${allDay ? '' : `<label>Description<textarea name="description" placeholder="Abstract, paper, room…">${esc(s.description || '')}</textarea></label>`}
       <div class="actions"><button type="submit" class="edit-button primary">Save</button>
         <button type="button" class="edit-button" data-form-cancel>Cancel</button>
-        ${s.id ? '<button type="button" class="edit-button" data-slot-delete title="For slots not needed (bank holidays, closures). Its calendar event goes too. A talk whose people should hear about it is better cancelled: set its title to Cancelled.">Remove slot</button>' : ''}
+        ${mayCancel(s) ? `<button type="button" class="edit-button" data-slot-cancel title="The slot stays, titled Cancelled; the people on it get an email with your reason, and the presenter keeps their turn. Tea duty stays.">Cancel ${s.type === 'Just Tea' ? 'just tea' : 'talk'}</button>` : ''}
+        ${s.id ? '<button type="button" class="edit-button" data-slot-delete title="For slots not needed (bank holidays, closures). Its calendar event goes too, and nobody is emailed. A talk whose people should hear about it is better cancelled (Cancel talk).">Remove slot</button>' : ''}
         <span class="error" role="alert"></span></div>
     </form>`;
   }
@@ -656,6 +662,34 @@
           toast(done?.calendar === 'deleted' ? 'Slot and its calendar event removed.'
             : done?.calendar === 'kept' ? 'Slot removed. The bot is paused, so its calendar event is still there.' : 'Slot removed.');
         } catch (x) { $('.error', fm).textContent = x.message; b.disabled = false; }
+      });
+      // cancelling asks for a reason first (it goes into the email to the people on the slot)
+      $('[data-slot-cancel]', fm)?.addEventListener('click', (e) => {
+        e.currentTarget.disabled = true;
+        $('.actions', fm).insertAdjacentHTML('afterend', `<div class="row cancel-row">
+          <label>Reason (goes into the email to the people on it)<input name="cancel_reason" maxlength="1000" placeholder="e.g. the speaker can't make it, so it is just tea this week"></label>
+          <button type="button" class="edit-button primary" data-slot-cancel-go>Cancel it and email them</button></div>`);
+        const input = $('[name=cancel_reason]', fm), go = $('[data-slot-cancel-go]', fm);
+        input.addEventListener('keydown', (k) => { if (k.key === 'Enter') { k.preventDefault(); go.click(); } });
+        go.addEventListener('click', async () => {
+          const err = $('.error', fm);
+          err.textContent = '';
+          if (input.value.trim().length < 5) { err.textContent = 'Please give a short reason; it goes into the email.'; input.focus(); return; }
+          go.disabled = true;
+          go.textContent = 'Cancelling…';
+          try {
+            const done = await R.api('api_site_cancel_slot', token(), s.id, input.value.trim());
+            putItem('schedule', done.slot);
+            const list = (xs) => xs.join(', ');
+            toast('Cancelled.' + (done.emailed.length ? ' Emailed ' + list(done.emailed) + ', the organiser in cc.' : ' The organiser was emailed.') +
+              (done.no_address.length ? ' No address registered for ' + list(done.no_address) + ': please tell them.' : ''), !!done.no_address.length);
+          } catch (x) {
+            err.textContent = x.message;
+            go.disabled = false;
+            go.textContent = 'Cancel it and email them';
+          }
+        });
+        input.focus();
       });
       fm.addEventListener('click', (e) => {
         const more = e.target.closest('[data-more]');

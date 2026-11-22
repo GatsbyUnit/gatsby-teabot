@@ -143,9 +143,10 @@ function swap_done_blocks(row, what, from_name, to_name){
 
 // Cancelling a talk, a last resort: swapping is always better. The slot stays on the site, titled "Cancelled",
 // without its presenter, so they keep their turn and are scheduled again soon; tea duty stays. A just tea
-// (cancelled in the calendar only) loses its tea people instead, who keep their turn. how.source is 'page'
-// (the presenter on their tea page, with how.by and how.reason), 'deleted' or 'renamed' (by hand in the
-// calendar). One email to the presenter and the tea people, with the organiser in cc.
+// loses its tea people instead, who keep their turn. how.source is 'page' (the presenter on their tea page),
+// 'site' (a tsar on the Rotas site; both with how.by and how.reason), 'deleted' or 'renamed' (by hand in the
+// calendar). One email to the presenter and the tea people, with the organiser in cc. Returns who was emailed
+// and who has no registered address: {emailed: [names], no_address: [names]}.
 function cancel_slot(row, ctx, how){
   var just_tea = row.type === 'Just Tea';
   var thing = just_tea ? 'just tea' : 'talk';
@@ -172,21 +173,26 @@ function cancel_slot(row, ctx, how){
     save_state(row.gcal_id, {t: title, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
     try { uninvite(row, bumped, ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
   }
-  var why = how.source === 'page' ? how.by + ': ' + how.reason : (how.source === 'deleted' ? 'event deleted in the calendar' : 'event renamed in the calendar');
-  log_row(ctx, how.source === 'page' ? 'page' : 'sync', row.type, row.start, 'cancelled', why + (was ? ' (was: ' + was + ')' : ''));
+  var by_person = how.source === 'page' || how.source === 'site';
+  var why = by_person ? how.by + ': ' + how.reason : (how.source === 'deleted' ? 'event deleted in the calendar' : 'event renamed in the calendar');
+  log_row(ctx, by_person ? how.source : 'sync', row.type, row.start, 'cancelled', why + (was ? ' (was: ' + was + ')' : ''));
 
   var organiser = admin_email_for_type(row.type, ctx.constants);
-  var to = emails_of(bumped.concat(row.tea_ids), ctx.people);
+  var on_duty = bumped.concat(row.tea_ids);
+  var has_address = function(id){ return !!(ctx.people[id] && ctx.people[id].email); };
+  var to = emails_of(on_duty, ctx.people);
   var role = just_tea ? 'tea person' : 'presenter';
   var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + ', ' + row.type], [just_tea ? 'Tea' : 'Presenter', was || '–']];
-  if (how.source === 'page') table.push(['Reason', how.reason]);
+  if (by_person) table.push(['Reason', how.reason]);
   var blocks = [
-    how.source === 'page' ? how.by + ' has cancelled this talk.'
+    by_person ? how.by + ' has cancelled this ' + thing + '.'
       : 'This ' + thing + ' was ' + (how.source === 'deleted' ? 'deleted from' : 'marked as cancelled in') + ' the calendar, so the bot has recorded it as cancelled.',
     {table: table}
   ];
   if (bumped.length) blocks.push('The ' + role + ' is no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
-  if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
+  if (row.tea_ids.length) blocks.push('Tea still goes ahead: tea duty stays as it is unless the organiser changes it.');
   blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + role + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
   send_mail(to.length ? to.join(',') : organiser, 'Cancelled: ' + row.type + ' on ' + fmt_day(row.start), blocks, ctx.constants, to.length ? {reply_to: organiser, cc: organiser} : {as: row.type});
+  return {emailed: names_of(on_duty.filter(has_address), ctx.people),
+          no_address: names_of(on_duty.filter(function(id){ return !has_address(id); }), ctx.people)};
 }

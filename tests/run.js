@@ -523,6 +523,79 @@ t('site: a rota tsar can only tick their own rota on people, and only edit their
     assert.throws(() => api_site_save_slot('tok', {id: 's1', type: 'TNJC', start: '2026-11-02'}), /MLJC tsar/);
   } finally { site_restore(); }
 });
+t('cancel by a tsar on the site: the email names them by title, gives the reason, and says tea goes ahead; who was emailed comes back', () => {
+  __props = {}; var e = cev('TEA TALK: Nikolai Petrov TEA: Zoé Martin'); var c = cctx(e); var m = []; var saved = send_mail;
+  send_mail = function(to, subj, blocks, k, o){ m.push({to: to, subj: subj, text: JSON.stringify(blocks), o: o}); };
+  try {
+    var told = cancel_slot(row({type: 'Tea Talk', tea_ids: ['c'], start: soon}), c, {source: 'site', by: 'The Tea Tsar', reason: 'Nikolai cannot make it'});
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(told)), {emailed: ['Nikolai Petrov'], no_address: ['Zoé Martin']});
+    assert.strictEqual(m.length, 1); assert.strictEqual(m[0].to, 'nikolai@x'); assert.strictEqual(m[0].o.cc, 'tsar@x');
+    assert.ok(m[0].text.includes('The Tea Tsar has cancelled this talk.') && m[0].text.includes('Nikolai cannot make it') && m[0].text.includes('Tea still goes ahead'), m[0].text);
+    assert.strictEqual(e.title, 'TEA TALK: CANCELLED TEA: Zoé Martin');
+    assert.ok(logged.some(l => l.indexOf('cancelled: The Tea Tsar: Nikolai cannot make it (was: Nikolai Petrov)') === 0), logged.join('; '));
+  } finally { send_mail = saved; }
+});
+t('site: a tsar cancels an upcoming talk of their rota with a reason; tentative, cancelled, past, coffee and paused slots are refused', () => {
+  site_stubs('tsar@x');
+  var saved = [make_context, get_settings, cancel_slot], calls = [];
+  var start = new Date(Date.now() + 3 * 864e5).toISOString();
+  var page = (o) => () => ({id: 's1', url: 'u', properties: Object.assign({Type: {select: {name: 'Tea Talk'}}, Title: {title: []}, Presenter: {relation: [{id: 'b'}]},
+    Tea: {relation: [{id: 'a'}]}, Date: {date: {start: start}}, 'GCal ID': {rich_text: [{plain_text: 'ev1'}]}}, o)});
+  try {
+    var live = ['Tea Talk', 'TNJC'];
+    get_settings = () => ({dry_run: false, live_types: live});
+    make_context = (k, s) => ({constants: k, settings: s, people: people});
+    cancel_slot = (r, c, how) => { calls.push([r.id, r.type, how.source, how.by, how.reason]); return {emailed: ['Nikolai Petrov'], no_address: []}; };
+    notion_get_page = page({});
+    var done = api_site_cancel_slot('tok', 's1', '  Alex cannot make it, just tea  ');
+    assert.deepStrictEqual(calls, [['s1', 'Tea Talk', 'site', 'The Tea Tsar', 'Alex cannot make it, just tea']]);
+    assert.strictEqual(done.slot.id, 's1'); assert.deepStrictEqual(done.emailed, ['Nikolai Petrov']);
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'ill'), /short reason/);
+    notion_get_page = page({Title: {title: [{plain_text: '[Tea Talk Tentative]'}]}});
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason'), /tentative/);
+    notion_get_page = page({Title: {title: [{plain_text: 'Cancelled'}]}});
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason'), /already cancelled/);
+    notion_get_page = page({Date: {date: {start: '2026-01-05T15:30:00.000+00:00'}}});
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason'), /upcoming/);
+    notion_get_page = page({Type: {select: {name: 'Coffee Cleaning'}}});
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason'), /Only talks and just teas/);
+    notion_get_page = page({});
+    live = ['TNJC'];
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason'), /paused/);
+    identity_for_token = () => ({id: 'p1', email: 'tnjc@x'});
+    assert.throws(() => api_site_cancel_slot('tok', 's1', 'a good reason'), /Only the Tea Talk tsar/);
+    notion_get_page = page({Type: {select: {name: 'TNJC'}}});
+    live = ['TNJC'];
+    calls = [];
+    api_site_cancel_slot('tok', 's1', 'room closed for works');
+    assert.strictEqual(calls[0][3], 'The TNJC Tsar');
+    assert.strictEqual(calls.length, 1);
+  } finally { site_restore(); make_context = saved[0]; get_settings = saved[1]; cancel_slot = saved[2]; }
+});
+t('site: a "Cancelled" title on a slot with people on it is refused (it would tell nobody); empty, new and paused slots may have one', () => {
+  site_stubs('tsar@x');
+  var saved = [get_settings], start = new Date(Date.now() + 3 * 864e5).toISOString(), patched = 0;
+  var page = (o) => () => ({id: 's1', url: 'u', properties: Object.assign({Type: {select: {name: 'Tea Talk'}}, Title: {title: []}, Presenter: {relation: [{id: 'b'}]},
+    Tea: {relation: []}, Date: {date: {start: start}}}, o)});
+  try {
+    var dry = false;
+    get_settings = () => ({dry_run: dry, live_types: ['Tea Talk']});
+    notion_patch_page = (id, props) => { patched++; return {id: id, properties: {}}; };
+    notion_request = () => { patched++; return {id: 'n', properties: {}}; };
+    var slot = {id: 's1', type: 'Tea Talk', title: 'Cancelled: ill', start: '2026-12-01', presenter: ['b'], tea: []};
+    notion_get_page = page({});
+    assert.throws(() => api_site_save_slot('tok', slot), /Cancel talk/);
+    assert.strictEqual(patched, 0);
+    api_site_save_slot('tok', Object.assign({}, slot, {title: 'A new title'}));
+    notion_get_page = page({Presenter: {relation: []}});
+    api_site_save_slot('tok', Object.assign({}, slot, {presenter: []}));
+    api_site_save_slot('tok', Object.assign({}, slot, {id: undefined, presenter: []}));
+    notion_get_page = page({});
+    dry = true;
+    api_site_save_slot('tok', slot);
+    assert.strictEqual(patched, 4);
+  } finally { site_restore(); get_settings = saved[0]; }
+});
 t('site: the pages are imported once; only the tea tsar may replace them', () => {
   site_stubs('tnjc@x');
   var saved_lock = LockService, saved_sheet = site_pages_sheet, saved_pages = site_pages, saved_save = save_site_page, written = [];

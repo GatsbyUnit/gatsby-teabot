@@ -672,8 +672,15 @@ function api_site_save_slot(token, slot){
   if (!slot || ALL_TYPES.indexOf(slot.type) < 0) throw new Error('Please pick what kind of slot this is.');
   if (!allowed(slot.type)) throw new Error('Only the ' + slot.type + ' tsar or the tea tsar can change these slots.');
   if (slot.id){
-    var current = site_slot(notion_get_page(hyphenate_id(slot.id), constants));
+    var current_page = notion_get_page(hyphenate_id(slot.id), constants);
+    var current = site_slot(current_page);
     if (!allowed(current.type)) throw new Error('Only the ' + current.type + ' tsar or the tea tsar can change this slot.');
+    // a "Cancelled" title alone tells nobody, so a slot with people on it is cancelled with api_site_cancel_slot
+    var row = to_row(current_page);
+    if (is_cancelled_title(slot.title || '') && !site_cancel_refusal(row) && (row.presenter_ids.length || row.guest || row.tea_ids.length) &&
+        is_live({settings: get_settings()}, row.type)){
+      throw new Error('To cancel this slot, use "Cancel ' + (row.type === 'Just Tea' ? 'just tea' : 'talk') + '" in its form instead: the people on it then get an email. A "Cancelled" title alone tells nobody.');
+    }
   }
   var people = load_people(constants);
   var ids = function(list){
@@ -702,9 +709,41 @@ function api_site_save_slot(token, slot){
   return site_slot(page);
 }
 
+// Why a slot can't be cancelled (api_site_cancel_slot), or '' when it can: upcoming, confirmed talks and just teas.
+function site_cancel_refusal(row){
+  if (CALENDAR_CANCEL_TYPES.indexOf(row.type) < 0) return 'Only talks and just teas can be cancelled. A ' + row.type + ' slot that is not needed can be removed.';
+  if (is_cancelled_title(row.title)) return 'This slot is already cancelled.';
+  if (is_tentative(row)) return 'This slot is still tentative: change it or remove it instead.';
+  if (!row.start || row.start.getTime() <= Date.now()) return 'Only upcoming slots can be cancelled.';
+  return '';
+}
+
+// A tsar cancels a talk or just tea (the presenter asked, or it can't happen), as a presenter's "Nobody can take
+// over?" on the tea page does (cancel_slot): the slot stays, titled "Cancelled", without its presenter (a just tea:
+// its tea people), who keep their turn; tea duty stays; the calendar shows it as cancelled; the presenter and the
+// tea people get one email with the reason, the organiser in cc. The email names the tsar by title ("The Tea Tsar").
+// {slot, emailed: [names], no_address: [names]}
+function api_site_cancel_slot(token, id, reason){
+  var ed = site_editor(token);
+  var page = notion_get_page(hyphenate_id(id), ed.constants);
+  var row = to_row(page);
+  if (ed.rights.slots.indexOf(row.type) < 0) throw new Error('Only the ' + row.type + ' tsar or the tea tsar can cancel this slot.');
+  var refusal = site_cancel_refusal(row);
+  if (refusal) throw new Error(refusal);
+  var ctx = make_context(ed.constants, get_settings());
+  if (!is_live(ctx, row.type)) throw new Error('The bot is paused for ' + row.type + ' (DRY_RUN or LIVE_TYPES), so it can\'t cancel this slot or email anyone.');
+  reason = String(reason || '').trim().slice(0, 1000);
+  if (reason.length < 5) throw new Error('Please give a short reason; it goes into the email.');
+  var badge = ROYAL_BADGES[ed.rights.royal];
+  var told = cancel_slot(row, ctx, {source: 'site', by: badge ? 'The ' + badge.label : site_name(ed), reason: reason});
+  site_forget('data');
+  log_site_edit(ed, 'cancelled ' + row.type + ' slot ' + site_date(page.properties['Date'].date.start));
+  return {slot: site_slot(notion_get_page(hyphenate_id(id), ed.constants)), emailed: told.emailed, no_address: told.no_address};
+}
+
 // Removes a slot, for slots not needed (bank holidays, closures), together with its calendar event: deleting
 // only the row leaves the event behind, as the sync only looks at slots that exist. A talk whose
-// people should hear about it is better cancelled (title "Cancelled"): the bot then emails them.
+// people should hear about it is better cancelled (api_site_cancel_slot): the bot then emails them.
 // {calendar: '' (no event), 'deleted', or 'kept' (the bot is paused, DRY_RUN)}
 function api_site_delete_slot(token, id){
   var ed = site_editor(token);

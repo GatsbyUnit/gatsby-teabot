@@ -135,7 +135,7 @@ const TOOLS = [
   { name: 'whoami', description: 'Everyone: who the server acts as, and what they may do. Everyone can read the rotas and look after their own duties (swaps, talk titles, away dates, photo, email); tsars can also edit slots, people, rota rules and pages.',
     inputSchema: obj({}), run: async () => { const b = await data(true); const r = b.me || {}; const me = b.data.people.find((p) => p.id === r.person);
       const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: swaps, talk titles, cancelling a talk, away dates', 'change your own photo and email'];
-      if (r.slots?.length) can.push('edit the slots of ' + r.slots.join(', '));
+      if (r.slots?.length) can.push('edit the slots of ' + r.slots.join(', ') + ', and cancel their talks and just teas (cancel_slot: the people on them are emailed)');
       if (r.people?.includes('all')) can.push('edit and add people, with their emails'); else if (r.people?.length) can.push('tick or untick ' + r.people.join(', ') + ' on people');
       if (r.pages) can.push('edit the site\'s pages');
       if (r.rules) can.push('edit the rota rules');
@@ -176,7 +176,11 @@ const TOOLS = [
       for (const k of ['presenter', 'tea']) if (a[k] !== undefined) slot[k] = a[k].map((w) => personId(b, w));
       slot.presenter ||= []; slot.tea ||= [];
       const saved = await api('api_site_save_slot', TOKEN, slot); changed(); return slotOut(b, saved); } },
-  { name: 'remove_slot', description: 'Tsars: remove a slot that is not needed (bank holiday, closure) together with its calendar event. To tell the people on duty, cancel the talk instead (title "Cancelled: …", or cancel_talk).',
+  { name: 'cancel_slot', description: 'Tsars: cancel an upcoming talk or just tea of your rota (the presenter asked, or it can\'t happen). The slot stays, titled "Cancelled", without its presenter (a just tea: its tea people), who keep their turn; tea duty stays; the calendar shows it as cancelled; the presenter and the tea people get one email with the reason, the organiser in cc. A "Cancelled" title set with save_slot tells nobody, so it is refused for slots with people on them.',
+    inputSchema: obj({ id: str, reason: { ...str, description: 'goes into the email, e.g. "Alex can\'t make it, so it is just tea this week"' } }, ['id', 'reason']),
+    run: async (a) => { const b = await data(); const r = await api('api_site_cancel_slot', TOKEN, norm(a.id), a.reason); changed();
+      return { slot: slotOut(b, r.slot), emailed: r.emailed, no_address: r.no_address }; } },
+  { name: 'remove_slot', description: 'Tsars: remove a slot that is not needed (bank holiday, closure) together with its calendar event. Nobody but invited guests is told: to tell the people on duty, use cancel_slot instead.',
     inputSchema: obj({ id: str }, ['id']), run: async (a) => { const r = await api('api_site_delete_slot', TOKEN, norm(a.id)); changed(); return r; } },
   { name: 'save_person', description: 'Tsars and unit admins: add a person (tea tsar or unit admin, no id) or change one (id or name: only the fields given change). Organisers can only tick or untick their own rota; the tea tsar and unit admins everything, including the registered email. Newcomers: give position and joined, and leave them exempt from all three duties: the bot adds them when the rota rules say. active=false takes someone off the rotas (leavers); the answer then lists the slots they still hold.',
     inputSchema: obj({ id: { ...str, description: 'id or name' }, name: str, position: str, active: bool, rotas: { ...strs, description: 'all rotas they are on: TNJC, CSNJC, MLJC, Coffee' },
