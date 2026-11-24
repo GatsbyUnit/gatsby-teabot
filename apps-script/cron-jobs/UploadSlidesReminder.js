@@ -150,7 +150,9 @@ function slidesreminder(admin_email, talk_date, email_option, constants) {
           email_list.push(email_response[0]);
         }
       }
-      send_email(email_list.join(","), "REMINDER Please upload your slides", 
+      // nobody to email: a guest speaker (no Presenter) or a talk cancelled to just tea
+      if (email_list.length == 0) continue;
+      send_email(email_list.join(","), "REMINDER Please upload your slides",
         "Hi,\n\n" +
         "Thank you for giving your talk today! \n\n" +
         "Please update your talk title on your tea page if you haven't already done so. \n\n" +
