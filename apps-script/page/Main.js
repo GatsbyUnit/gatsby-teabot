@@ -78,6 +78,8 @@ function api_site_access(token){ return TeaBot.api_site_access(token); }
 function api_site_save_access(token, entry){ return TeaBot.api_site_save_access(token, entry); }
 function api_site_remove_access(token, id){ return TeaBot.api_site_remove_access(token, id); }
 function api_debug_state(token, person_id){ return TeaBot.api_debug_state(token, person_id); }
+// anonymous diagnostics from both pages (site/telemetry.js)
+function api_telemetry(batch){ return TeaBot.api_telemetry(batch); }
 
 // run once from the editor after creating the project, to grant it the bot's permissions. (The page's
 // address is the PAGE_URL setting in the Automation tab of the constants sheet.)

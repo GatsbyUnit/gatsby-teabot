@@ -79,7 +79,9 @@
   </div>
 </header>
 <main id="app"></main>
+<footer class="footer"><p id="footer-links"></p></footer>
 
+<script src="telemetry.js?v=1" data-page="tea" data-version="tea-1"></script>
 <script>
   // A static page (GitHub Pages); everything on it comes from the tea bot's web app ("Gatsby Tea Page"), which
   // checks the personal code (t, swap, confirm) or, on the general page, the unit key (k) from the link.
@@ -188,14 +190,21 @@
   // Now and then Google never delivers the bot's answer to one call (the bot was done in seconds; asking again
   // works). Calls that only read are asked again after 15 seconds, twice; changes are never sent twice.
   var READS = ['api_state', 'api_debug_state', 'api_link_people', 'api_rotas', 'api_leave_info'];
+  // Each attempt also goes to the anonymous diagnostics (telemetry.js): the call's name, time and outcome.
+  function track(fn, t0, outcome, attempt, detail){
+    if (window.GatsbyTelemetry) window.GatsbyTelemetry.call(fn, Date.now() - t0, outcome, attempt, detail);
+  }
   function post(fn, args, attempt){
     var stop = READS.indexOf(fn) >= 0 && window.AbortController ? new AbortController() : null;
     var timer = stop && setTimeout(function(){ stop.abort(); }, 15000);
+    var t0 = Date.now();
     return fetch(EXEC_URL, {method: 'POST', body: JSON.stringify({fn: fn, args: args}), credentials: 'omit', redirect: 'follow', signal: stop ? stop.signal : undefined})
       .then(function(r){ return r.json(); })
-      .then(function(res){ clearTimeout(timer); return res; }, function(err){
+      .then(function(res){ clearTimeout(timer); track(fn, t0, res.ok ? 'ok' : 'error', attempt, res.error); return res; }, function(err){
         clearTimeout(timer);
-        if (stop && stop.signal.aborted && attempt < 3) return post(fn, args, attempt + 1);
+        var aborted = stop && stop.signal.aborted;
+        track(fn, t0, aborted ? (attempt < 3 ? 'timeout' : 'gave up') : 'network', attempt, err && err.message);
+        if (aborted && attempt < 3) return post(fn, args, attempt + 1);
         throw err;
       });
   }
@@ -425,6 +434,7 @@
   function render(s){
     app.innerHTML = '';
     if (!DEBUG) showAccount(s.name, s.badge);
+    if (s.tea_tsar && !DEBUG){ TSAR = s.tea_tsar; footerLinks(); }
     var hi = el('h1', {text: 'Hi ' + (s.badge ? s.badge.label + ' ' : '') + s.name.split(' ')[0]});
     if (s.badge){
       hi.style.cssText = 'display:flex;align-items:center;gap:10px';
@@ -464,7 +474,6 @@
       'This browser remembers your page, so the tea links in calendar events and group emails open it directly. ',
       el('button', {class: 'quiet', text: 'Forget me on this browser', onclick: forgetMe}), ' ',
       el('button', {class: 'quiet', text: 'Leave the tea system (no longer a member of the Unit)…', onclick: renderLeave}), ' ',
-      s.tea_tsar ? el('button', {class: 'quiet', text: 'Report an issue (tea tsar' + (s.tea_tsar.name ? ' ' + s.tea_tsar.name : '') + ')', onclick: function(){ reportIssue(s.tea_tsar); }}) : null, s.tea_tsar ? ' ' : null,
       el('button', {class: 'quiet', text: 'Copy my code for an AI agent', title: 'For the tea bot\'s MCP server (github.com/GatsbyUnit/gatsby-teabot, mcp/): the agent can then do what you can do here', onclick: function(e){
         var b = e.currentTarget;
         navigator.clipboard.writeText(TOKEN).then(function(){ b.textContent = 'Copied: keep it to yourself'; }, function(){ b.textContent = TOKEN; });
@@ -472,21 +481,37 @@
     ]));
   }
 
+  // The page footer: report an issue, the privacy notice, the code on GitHub. The tea tsar's name and address
+  // come with the personal page (api_state); until then "Report an issue" offers GitHub only.
+  var REPO_URL = 'https://github.com/GatsbyUnit/gatsby-teabot';
+  var TSAR = null;
+  function footerLinks(){
+    var box = document.getElementById('footer-links');
+    box.innerHTML = '';
+    var sep = function(){ return el('span', {class: 'sep', 'aria-hidden': 'true', text: '·'}); };
+    box.appendChild(el('button', {type: 'button', class: 'link-button', text: 'Report an issue' + (TSAR && TSAR.name ? ' (tea tsar ' + TSAR.name + ')' : ''), onclick: function(){ reportIssue(TSAR); }}));
+    box.appendChild(sep());
+    box.appendChild(el('a', {href: 'privacy.html', text: 'Privacy'}));
+    box.appendChild(sep());
+    box.appendChild(el('a', {href: REPO_URL, target: '_blank', rel: 'noopener', text: 'GitHub'}));
+  }
+  footerLinks();
+
   // "Report an issue": an email to the tea tsar, or an issue on GitHub (public). Never this page's address: it holds the code.
   function reportIssue(c){
     var ask = '(What happened, and what did you expect?)';
-    var first = c.name ? c.name.split(' ')[0] : '';
-    var mail = 'mailto:' + c.email + '?subject=' + encodeURIComponent('Gatsby tea page: a problem') +
-      '&body=' + encodeURIComponent('Hi ' + (first || 'there') + ',\n\n' + ask + '\n\nPage: my tea page\n');
-    var issue = 'https://github.com/GatsbyUnit/gatsby-teabot/issues/new?body=' + encodeURIComponent(ask + '\n\nPage: the tea page\n');
+    var first = c && c.name ? c.name.split(' ')[0] : '';
+    var mail = c && ('mailto:' + c.email + '?subject=' + encodeURIComponent('Gatsby tea page: a problem') +
+      '&body=' + encodeURIComponent('Hi ' + (first || 'there') + ',\n\n' + ask + '\n\nPage: my tea page\n'));
+    var issue = REPO_URL + '/issues/new?body=' + encodeURIComponent(ask + '\n\nPage: the tea page\n');
     var old = document.querySelector('.report-dialog');
     if (old) old.remove();
     var dlg = el('dialog', {class: 'report-dialog', 'aria-labelledby': 'report-title'}, [
       el('h2', {id: 'report-title', text: 'Report an issue'}),
-      el('p', {text: 'Something wrong or confusing on the rotas, the tea page or in the tea bot\'s emails? Tell the tea tsar' + (c.name ? ', ' + c.name + ',' : '') + ' by email, or open an issue on GitHub (public, needs a GitHub account).'}),
+      el('p', {text: 'Something wrong or confusing on the rotas, the tea page or in the tea bot\'s emails? ' + (c ? 'Tell the tea tsar' + (c.name ? ', ' + c.name + ',' : '') + ' by email, or open' : 'Open') + ' an issue on GitHub (public, needs a GitHub account)' + (c ? '.' : ', or tell the tea tsar on Slack.')}),
       el('div', {class: 'actions'}, [
-        el('a', {class: 'edit-button primary', href: mail, 'data-report-done': ''}, ['Email ' + (first || 'the tea tsar')]),
-        el('a', {class: 'edit-button', href: issue, target: '_blank', rel: 'noopener', 'data-report-done': ''}, ['Open a GitHub issue']),
+        c ? el('a', {class: 'edit-button primary', href: mail, 'data-report-done': ''}, ['Email ' + (first || 'the tea tsar')]) : null,
+        el('a', {class: 'edit-button' + (c ? '' : ' primary'), href: issue, target: '_blank', rel: 'noopener', 'data-report-done': ''}, ['Open a GitHub issue']),
         el('button', {type: 'button', class: 'edit-button', 'data-report-done': ''}, ['Cancel'])
       ])
     ]);
@@ -722,6 +747,8 @@
     .catch(function(){});
 
   function route(){
+    var view = AS ? 'debug' : SWAP ? 'swap' : CONFIRM ? 'confirm' : LEAVE ? 'leave' : (TOKEN || (!LEAVE && remembered())) ? 'personal' : KEY ? 'landing' : 'no-key';
+    if (window.GatsbyTelemetry){ window.GatsbyTelemetry.signedIn(TOKEN || remembered() ? 'member' : 'no'); window.GatsbyTelemetry.view(view); }
     if (AS) renderDebug();
     else if (SWAP) renderSwapAnswer();
     else if (CONFIRM) renderConfirm();

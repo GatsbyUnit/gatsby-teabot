@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Privacy · Gatsby Rotas</title>
+  <link rel="stylesheet" href="rotas/site.css?v=15">
+  <style>
+    main.privacy { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 3rem; }
+    .privacy h1 { margin: 0 0 .4rem; font: 700 clamp(1.6rem, 4vw, 2.1rem)/1.2 var(--font-head); letter-spacing: -.015em; }
+    .privacy h2 { margin: 2rem 0 .5rem; font: 650 1.15rem/1.3 var(--font-head); }
+    .privacy p, .privacy li { color: var(--text-2); }
+    .privacy ul { padding-left: 1.2rem; }
+    .privacy li { margin: .25rem 0; }
+    .privacy .lead { color: var(--muted); }
+    .choice { margin-top: .6rem; padding: .8rem 1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .choice label { display: flex; gap: .55rem; align-items: center; font-weight: 500; color: var(--text); }
+    .choice p { margin: .4rem 0 0; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <header class="site-head">
+    <div class="site-head-inner">
+      <a class="brand" href="rotas/">Gatsby Rotas</a>
+      <nav class="nav" aria-label="Pages"><ul>
+        <li><a href="rotas/">Rotas</a></li>
+        <li class="nav-tea-item"><a class="nav-tea" href="./"><span aria-hidden="true">🫖</span> My tea page</a></li>
+      </ul></nav>
+    </div>
+  </header>
+  <main class="privacy">
+    <h1>Privacy</h1>
+    <p class="lead">What the Gatsby Rotas site, the tea page and the tea bot keep about you, who sees it, and how to
+      get it changed or removed. The tea system is run by members of the Unit (the tea tsar and the rota tsars), not
+      by a company.</p>
+
+    <h2>What the tea bot keeps</h2>
+    <ul>
+      <li><strong>You on the rotas:</strong> your name, photo (if one was added), which rotas you are on, when you joined, and
+        whether you are exempt.</li>
+      <li><strong>Your duties:</strong> the talks, journal clubs, teas and coffee weeks you were or are down for, with talk
+        titles and descriptions. Past slots stay as the rota's history, which is what keeps turns fair.</li>
+      <li><strong>Your email address</strong>, for reminders, swap requests and your sign-in links.</li>
+      <li><strong>Away dates</strong> you enter, with the reason if you give one.</li>
+      <li><strong>Swap requests</strong> until they are answered or the slot has passed.</li>
+      <li><strong>A log</strong> of what the bot did and of changes made on the site (with the name of who made them), so
+        mistakes can be traced and undone.</li>
+      <li><strong>Diagnostics</strong> from your browser, without anything that identifies you (below).</li>
+    </ul>
+    <p>All of this lives in Google Sheets, Google Drive and Apps Script of the tea bot's Google account, and in backup
+      copies there. The bot's code is public on GitHub; the data is not.</p>
+
+    <h2>Who sees it</h2>
+    <ul>
+      <li>Everyone signed in to the site (members of the Unit, and colleagues they have invited) sees the rotas: names,
+        photos and duties. Email addresses appear there only masked (like ad•••e@u•••.ac.uk), and away dates not
+        at all.</li>
+      <li>The <strong>gatsby.tea calendar</strong> shows names in its event titles, to everyone it is shared with.</li>
+      <li>The tsars edit the rotas; the tea tsar can also look at the bot's sheets and log, and open a read-only view
+        of a member's tea page to help with a problem (with addresses, away dates and codes hidden; each use is
+        logged).</li>
+      <li>Rota emails go to the people on duty, usually with the organiser in copy; group emails go to the Unit's
+        mailing lists.</li>
+    </ul>
+
+    <h2>Services involved</h2>
+    <p>The pages are served by <strong>GitHub Pages</strong>, which, like any web host, sees your IP address when you load
+      them (see GitHub's privacy statement). Everything the pages ask the tea bot goes to <strong>Google</strong> (Apps
+      Script), and the bot's data, calendar and emails are Google services. No advertising, no third-party analytics,
+      no cookies.</p>
+
+    <h2>Stored in your browser</h2>
+    <p>Only in this site's local storage, never sent anywhere by itself: your sign-in (for six months; "Sign out"
+      removes it), the last tea page you opened ("Forget me on this browser" removes it), how long the bot usually
+      takes to answer (for the loading bars), photos and the page icon (to show them at once), and your choice
+      below.</p>
+
+    <h2 id="diagnostics">Diagnostics</h2>
+    <p>To find and fix problems (a page that hangs, a call that fails), the site and the tea page send the bot a few
+      facts about each visit:</p>
+    <ul>
+      <li>which page or view was open, by its name only ("TNJC", "a slot", "your tea page"), never which slot or person;</li>
+      <li>for each question to the bot: its name, how long it took, and whether it worked, timed out or failed (with
+        the bot's error message);</li>
+      <li>script errors in the page;</li>
+      <li>browser and system (e.g. "Safari 18", "iOS"), phone / tablet / desktop, the page's version, and whether
+        someone was signed in (member / invited / not).</li>
+    </ul>
+    <p>Never sent: names, person or slot ids, personal codes, email addresses, or the page's address. Ids, codes and
+      addresses are removed from error messages before they leave your browser, and again by the bot. A visit gets a
+      random id that lasts only until you leave or reload the page, so visits can't be linked to each other or to
+      you. The bot keeps these rows for 30 days, then deletes them.</p>
+    <p>Nothing is sent if your browser has Do Not Track or Global Privacy Control switched on, or if you opt out here:</p>
+    <div class="choice">
+      <label><input type="checkbox" id="send-diagnostics"> Send anonymous diagnostics from this browser</label>
+      <p id="diagnostics-state" class="muted"></p>
+    </div>
+
+    <h2>Leaving, and your data</h2>
+    <p>When you leave the Unit, "Leave the tea system" at the bottom of your tea page (or of any bot email) takes you
+      off the rotas and removes your email address and personal code; your name stays in the rota history. To see what
+      is kept about you, correct it, or have something removed, ask the tea tsar ("Report an issue" at the bottom of
+      every page names them once you are signed in, or message them on Slack).</p>
+  </main>
+  <footer class="footer"><p>
+    <a href="rotas/">Gatsby Rotas</a><span class="sep" aria-hidden="true">·</span>
+    <a href="https://github.com/GatsbyUnit/gatsby-teabot/issues/new" target="_blank" rel="noopener">Report an issue</a><span class="sep" aria-hidden="true">·</span>
+    <a href="https://github.com/GatsbyUnit/gatsby-teabot" target="_blank" rel="noopener">GitHub</a>
+  </p></footer>
+  <script src="telemetry.js?v=1" data-page="privacy" data-version="privacy-1"></script>
+  <script>
+    (function(){
+      var box = document.getElementById('send-diagnostics');
+      var state = document.getElementById('diagnostics-state');
+      var t = window.GatsbyTelemetry;
+      function show(){
+        var why = t ? t.blockedBy() : 'blocked';
+        box.checked = !why;
+        box.disabled = !t || (why && why !== 'opted-out');
+        state.textContent = !t ? 'The diagnostics script did not load, so nothing is sent.'
+          : why === 'gpc' ? 'Off: your browser sends Global Privacy Control.'
+          : why === 'dnt' ? 'Off: your browser sends Do Not Track.'
+          : why === 'local' ? 'Off: this is a local copy of the site.'
+          : why === 'opted-out' ? 'Off for this browser.'
+          : 'On for this browser.';
+      }
+      box.addEventListener('change', function(){ if (t) t.optOut(!box.checked); show(); });
+      show();
+      if (t) t.view('privacy');
+    })();
+  </script>
+</body>
+</html>

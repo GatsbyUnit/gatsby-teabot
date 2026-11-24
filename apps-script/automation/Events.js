@@ -15,7 +15,7 @@ const ROTAS = {
   'MLJC': {admin: 'mljc_admin_email', list: 'mljc_email', label: 'MLJC', subject: 'MLJC schedule updated',
            text: 'The MLJC schedule has been updated. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'},
   'Coffee Cleaning': {admin: 'coffee_admin_email', list: 'coffee_email', label: 'Coffee cleaning', subject: 'Coffee cleaning rota updated',
-           text: 'The coffee cleaning rota has been updated. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'},
+           text: 'The coffee cleaning rota has been updated. You may view it on the Gatsby Rotas site.'},
   'talks': {admin: 'admin_email', list: 'unit_wide_email', label: 'Research / tea talks', subject: 'Tea schedule updated',
            text: 'The tea talk schedule has been updated for the next month and the research talk schedule for the month after. You may view it on the Gatsby Rotas site or through the gatsby.tea Google Calendar.'}
 };
@@ -40,8 +40,13 @@ function event_description(row, ctx){
   return d;
 }
 
-// creates the event and stores its ID in the slot's row (plus any other fields, in the same call)
+// creates the event and stores its ID in the slot's row (plus any other fields, in the same call); rotas that are
+// not on the calendar only get the other fields
 function create_event(row, ctx, extra_props){
+  if (!on_calendar(row.type)){
+    if (extra_props) notion_patch_page(row.id, extra_props, ctx.constants);
+    return null;
+  }
   var title = format_title(row, ctx.people);
   var end = row.end || new Date(row.start.getTime() + 3600 * 1000);
   var opts = {description: event_description(row, ctx)};

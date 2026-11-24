@@ -1,5 +1,6 @@
 // Swap / title links at the end of future event descriptions. The title form rewrites the whole
-// description, so the hourly sync puts the links back. Everything from LINK_MARK on is ours.
+// description, so the hourly sync puts the links back. The LINK_MARK line (and the old forms' ✏️ line after it)
+// is ours; text people type below it is kept and moves above the links.
 // Links never contain email addresses: the calendar is public.
 
 const LINK_MARK = '🫖';
@@ -13,10 +14,18 @@ function ensure_links(event, row, ctx){
   return true;
 }
 
+// the description without the bot's link footer
 function strip_links(desc){
   var i = desc.indexOf(LINK_MARK);
-  var base = i >= 0 ? desc.slice(0, i) : desc;
-  return base.replace(/(\s|<br\s*\/?>)+$/i, '');
+  var trim_end = function(s){ return s.replace(/(\s|<br\s*\/?>)+$/i, ''); };
+  if (i < 0) return trim_end(desc);
+  var line = /^[^\n<]*(?:<a\b[^>]*>[^<]*<\/a>)?(?:(?:\n|<br\s*\/?>)✏️[^\n<]*(?:<a\b[^>]*>[^<]*<\/a>)?)?/i;
+  var rest = desc.slice(i + LINK_MARK.length);
+  var after = rest.slice(rest.match(line)[0].length).replace(/^(\s|<br\s*\/?>)+/i, '');
+  var before = trim_end(desc.slice(0, i));
+  if (!after) return before;
+  var gap = /<(br|p|a|div)\b/i.test(desc) ? '<br><br>' : '\n\n';
+  return trim_end(before ? before + gap + after : after);
 }
 
 // With the personal page deployed, one link does it all (the page lets you pick your name and sends you

@@ -123,7 +123,7 @@ function auto_recheck(rota, ctx, today, st){
     log_row(ctx, 'autopilot', row.type, row.start, 'handed on (away)', (c.role === 'tea' ? 'tea: ' : '') + names_of([c.id], ctx.people)[0] + ' -> ' + names_of([to], ctx.people)[0]);
     handed.push({row: row, role: c.role, from: c.id, to: to});
     released_mail(row, c.role, c.id, to, ctx);
-    duty_mail(row, c.role, to, ctx, today, {from: c.id, live: planned && !row.gcal_id ? sched_add_days(planned.at, AUTO_REVIEW_DAYS) : ''});
+    duty_mail(row, c.role, to, ctx, today, {from: c.id, live: planned && is_tentative(row) ? sched_add_days(planned.at, AUTO_REVIEW_DAYS) : ''});
   });
   if (handed.length || stuck.length) handover_mail(rota, handed, stuck, ctx);
   return handed;
@@ -244,8 +244,10 @@ function duty_mail(row, role, id, ctx, today, opts){
     ? 'Away then? Add it to your away dates on your tea page by the end of **' + fmt_day(parse_iso_date(deadline)) + '**, and the bot hands the slot to the next free person. After that, ask someone to swap on your tea page.'
     : 'If you can\'t make it, ask someone to swap on your tea page.');
   blocks.push({link: 'Open my tea page', url: tea_page_link_for(id, ctx)});
-  blocks.push((opts.live ? 'It goes on the calendar on ' + fmt_day(parse_iso_date(opts.live)) + '.'
-    : (is_tentative(row) ? 'It is still tentative until the organiser puts it on the calendar.' : 'It is on the calendar.')) + ' You will get the usual reminders before.');
+  var cal = on_calendar(row.type);
+  blocks.push((opts.live ? (cal ? 'It goes on the calendar on ' : 'It is confirmed on ') + fmt_day(parse_iso_date(opts.live)) + '.'
+    : is_tentative(row) ? (cal ? 'It is still tentative until the organiser puts it on the calendar.' : 'It is still tentative until the organiser confirms it.')
+    : (cal ? 'It is on the calendar.' : 'It is confirmed.')) + ' You will get the usual reminders before' + (cal ? '.' : ', and an email every day of that week.'));
   blocks.push('The rotas are planned automatically and fairly about six weeks ahead, around everyone\'s away dates.');
   var organiser = auto_organiser(rota_of_type(row.type), ctx).split(',')[0].trim();
   send_mail(p.email, m.subject, blocks, ctx.constants, organiser ? {reply_to: organiser} : {});
@@ -288,11 +290,12 @@ function auto_plan_mail(rota, res, fill, ctx, today){
   if (!to) return;
   var label = ROTAS[rota].label;
   var live = fmt_day(parse_iso_date(sched_add_days(today, AUTO_REVIEW_DAYS)));
+  var go = on_calendar(SLOT_PLANS[rota][0].type) ? 'go on the calendar' : 'are confirmed';
   var lines = fill.filled.concat(fill.unfilled);
   var blocks = [
     'The autopilot planned the next ' + label + ' slots and filled them fairly, around everyone\'s away dates:',
     {items: lines.length ? lines : res.created},
-    '**They go on the calendar on ' + live + '.** Everyone on them has been told they are pencilled in; until three weeks before, adding away dates hands their slot to the next free person by itself. Until ' + live + ', change anyone or remove a slot you don\'t need (closures, retreat, deadlines) on the Gatsby Rotas site. A slot you remove is not planned again.'
+    '**They ' + go + ' on ' + live + '.** Everyone on them has been told they are pencilled in; until three weeks before, adding away dates hands their slot to the next free person by itself. Until ' + live + ', change anyone or remove a slot you don\'t need (closures, retreat, deadlines) on the Gatsby Rotas site. A slot you remove is not planned again.'
   ];
   if (fill.unfilled.length) blocks.push('Nobody was available for some of them: put someone on them on the site, or remove them.');
   if (res.holidays.length) blocks.push('Skipped (bank holidays, closures): ' + res.holidays.join(', ') + '.');
@@ -300,17 +303,18 @@ function auto_plan_mail(rota, res, fill, ctx, today){
   blocks.push('Every Monday the autopilot keeps ' + label + ' planned ' + ctx.settings.auto_weeks + ' weeks ahead. To switch it off, take ' + rota + ' out of AUTO_TYPES in the Automation tab of the constants sheet (or ask the tea tsar).');
   blocks.push({link: 'Gatsby Rotas site', url: site_url(ctx.settings)});
   if (ctx.settings.HANDBOOK_URL) blocks.push({link: 'Organiser handbook', url: ctx.settings.HANDBOOK_URL});
-  send_mail(to, label + ': next slots planned, on the calendar on ' + live, blocks, ctx.constants, {as: rota});
+  send_mail(to, label + ': next slots planned, ' + (go === 'are confirmed' ? 'confirmed' : 'on the calendar') + ' on ' + live, blocks, ctx.constants, {as: rota});
 }
 
 function auto_empty_mail(rota, rows, ctx){
   var to = auto_organiser(rota, ctx);
   if (!to) return;
   var label = ROTAS[rota].label;
+  var cal = on_calendar(SLOT_PLANS[rota][0].type);
   send_mail(to, label + ': nobody on duty for ' + rows.length + ' planned slot' + (rows.length === 1 ? '' : 's'), [
-    'These ' + label + ' slots have nobody on duty, so they are not on the calendar yet:',
+    'These ' + label + ' slots have nobody on duty, so they are not ' + (cal ? 'on the calendar' : 'confirmed') + ' yet:',
     {items: rows.map(function(r){ return fmt_day(r.start) + ' · ' + r.type; })},
-    'Put someone (or a guest speaker) on them on the Gatsby Rotas site, or remove them. The autopilot tries to fill them again on Monday, and puts them on the calendar once someone is on duty.',
+    'Put someone (or a guest speaker) on them on the Gatsby Rotas site, or remove them. The autopilot tries to fill them again on Monday, and ' + (cal ? 'puts them on the calendar' : 'confirms them') + ' once someone is on duty.',
     {link: 'Gatsby Rotas site', url: site_url(ctx.settings)}
   ], ctx.constants, {as: rota});
 }

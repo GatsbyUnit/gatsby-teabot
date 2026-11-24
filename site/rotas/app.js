@@ -96,19 +96,27 @@ class SignedOut extends Error {}
 const READS = new Set(['api_site_bundle', 'api_site_photos', 'api_site_people', 'api_site_access', 'api_page_icon']);
 const READ_PATIENCE_MS = 15e3;
 
+// each attempt also goes to the anonymous diagnostics (telemetry.js): the call's name, time and outcome
+const track = (...a) => window.GatsbyTelemetry?.call(...a);
+
 async function api(fn, ...args) {
   for (let attempt = 1; ; attempt++) {
     const stop = READS.has(fn) ? new AbortController() : null;
     const timer = stop && setTimeout(() => stop.abort(), READ_PATIENCE_MS);
+    const t0 = performance.now();
+    let answered = false;
     try {
       const res = await fetch(CONFIG.api, { method: 'POST', body: JSON.stringify({ fn, args }), credentials: 'omit', redirect: 'follow', signal: stop?.signal });
       const out = await res.json().catch((err) => {
         if (stop?.signal.aborted) throw err;
         return { ok: false, error: `The server answered ${res.status}.` };
       });
+      answered = true;
+      track(fn, performance.now() - t0, out.ok ? 'ok' : 'error', attempt, out.error);
       if (!out.ok) throw new Error(out.error || 'Something went wrong.');
       return out.result;
     } catch (err) {
+      if (!answered) track(fn, performance.now() - t0, stop?.signal.aborted ? (attempt === 3 ? 'gave up' : 'timeout') : 'network', attempt, err?.message);
       if (!stop?.signal.aborted) throw err;
       if (attempt === 3) throw new Error('the tea bot did not answer');
     } finally {
@@ -940,28 +948,32 @@ function footerMeta() {
     bundleAt && `Checked ${F.stamp.format(new Date(bundleAt))}`,
     (!s || isMember()) && `<a href="${esc(teaLink)}">Tea page</a>`,
     who, s && '<button type="button" class="link-button" data-sign-out>Sign out</button>',
-    bundle?.contact && `<button type="button" class="link-button" data-report>Report an issue (tea tsar${bundle.contact.name ? ' ' + esc(bundle.contact.name) : ''})</button>`,
+    `<button type="button" class="link-button" data-report>Report an issue${bundle?.contact?.name ? ` (tea tsar ${esc(bundle.contact.name)})` : ''}</button>`,
+    `<a href="${esc(PRIVACY_URL)}">Privacy</a>`,
+    `<a href="${esc(REPO_URL)}" target="_blank" rel="noopener">GitHub</a>`,
   ].filter(Boolean).join('<span class="sep" aria-hidden="true">·</span>');
 }
 
-// "Report an issue": an email to the tea tsar, or an issue on GitHub (public), with a link to the page it is about
-const ISSUES_URL = 'https://github.com/GatsbyUnit/gatsby-teabot/issues/new';
+// "Report an issue": an email to the tea tsar (once signed in), or an issue on GitHub (public), with a link to
+// the page it is about
+const REPO_URL = 'https://github.com/GatsbyUnit/gatsby-teabot';
+const ISSUES_URL = REPO_URL + '/issues/new';
+const PRIVACY_URL = '../privacy.html';
 document.addEventListener('click', (e) => {
   if (!e.target.closest('[data-report]')) return;
   const c = bundle?.contact;
-  if (!c) return;
   const keep = new URLSearchParams([...params].filter(([k]) => ['p', 'person', 'slot'].includes(k))).toString();
   const page = location.origin + location.pathname + (keep ? '?' + keep : '');
   const ask = '(What happened, and what did you expect?)';
-  const first = c.name.split(' ')[0];
-  const mail = `mailto:${c.email}?subject=${encodeURIComponent('Gatsby Rotas: a problem')}&body=${encodeURIComponent(`Hi ${first || 'there'},\n\n${ask}\n\nPage: ${page}\n`)}`;
+  const first = c?.name ? c.name.split(' ')[0] : '';
+  const mail = c && `mailto:${c.email}?subject=${encodeURIComponent('Gatsby Rotas: a problem')}&body=${encodeURIComponent(`Hi ${first || 'there'},\n\n${ask}\n\nPage: ${page}\n`)}`;
   const issue = `${ISSUES_URL}?body=${encodeURIComponent(`${ask}\n\nPage: ${page}\n`)}`;
   $('.report-dialog')?.remove();
   document.body.insertAdjacentHTML('beforeend', `<dialog class="report-dialog" aria-labelledby="report-title">
     <h2 id="report-title">Report an issue</h2>
-    <p>Something wrong or confusing on the rotas, the tea page or in the tea bot's emails? Tell the tea tsar${c.name ? `, ${esc(c.name)},` : ''} by email, or open an issue on GitHub (public, needs a GitHub account).</p>
-    <div class="actions"><a class="edit-button primary" href="${esc(mail)}" data-report-done>Email ${esc(first || 'the tea tsar')}</a>
-      <a class="edit-button" href="${esc(issue)}" target="_blank" rel="noopener" data-report-done>Open a GitHub issue</a>
+    <p>Something wrong or confusing on the rotas, the tea page or in the tea bot's emails? ${c ? `Tell the tea tsar${c.name ? `, ${esc(c.name)},` : ''} by email, or open` : 'Open'} an issue on GitHub (public, needs a GitHub account)${c ? '' : ', or tell the tea tsar on Slack'}.</p>
+    <div class="actions">${c ? `<a class="edit-button primary" href="${esc(mail)}" data-report-done>Email ${esc(first || 'the tea tsar')}</a>` : ''}
+      <a class="edit-button${c ? '' : ' primary'}" href="${esc(issue)}" target="_blank" rel="noopener" data-report-done>Open a GitHub issue</a>
       <button type="button" class="edit-button" data-report-done>Cancel</button></div>
   </dialog>`);
   const dlg = $('.report-dialog');
@@ -977,6 +989,8 @@ document.addEventListener('click', (e) => {
 });
 
 function signInPage({ notice = '' } = {}) {
+  window.GatsbyTelemetry?.signedIn('no');
+  window.GatsbyTelemetry?.view('signin');
   document.body.classList.add('signed-out');
   document.title = 'Sign in · Gatsby Rotas';
   $('#nav').innerHTML = '';
@@ -1090,6 +1104,9 @@ async function route() {
   const person = params.get('person');
   const slug = params.get('p') || 'home';
   const slot = params.get('slot');
+  const tel = window.GatsbyTelemetry;
+  tel?.signedIn(!session() ? 'no' : isMember() ? 'member' : 'reader');
+  tel?.view(person ? 'person' : slot ? 'slot' : /^[a-z0-9-]+$/.test(slug) ? slug : 'other');
   if (person) await renderPerson(person.replace(/-/g, ''));
   else if (slot) await renderSlot(slot.replace(/-/g, ''));
   else if (!/^[a-z0-9-]+$/.test(slug)) notFound();

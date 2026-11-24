@@ -6,6 +6,10 @@ const ALL_TYPES = ['TNJC', 'MLJC', 'Coffee Cleaning', 'Research Talk', 'Tea Talk
 const PRESENTER_TYPES = ['Research Talk', 'Tea Talk', 'MLJC', 'TNJC'];
 const TEA_TYPES = ['Research Talk', 'Tea Talk', 'Just Tea', 'External Seminar', 'Leaving Tea', 'Coffee Cleaning'];
 const GUEST_TYPES = ['TNJC', 'MLJC'];
+// rotas that are not on the gatsby.tea calendar (coffee: the people on duty get an email every day of their week
+// instead, and the site shows who is on); the bot removes the calendar events of their upcoming slots
+const OFF_CALENDAR_TYPES = ['Coffee Cleaning'];
+function on_calendar(type){ return OFF_CALENDAR_TYPES.indexOf(type) < 0; }
 // slots an organiser can cancel by deleting or renaming the calendar event
 const CALENDAR_CANCEL_TYPES = PRESENTER_TYPES.concat(['Just Tea']);
 

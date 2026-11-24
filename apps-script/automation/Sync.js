@@ -9,7 +9,8 @@
 //   - both changed and disagree  -> ask the organiser
 // A talk or just tea whose event is deleted, or renamed to "… CANCELLED", by hand is recorded as cancelled
 // (see cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup can't cancel it.
-// Slots titled "Cancelled" are left alone.
+// Slots titled "Cancelled" are otherwise left alone, except that a cancelled talk or just tea whose event is
+// renamed back to a normal title is put back on (see sync_cancelled_row).
 // A talk title or description edited on the site rewrites the event description (future slots, and only
 // when the slot's text changed since last time, so text typed into the calendar is otherwise left alone).
 // Confirmed future slots without an event get one (same title / description as the finalizing scripts).
@@ -105,6 +106,7 @@ function sync_all(ctx){
     }
   });
   ctx.baseline = false;
+  remove_off_calendar_events(ctx, today);
   write_mismatches(mismatches, ctx);
   report_findings(findings, ctx);
   if (findings.length > 0 || links > 0) log_row(ctx, 'sync', '', null, 'run', findings.length + ' findings, ' + mismatches.length + ' open mismatches, ' + links + ' event descriptions with new or updated links');
@@ -114,7 +116,9 @@ function sync_all(ctx){
 
 function sync_row(row, ctx, today){
   var out = {};
-  if (is_tentative(row) || is_cancelled_title(row.title)) return out;
+  if (is_tentative(row)) return out;
+  if (is_cancelled_title(row.title)) return sync_cancelled_row(row, ctx, today);
+  if (!on_calendar(row.type)) return out;   // see remove_off_calendar_events
   var future = row.start.getTime() >= today.getTime();
   if (!row.gcal_id){
     if (!future) return out;
@@ -224,33 +228,8 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
     return res;
   }
 
-  var changed = Object.keys(parsed.roles).filter(function(role){
-    return !same_names(parsed.roles[role], notion_role_names(row, role, ctx.people));
-  });
-  var plan = {};
-  var unsure = [];
-  var unknown = [];
-  var guest = null;
-  var notes = [];
-  changed.forEach(function(role){
-    var typed = parsed.roles[role];
-    var matches = typed.map(function(n){ return {typed: n, m: match_name(n, ctx.people)}; });
-    matches.filter(function(x){ return x.m.status === 'uncertain'; }).forEach(function(x){
-      unsure.push('"' + x.typed + '" could be ' + x.m.candidates.map(function(c){ return c.person.name + (c.person.active ? '' : ' (inactive)'); }).join(' or '));
-    });
-    var none = matches.filter(function(x){ return x.m.status === 'none'; });
-    var hits = matches.filter(function(x){ return x.m.status === 'match'; });
-    hits.forEach(function(x){
-      if (normalise_name(x.typed) !== normalise_name(x.m.person.name)) notes.push('"' + x.typed + '" was read as ' + x.m.person.name + '.');
-    });
-    if (none.length && !hits.length && role === 'Presenter' && GUEST_TYPES.indexOf(row.type) >= 0 && typed.length === none.length){
-      guest = typed.join(', ');
-    } else if (none.length){
-      none.forEach(function(x){ unknown.push('"' + x.typed + '"'); });
-    } else {
-      plan[role] = hits.map(function(x){ return x.m.person.id; });
-    }
-  });
+  var names = read_title_names(parsed, row, ctx, GUEST_TYPES);
+  var plan = names.plan, unsure = names.unsure, unknown = names.unknown, guest = names.guest, notes = names.notes;
   var where = 'The calendar says "' + actual + '", but the site says "' + notion_says + '".';
 
   if (unsure.length){
@@ -294,6 +273,137 @@ function classify_difference(row, event, actual, expected, parsed, prev, fingerp
   if (guest) notify_guest_from_calendar(row, old_ids.Presenter, ctx);
   else notify_swap_from_calendar(row, old_ids, plan, notes, ctx);
   return res;
+}
+
+// Upcoming slots of rotas that are no longer on the calendar (OFF_CALENDAR_TYPES) lose their events; past
+// events stay as they were. Whatever SYNC_TYPES says.
+function remove_off_calendar_events(ctx, today){
+  if (ctx.settings.dry_run) return 0;
+  var n = 0;
+  OFF_CALENDAR_TYPES.forEach(function(type){
+    load_rows(type, add_days(today, -6), null, ctx).forEach(function(row){
+      var end = row.end || row.start;
+      if (!row.gcal_id || end.getTime() < today.getTime()) return;
+      site_delete_event(row.gcal_id, ctx.constants);
+      notion_patch_page(row.id, {'GCal ID': {rich_text: []}}, ctx.constants);
+      log_row(ctx, 'sync', row.type, row.start, 'removed event', type + ' is not on the calendar any more');
+      n++;
+    });
+  });
+  return n;
+}
+
+// Who a calendar title names, for the roles where it differs from the slot: {plan: {role: [ids]}, guest,
+// unsure: [...], unknown: [...], notes: [...]}. An unknown presenter is a guest speaker in guest_types.
+function read_title_names(parsed, row, ctx, guest_types){
+  var out = {plan: {}, guest: null, unsure: [], unknown: [], notes: []};
+  Object.keys(parsed.roles).filter(function(role){
+    return !same_names(parsed.roles[role], notion_role_names(row, role, ctx.people));
+  }).forEach(function(role){
+    var typed = parsed.roles[role];
+    var matches = typed.map(function(n){ return {typed: n, m: match_name(n, ctx.people)}; });
+    matches.filter(function(x){ return x.m.status === 'uncertain'; }).forEach(function(x){
+      out.unsure.push('"' + x.typed + '" could be ' + x.m.candidates.map(function(c){ return c.person.name + (c.person.active ? '' : ' (inactive)'); }).join(' or '));
+    });
+    var none = matches.filter(function(x){ return x.m.status === 'none'; });
+    var hits = matches.filter(function(x){ return x.m.status === 'match'; });
+    hits.forEach(function(x){
+      if (normalise_name(x.typed) !== normalise_name(x.m.person.name)) out.notes.push('"' + x.typed + '" was read as ' + x.m.person.name + '.');
+    });
+    if (none.length && !hits.length && role === 'Presenter' && guest_types.indexOf(row.type) >= 0 && typed.length === none.length){
+      out.guest = typed.join(', ');
+    } else if (none.length){
+      none.forEach(function(x){ out.unknown.push('"' + x.typed + '"'); });
+    } else {
+      out.plan[role] = hits.map(function(x){ return x.m.person.id; });
+    }
+  });
+  return out;
+}
+
+// A cancelled talk or just tea whose calendar event someone renamed back to a normal title since the bot last
+// wrote it ("TEA TALK: Ada Lovelace TEA: …"; e.g. a visitor takes over the slot): the slot is put back on with the
+// people the title names (an unknown speaker is a guest), loses its "Cancelled" title, and text typed into the
+// event is kept as the slot's description (so the bot doesn't overwrite it later). The people now presenting
+// (or the organiser) get an email. Names the bot can't place go to the tea tsar; the slot then stays cancelled.
+function sync_cancelled_row(row, ctx, today){
+  var out = {};
+  if (!row.gcal_id || ctx.baseline || CALENDAR_CANCEL_TYPES.indexOf(row.type) < 0) return out;
+  if (row.start.getTime() < today.getTime()) return out;
+  var just_tea = row.type === 'Just Tea';
+  if (just_tea ? row.tea_ids.length : (row.presenter_ids.length || row.guest)) return out;
+  var event = ctx.cal.getEventById(row.gcal_id);
+  if (!event || (ctx.deleted_events || {})[event_key(row.gcal_id)]) return out;
+  var actual = event.getTitle();
+  var prev = load_state(row.gcal_id);
+  if (!prev || prev.t === actual || is_cancelled_title(actual)) return out;
+  var where = 'This ' + row.type + ' is cancelled on the site, but its calendar event has been renamed to "' + actual + '".';
+  var parsed = parse_title(actual, row.type);
+  if (!parsed){
+    out.finding = finding(row, 'unrecognised', where + ' The bot could not read that title, so the slot stays cancelled. If it is back on, please put the people back on the site and remove "Cancelled" from its title.', false);
+    return out;
+  }
+  var names = read_title_names(parsed, row, ctx, PRESENTER_TYPES);
+  if (names.unsure.length || names.unknown.length){
+    out.finding = finding(row, names.unsure.length ? 'uncertain_match' : 'unknown_person', where + ' ' +
+      (names.unsure.length ? 'I could not tell for sure who is meant: ' + names.unsure.join('; ') : names.unknown.join(', ') + (names.unknown.length === 1 ? ' is' : ' are') + ' not on the People list') +
+      ', so the slot stays cancelled. If it is back on, please put the right people back on the site and remove "Cancelled" from its title.', false);
+    out.finding.alert_tsar = true;
+    return out;
+  }
+  if (just_tea ? !names.plan.Tea : !(names.plan.Presenter || names.guest)) return out;  // renamed, but still nobody on it
+  if (names.guest && !ctx.has_guest_prop) return out;
+
+  var extra = hand_typed_text(event.getDescription() || '', row, ctx);
+  var description = [row.description, extra].filter(Boolean).join('\n\n').slice(0, 4000);
+  var props = {'Title': {title: []}};
+  Object.keys(names.plan).forEach(function(role){
+    props[role] = {relation: names.plan[role].map(function(id){ return {id: hyphenate_id(id)}; })};
+  });
+  if (names.guest) props[GUEST_PROP] = {rich_text: [{text: {content: names.guest}}]};
+  if (description !== (row.description || '')) props['Description'] = {rich_text: chunk_text(description)};
+  if (!act(ctx, row, 'reinstate_from_calendar', actual, function(){ notion_patch_page(row.id, props, ctx.constants); })){
+    out.finding = finding(row, 'reinstate_from_calendar', where + ' The bot would put it back on the site with the people the title names.', false);
+    return out;
+  }
+  row.title = '';
+  if (names.plan.Presenter) row.presenter_ids = names.plan.Presenter;
+  if (names.plan.Tea) row.tea_ids = names.plan.Tea;
+  if (names.guest) row.guest = names.guest;
+  row.description = description;
+  event.setDescription(event_description(row, ctx));
+  if (ctx.settings.links_in_events) ensure_links(event, row, ctx);
+  save_state(row.gcal_id, {t: actual, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
+  notify_reinstated(row, actual, names.notes, ctx);
+  return out;
+}
+
+// What people typed into an event's description besides the bot's own lines (Title / Zoom Link / Description
+// and the link footer), as plain text.
+function hand_typed_text(desc, row, ctx){
+  var s = strip_links(desc);
+  if (/<(br|p|div|a|span|b|i|u|ul|li)\b/i.test(s)){
+    s = s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '\n').replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  }
+  var ours = event_description(row, ctx);
+  if (s.indexOf(ours) === 0) s = s.slice(ours.length);
+  else s = s.replace(/^Title: .*$/m, '').replace(/^Zoom Link: .*$/m, '');
+  return s.replace(/^\s+|\s+$/g, '');
+}
+
+function notify_reinstated(row, actual, notes, ctx){
+  var admin = admin_email_for_type(row.type, ctx.constants);
+  var just_tea = row.type === 'Just Tea';
+  var to = emails_of(just_tea ? row.tea_ids : row.presenter_ids, ctx.people);
+  var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + ', ' + row.type]];
+  if (!just_tea) table.push([row.guest ? 'Guest speaker' : 'Presenter', row.guest || names_of(row.presenter_ids, ctx.people).join(', ')]);
+  table.push(['Tea', names_of(row.tea_ids, ctx.people).join(', ') || '–']);
+  var blocks = ['This ' + (just_tea ? 'just tea' : row.type) + ' had been cancelled, but its calendar event has been renamed to "' + actual + '", so the bot has put it back on the site.', {table: table}];
+  if (notes.length) blocks.push(notes.join(' '));
+  if (row.description) blocks.push('Text typed into the calendar event is now the slot\'s description on the site.');
+  blocks.push('If this is wrong, just reply to this email.');
+  send_mail(to.length ? to.join(',') : admin, row.type + ' back on for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : row.type});
 }
 
 // runs fn if the bot may write for this rota (and this is not a rota's first look); logs either way

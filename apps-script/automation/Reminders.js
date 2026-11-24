@@ -26,6 +26,7 @@ function run_daily_reminders(){
     notify_error('Autopilot', err, constants);
     failed = failed || err;
   }
+  try { telemetry_prune(); } catch (err) { Logger.log('telemetry prune: ' + err); }
   if (failed) throw failed;
 }
 
