@@ -14,16 +14,22 @@ concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
+  # upload and deploy in separate jobs (GitHub's own layout): deploy-pages right after the upload in the same job
+  # sometimes finds no artifact (actions/deploy-pages "No artifacts named github-pages", Nov 2026)
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
