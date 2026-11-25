@@ -291,12 +291,14 @@ function loadData() {
   if (data) return data;
   const d = bundle.data;
   const people = new Map(d.people.map((p) => [p.id, p]));
+  // cancelled titles, also misspelt (canceled, cancelld, canclled, cancellation…), "called off", "No TNJC/talk/tea…"; same pattern as the bot's is_cancelled_title
+  const CANCELLED_TITLE_RE = /\bcan?c+[ae]?l+(?:e?d|ation|ing)?\b|\bcalled\s+off\b|\bno\s+(?:tnjc|mljc|csnjc|jc|talk|research\s+talk|tea|seminar|journal\s+club)\b/i;
   const slots = d.schedule.filter((s) => TYPES[s.type]).map((s) => ({
     ...s,
     startDate: new Date(s.start.length === 10 ? s.start + 'T00:00:00' : s.start),
     allDay: s.start.length === 10,
     tentative: /\[[^\]]*tentative\]/i.test(s.title),
-    cancelled: /^\s*cancell?ed\b/i.test(s.title),
+    cancelled: CANCELLED_TITLE_RE.test(s.title),
     cleanTitle: s.title.replace(/\[[^\]]*tentative\]/ig, '').trim(),
   })).sort((a, b) => a.startDate - b.startDate);
   const pageIds = new Map(Object.values(bundle.pages).map((p) => [p.id, p.slug]));

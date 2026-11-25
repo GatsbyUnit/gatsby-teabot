@@ -1,3 +1,6 @@
+// cancelled titles, also misspelt (canceled, cancelld, canclled, cancellation…), "called off", "No TNJC/talk/tea…"; same pattern as is_cancelled_title (automation, Schedule.js)
+var CANCELLED_TITLE_RE = /\bcan?c+[ae]?l+(?:e?d|ation|ing)?\b|\bcalled\s+off\b|\bno\s+(?:tnjc|mljc|csnjc|jc|talk|research\s+talk|tea|seminar|journal\s+club)\b/i;
+
 function talkreminder(admin_email, talk_date, email_option, talk_date_name, constants) {
   // email_option has to be "duty_people" or "group"
   if (email_option !== "group" && email_option !== "duty_people" && email_option !== "coffee_people"){
@@ -190,8 +193,8 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
     if (presenter_names.length == 0 && guest_prop && guest_prop['rich_text'] && guest_prop['rich_text'].length > 0){
       presenter_names = [guest_prop['rich_text'].map(function(x){ return x['plain_text']; }).join('')];
     }
-    // cancelled talks (title "Cancelled", set by the tea bot) get no group reminder
-    var talk_cancelled = /\bcancel(?:l?ed)?\b/i.test(talk_title);
+    // cancelled talks (title "Cancelled", set by the tea bot, or typed by hand) get no group reminder
+    var talk_cancelled = CANCELLED_TITLE_RE.test(talk_title);
     if ( presenter_names.length > 0 ){
       var presenter_title_text = " by " + presenter_names.join(", ");
     } else {

@@ -60,6 +60,8 @@ const changed = () => { bundle = null; };
 // ---------- helpers ----------
 
 const norm = (id) => String(id || '').replace(/-/g, '').toLowerCase();
+// cancelled titles, also misspelt; same pattern as the bot's is_cancelled_title (Schedule.js)
+const CANCELLED_TITLE_RE = /\bcan?c+[ae]?l+(?:e?d|ation|ing)?\b|\bcalled\s+off\b|\bno\s+(?:tnjc|mljc|csnjc|jc|talk|research\s+talk|tea|seminar|journal\s+club)\b/i;
 const londonDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(d);
 const addDays = (day, n) => { const d = new Date(day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
@@ -197,9 +199,12 @@ const TOOLS = [
       const saved = await api('api_site_save_person', TOKEN, p); changed();
       if (p.id && was && p.active === false) {
         const today = londonDay();
-        saved.still_holds = b.data.schedule.filter((s) => s.start.slice(0, 10) >= today && !/^\s*cancell?ed\b/i.test(s.title) && (s.presenter.includes(p.id) || s.tea.includes(p.id))).map((s) => slotOut(b, s));
+        saved.still_holds = b.data.schedule.filter((s) => s.start.slice(0, 10) >= today && !CANCELLED_TITLE_RE.test(s.title) && (s.presenter.includes(p.id) || s.tea.includes(p.id))).map((s) => slotOut(b, s));
       }
       return saved; } },
+  { name: 'remove_from_tea_system', description: 'Tea tsar and unit admins: take someone who has left the Unit out of the tea system for good, as their own "Leave the tea system" link would: inactive, registered email and tea-page link cleared (no more emails from the bot or the reminders), swap requests dropped. Nobody is emailed unless they still hold slots (then the tea tsar, organisers in cc). Undo: active=true and their email again with save_person.',
+    inputSchema: obj({ id: { ...str, description: 'id or name' } }, ['id']),
+    run: async (a) => { const b = await data(true); const r = await api('api_site_leave', TOKEN, personId(b, a.id)); changed(); return r; } },
   { name: 'put_on_rota', description: 'Tsars and unit admins: put several people on a rota and/or take them off at once (TNJC, CSNJC, MLJC or Coffee). People by name or id. Organisers only their own rota.',
     inputSchema: obj({ rota: str, add: strs, remove: strs }, ['rota']),
     run: async (a) => { const b = await data(true);

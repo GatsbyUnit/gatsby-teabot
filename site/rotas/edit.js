@@ -549,8 +549,10 @@
 
   // talks and just teas can be cancelled while upcoming and confirmed (the bot's site_cancel_refusal decides)
   const CANCEL_TYPES = ['Research Talk', 'Tea Talk', 'MLJC', 'TNJC', 'Just Tea'];
+  // cancelled titles, also misspelt (canceled, cancelld, canclled, cancellation…), "called off", "No TNJC/talk/tea…"; same pattern as the bot's is_cancelled_title
+  const CANCELLED_TITLE_RE = /\bcan?c+[ae]?l+(?:e?d|ation|ing)?\b|\bcalled\s+off\b|\bno\s+(?:tnjc|mljc|csnjc|jc|talk|research\s+talk|tea|seminar|journal\s+club)\b/i;
   const mayCancel = (s) => !!s.id && CANCEL_TYPES.includes(s.type) && new Date(s.start) > Date.now() &&
-    !/\bcancel(?:l?ed)?\b|\bno\s+(?:tnjc|mljc|csnjc|talk|tea|journal club)\b/i.test(s.title || '') && !/\[[^\]]*Tentative\]/i.test(s.title || '');
+    !CANCELLED_TITLE_RE.test(s.title || '') && !/\[[^\]]*Tentative\]/i.test(s.title || '');
 
   const DEFAULT_TIME = { 'Research Talk': '15:00', 'Tea Talk': '15:30', 'TNJC': '13:30', 'MLJC': '13:30', 'Just Tea': '15:30', 'Leaving Tea': '15:30', 'External Seminar': '16:00' };
 

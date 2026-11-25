@@ -57,6 +57,7 @@ function api_fill_slots(token, rota){ return TeaBot.api_fill_slots(token, rota);
 function api_leave_info(token){ return TeaBot.api_leave_info(token); }
 function api_leave(token){ return TeaBot.api_leave(token); }
 function api_leave_by_name(key, person_id){ return TeaBot.api_leave_by_name(key, person_id); }
+function api_site_leave(token, person_id){ return TeaBot.api_site_leave(token, person_id); }
 function api_rotas(token){ return TeaBot.api_rotas(token); }
 // the Gatsby Rotas site (site/rotas/)
 function api_site_people(){ return TeaBot.api_site_people(); }

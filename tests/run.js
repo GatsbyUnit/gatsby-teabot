@@ -159,6 +159,7 @@ t('relabelled talk agrees', () => assert.ok(titles_agree(parse_title('UPGRADE TA
 t('rotation talk agrees', () => assert.ok(titles_agree(parse_title('ROTATION TALK: Nikolai Petrov TEA: Lena Weber', 'Tea Talk'), row({type: 'Tea Talk', presenter_ids: ['b'], tea_ids: ['a']}), people)));
 t('tea-only title compares tea only', () => assert.ok(titles_agree(parse_title('TEA: Lena Weber', 'Tea Talk'), row({type: 'Tea Talk', presenter_ids: ['b'], tea_ids: ['a']}), people)));
 t('cancellations recognised', () => { ['No MLJC — CANCELLED', 'TEA TALK: CANCELLED TEA: X', 'TEA TALK: Cancelled TEA: Y', 'TNJC cancelled', 'No TNJC this week'].forEach(x => assert.ok(is_cancelled_title(x), x)); ['TNJC: Lena Weber', 'RESEARCH TALK: Cancela TEA: X'].forEach(x => assert.ok(!is_cancelled_title(x), x)); });
+t('cancellations recognised, also misspelt or in other words', () => { ['CANCELED', 'TNJC: cancelld', 'canclled', 'Cancled', 'Cancellled', 'cacelled', 'Cancellation', 'cancelation', 'Talk called off', 'No research talk', 'No JC this week', 'No seminar today', '[Cancelled]'].forEach(x => assert.ok(is_cancelled_title(x), x)); ['Cancer genomics', 'Cancellieri on RL', 'No-regret learning', 'Off-policy RL', 'Canal flows', 'Notes on tea'].forEach(x => assert.ok(!is_cancelled_title(x), x)); });
 t('cancelled event seen for the first time: no change, no finding', () => { __props = {}; var c = ctx(false); c.baseline = false; c.no_event = []; var e = ev('No TNJC — CANCELLED'); c.cal = {getEventById: () => Object.assign(e, {getDescription: () => '', setDescription: function(){}})}; var out = sync_row(row({start: new Date(Date.now() + 5 * 864e5)}), c, start_of_today()); assert.strictEqual(out.finding, undefined); assert.strictEqual(e.title, 'No TNJC — CANCELLED'); assert.strictEqual(patched.length, 0); });
 t('masked email', () => { assert.strictEqual(mask_email('ada.lovelace@ucl.ac.uk'), 'ad•••e@u•••.ac.uk'); assert.strictEqual(mask_email('ab@gmail.com'), 'a•••@g•••.com'); assert.strictEqual(mask_email('anna@x.org'), 'an•••@x•••.org'); });
 // swap requests
@@ -299,6 +300,24 @@ t('leaving by picking a name: one click, the tea tsar is warned anyone could hav
     assert.throws(() => api_leave_by_name('', 'fedcba9876543210fedcba9876543210'), /not in the tea system/);
     store['leave:all'] = '5'; assert.throws(() => api_leave_by_name('', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'), /try again later/);
   } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; make_context = saved[3]; CacheService = saved[4]; LockService = saved[5]; get_global_constants = saved[6]; delete people['0123456789abcdef0123456789abcdef']; delete people['fedcba9876543210fedcba9876543210']; }
+});
+t('taken out by the tea tsar: like leaving, also when inactive already; nobody emailed unless slots are held', () => {
+  var m = [], cleared = []; var saved = [identity_rows, upcoming_rows_of, send_mail];
+  identity_rows = () => ({sheet: {getRange: (r, c, nr, nc) => ({setValues: v => cleared.push([r, c, nc, v])})}, rows: [{row: 7, id: 'd', email: 'old@x', token: 'tok'}]});
+  send_mail = function(to, subj, blocks, k, o){ m.push({to: to, subj: subj, o: o || {}, text: JSON.stringify(blocks)}); };
+  try {
+    upcoming_rows_of = () => [];
+    var c = ctx(false); c.me = people.d; c.me_identity = {email: 'old@x'};
+    assert.deepStrictEqual(leave_tea_system(c, 'tsar', 'Jan Bauer'), []);
+    assert.deepStrictEqual(patched[patched.length - 1], {Active: {checkbox: false}});
+    assert.deepStrictEqual(cleared, [[7, 3, 2, [['', '']]]]);
+    assert.strictEqual(m.length, 0, 'nobody emailed');
+    upcoming_rows_of = () => [row({start: soon, url: 'https://notion/r1', presenter_ids: ['d']})];
+    c = ctx(false); c.me = people.d; c.me_identity = {email: 'old@x'};
+    assert.strictEqual(leave_tea_system(c, 'tsar', 'Jan Bauer').length, 1);
+    assert.strictEqual(m.length, 1); assert.strictEqual(m[0].to, 'tsar@x'); assert.strictEqual(m[0].o.cc, 'org@x');
+    assert.ok(/Jan Bauer took Sam Old out of the Gatsby tea system/.test(m[0].text) && /TNJC talk/.test(m[0].text), m[0].text);
+  } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; }
 });
 t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai Petrov has left the tea system']); });
 t('rota overview: same rules as scheduling', () => { var saved = notion_query; notion_query = () => []; try { var c = ctx(false); c.me_identity = {email: 'tsar@x'}; c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false, email: 'p@x'}, q: {id: 'q', name: 'Old One', active: false}}; var r = rota_overview(c); assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false, mljc: true, research: false, teatalk: true, tea: true, coffee: false}); assert.strictEqual(r.inactive, 1); assert.strictEqual(r.people.length, 1); } finally { notion_query = saved; } });
@@ -1466,6 +1485,12 @@ const cronIds = [['https://gatsbyunit.github.io/gatsby-teabot/rotas/?person=0123
   .filter(([u, id]) => cron.notion_id_from_url(u) !== id);
 console.log((cronIds.length ? 'FAIL' : 'ok  ') + ' cron jobs: people found by the id in their address' + (cronIds.length ? ' (' + cronIds.map(x => x[0]) + ')' : ''));
 if (cronIds.length) process.exitCode = 1;
+// The cancelled-title pattern has copies where the bot's code can't be shared: all must be the same
+const reCopies = ['apps-script/automation/Schedule.js', 'apps-script/cron-jobs/Utilities_TalkReminder.js', 'site/rotas/app.js', 'site/rotas/edit.js', 'mcp/server.js']
+  .map(f => [f, (fs.readFileSync(path.join(__dirname, '..', f), 'utf8').match(/CANCELLED_TITLE_RE = (\/.+\/i);/) || [])[1]]);
+const reBad = reCopies.filter(([, re]) => !re || re !== reCopies[0][1]).map(([f]) => f);
+console.log((reBad.length ? 'FAIL' : 'ok  ') + ' cancelled-title pattern: the same in bot, Cron Jobs, site and MCP' + (reBad.length ? ' (differs: ' + reBad + ')' : ''));
+if (reBad.length) process.exitCode = 1;
 const ctx = vm.createContext({console, Buffer, assert, require_crypto: require('crypto'), Intl});
 const out = vm.runInContext(stubs + src + tests, ctx);
 console.log(out);

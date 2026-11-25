@@ -121,8 +121,13 @@ function cancelled_title(row, people){
   return row.type.toUpperCase() + ': CANCELLED' + (tea.length ? ' TEA: ' + tea.join(', ') : '');
 }
 
+// cancelled titles, also misspelt (canceled, cancelld, canclled, cancellation…), "called off", "No TNJC/talk/tea…";
+// the same pattern is in the Cron Jobs (Utilities_TalkReminder.js), the site (rotas/app.js, rotas/edit.js) and the
+// MCP server; tests/run.js checks the copies agree
+const CANCELLED_TITLE_RE = /\bcan?c+[ae]?l+(?:e?d|ation|ing)?\b|\bcalled\s+off\b|\bno\s+(?:tnjc|mljc|csnjc|jc|talk|research\s+talk|tea|seminar|journal\s+club)\b/i;
+
 function is_cancelled_title(title){
-  return /\bcancel(?:l?ed)?\b|\bno\s+(?:tnjc|mljc|csnjc|talk|tea|journal club)\b/i.test(String(title));
+  return CANCELLED_TITLE_RE.test(String(title));
 }
 
 function split_names(s, strip_guest){
