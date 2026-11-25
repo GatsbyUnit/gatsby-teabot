@@ -1265,6 +1265,36 @@ t('sched_pick: next in line who is free, not excluded, not presenting within a w
   assert.strictEqual(sched_pick(talk, 'presenter', [], flags, ['an', 'bo']), 'di');
   assert.strictEqual(sched_pick(talk, 'tea', [], flags, ['an', 'bo']), 'cy');
 });
+ap_t('fill_slots: only the open duties of tentative slots; people on them stay; guests keep their talk; cancelled slots are left alone', () => {
+  var T = '[Tentative]';
+  var w = ap_world({rows: [
+    ap_row('s1', 'Research Talk', '2027-01-04T15:00:00Z', [], ['an'], {title: T}),
+    ap_row('s2', 'Research Talk', '2027-01-11T15:00:00Z', [], [], {title: T + ' Cancelled'}),
+    ap_row('s3', 'Tea Talk', '2027-01-05T15:30:00Z', [], [], {title: T, guest: 'Prof Guest'}),
+    ap_row('s4', 'Tea Talk', '2027-02-04T15:30:00Z', ['bo'], ['cy'], {title: T}),
+    ap_row('s5', 'Just Tea', '2027-01-12T15:30:00Z', [], [], {title: 'Cancelled'})
+  ]}), W = w.W;
+  var patched = [], real_patch = notion_patch_page;
+  notion_patch_page = (id, props) => { patched.push(normalise_id(id)); return real_patch(id, props); };
+  var res = fill_slots('talks', w.c);
+  var on = id => W.rows.filter(r => r.id === id)[0];
+  assert.deepStrictEqual([on('s1').presenter_ids, on('s1').tea_ids], [['di'], ['an']], 'the tea person stays, the presenter is filled');
+  assert.deepStrictEqual([on('s3').presenter_ids, on('s3').tea_ids], [[], ['bo']], 'a guest talk only gets tea: di presents the day before, an (s1) and cy (s4) count as having had tea');
+  assert.deepStrictEqual(patched.sort(), ['s1', 's3'], 'full and cancelled slots are not written');
+  assert.deepStrictEqual([on('s2').presenter_ids, on('s2').tea_ids, on('s5').tea_ids], [[], [], []]);
+  assert.strictEqual(res.filled.length, 2);
+  assert.ok(/Prof Guest, tea: Bo X/.test(res.filled.join(' | ')), res.filled.join(' | '));
+  assert.deepStrictEqual(fill_slots('talks', w.c).warnings, ['No tentative slot is missing a presenter or tea person.'], 'a second run finds nothing to do');
+});
+t('organiser_rota: rota names in any case, talk aliases, unknown names are their own error', () => {
+  var c = {me_identity: {email: 'Tsar@x'}, constants: {admin_email: 'tsar@x', mljc_admin_email: 'org@x'}};
+  assert.strictEqual(organiser_rota(c, 'Research Talk'), 'talks');
+  assert.strictEqual(organiser_rota(c, 'tea talks'), 'talks');
+  assert.strictEqual(organiser_rota(c, 'coffee cleaning'), 'Coffee Cleaning');
+  assert.throws(() => organiser_rota(c, 'Lunch'), /no rota called "Lunch"/);
+  assert.throws(() => organiser_rota({me_identity: {email: 'org@x'}, constants: c.constants}, 'TNJC'), /Only the organiser/);
+  assert.strictEqual(organiser_rota({me_identity: {email: 'org@x'}, constants: c.constants}, 'mljc'), 'MLJC');
+});
 ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot on, Monday it goes live and plans on, an organiser edit is told', () => {
   var w = ap_world({rows: [ap_row('g', 'MLJC', '2026-11-23T13:30:00Z', [], [], {guest: 'Prof Guest'})]}), W = w.W;
   W.run('2026-11-20');   // Friday, first run: plans 30 Nov - 3 Jan (28 Dec closed)

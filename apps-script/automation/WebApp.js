@@ -420,9 +420,20 @@ function mask_email(email){
   return shown + '@' + domain.charAt(0) + '•••' + (dot > 0 ? domain.slice(dot) : '');
 }
 
+// The rota a plan/fill/finalise call means: TNJC, MLJC, Coffee Cleaning or talks, in any case; "Research Talk(s)"
+// and "Tea Talk(s)" are talks too. An unknown name is an error of its own, not a permission refusal.
+function organiser_rota(ctx, rota){
+  var name = String(rota || '').trim();
+  var key = Object.keys(SLOT_PLANS).filter(function(k){ return k.toLowerCase() === name.toLowerCase(); })[0];
+  if (!key && /^(research|tea)( talks?)?$/i.test(name)) key = 'talks';
+  if (!key) throw new Error('There is no rota called "' + name + '": use TNJC, MLJC, Coffee Cleaning or talks (research and tea talks).');
+  if (!is_organiser(ctx, key)) throw new Error('Only the organiser of this rota can do that.');
+  return key;
+}
+
 function api_finalise(token, rota, email_group){
   var ctx = page_context(token);
-  if (!ROTAS[rota] || !is_organiser(ctx, rota)) throw new Error('Only the organiser of this rota can do that.');
+  rota = organiser_rota(ctx, rota);
   var lock = LockService.getScriptLock();
   lock.waitLock(60 * 1000);
   try {
@@ -437,7 +448,7 @@ function api_finalise(token, rota, email_group){
 // fill every empty one fairly. They stay tentative until the organiser has checked them and finalises.
 function api_plan_slots(token, rota, ranges){
   var ctx = page_context(token);
-  if (!SLOT_PLANS[rota] || !is_organiser(ctx, rota)) throw new Error('Only the organiser of this rota can do that.');
+  rota = organiser_rota(ctx, rota);
   var lock = LockService.getScriptLock();
   lock.waitLock(60 * 1000);
   try {
@@ -454,7 +465,7 @@ function api_plan_slots(token, rota, ranges){
 
 function api_fill_slots(token, rota){
   var ctx = page_context(token);
-  if (!SLOT_PLANS[rota] || !is_organiser(ctx, rota)) throw new Error('Only the organiser of this rota can do that.');
+  rota = organiser_rota(ctx, rota);
   var lock = LockService.getScriptLock();
   lock.waitLock(60 * 1000);
   try {

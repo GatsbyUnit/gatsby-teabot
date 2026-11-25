@@ -2,7 +2,8 @@
 //   create_slots(): empty "[... Tentative]" slots for a date range (same days, times, CSNJC rule and coffee
 //                   water-filter weeks as the notebooks); slots that already exist are not duplicated
 //   fill_slots():   assigns people to the tentative slots with the fairness algorithm below, using
-//                   everyone's away dates; slots that already have someone are left alone
+//                   everyone's away dates; people already on a slot stay, only its open duties (no presenter
+//                   or no tea person) are filled, and cancelled slots are never touched
 // Then the organiser checks the slots and finalises (Events.js), as before; for rotas on autopilot the bot
 // does all three itself (Autopilot.js).
 //
@@ -72,11 +73,15 @@ function sched_fill(schedule, queue, slot_type){
   queue = queue.map(function(v){ return Object.assign({}, v, {taken: false}); });
   schedule.forEach(function(talk, i){
     if (!talk.to_fill || types.indexOf(talk.type) < 0) return;
+    // a duty someone already has (or a guest speaker's talk) stays as it is; with only empty slots to fill,
+    // as in script.py, this never applies
+    if (talk[duty].length || (duty === 'presenter' && talk.guest)) return;
     var whitelist = sched_whitelist(talk.date, schedule);
     var found = false;
     for (var j = 0; j < queue.length; j++){
       var victim = queue[j];
       if (victim.taken || whitelist.indexOf(victim.id) >= 0) continue;
+      if (talk.presenter.indexOf(victim.id) >= 0 || talk.tea.indexOf(victim.id) >= 0) continue;   // already on this slot
       var end = talk.date_end || talk.date;
       if (!sched_overlap(talk.date, end, victim.away_from, victim.away_until)){
         found = true;
@@ -96,7 +101,9 @@ function sched_main(to_fill, past, people, query){
   var schedule = to_fill.map(function(t){ return Object.assign({}, t, {to_fill: true}); })
     .concat(past.map(function(t){ return Object.assign({}, t, {to_fill: false}); }))
     .sort(function(a, b){ return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
-  var past_only = schedule.filter(function(t){ return !t.to_fill; });
+  // the fairness queues count the past and the people already on the slots to fill (none, when they are
+  // empty as in script.py), before anything is filled
+  var past_only = schedule.filter(function(t){ return !t.to_fill || t.presenter.length || t.tea.length; });
   var ids = function(filter){ return people.filter(filter).map(function(p){ return p.id; }); };
   if (query === 'ResearchTeaTalks'){
     var rt = sched_priority_queue(past_only, people, ids(function(p){ return !p.rt_excluded; }), 'Research Talk');
@@ -234,11 +241,21 @@ function coffee_templates(first_monday, ctx){
   };
 }
 
-// assigns people to all future tentative slots of the rota that have nobody yet
+// The duties of a slot nobody has yet: 'presenter' (talks and journal clubs, unless a guest speaks) and 'tea'
+// (talks, teas and coffee cleaning).
+function open_duties(row){
+  var out = [];
+  if (PRESENTER_TYPES.indexOf(row.type) >= 0 && !row.presenter_ids.length && !row.guest) out.push('presenter');
+  if (SLOT_TO_TALK_TYPES['Tea'].concat(['Coffee Cleaning']).indexOf(row.type) >= 0 && !row.tea_ids.length) out.push('tea');
+  return out;
+}
+
+// assigns people to the open duties of all future tentative slots of the rota; the people already on a slot stay,
+// and a cancelled slot is never filled
 function fill_slots(rota, ctx){
-  var tentative = tentative_rows(rota, ctx).filter(function(r){ return r.start >= start_of_today(); });
-  var to_fill = tentative.filter(function(r){ return r.presenter_ids.length === 0 && r.tea_ids.length === 0; });
-  if (!to_fill.length) return {filled: [], unfilled: [], warnings: ['There are no empty tentative slots to fill.']};
+  var tentative = tentative_rows(rota, ctx).filter(function(r){ return r.start >= start_of_today() && !is_cancelled_title(r.title); });
+  var to_fill = tentative.filter(function(r){ return open_duties(r).length > 0; });
+  if (!to_fill.length) return {filled: [], unfilled: [], warnings: ['No tentative slot is missing a presenter or tea person.']};
 
   var past = sched_past(rota, to_fill[0].start, to_fill[to_fill.length - 1].start, to_fill.map(function(r){ return r.id; }), ctx);
   var warnings = [];
@@ -249,15 +266,20 @@ function fill_slots(rota, ctx){
   var filled = [], unfilled = [];
   result.forEach(function(t){
     var row = to_fill.filter(function(r){ return r.id === t.id; })[0];
+    var added = t.presenter.filter(function(id){ return row.presenter_ids.indexOf(id) < 0; })
+      .concat(t.tea.filter(function(id){ return row.tea_ids.indexOf(id) < 0; }));
+    var still_open = open_duties({type: t.type, presenter_ids: t.presenter, tea_ids: t.tea, guest: row.guest});
     var props = {
       'Presenter': {relation: t.presenter.map(function(id){ return {id: hyphenate_id(id)}; })},
       'Tea': {relation: t.tea.map(function(id){ return {id: hyphenate_id(id)}; })}
     };
     if (t.type !== row.type) props['Type'] = {select: {name: t.type}};
-    notion_patch_page(t.id, props, ctx.constants);
-    var who = names_of(t.presenter, ctx.people).concat(t.tea.length ? ['tea: ' + names_of(t.tea, ctx.people).join(', ')] : []);
-    var line = fmt_day(row.start) + ' · ' + t.type + (t.type !== row.type ? ' (was ' + row.type + ', nobody available)' : '') + ': ' + (who.join(', ') || 'nobody available');
-    (t.presenter.length || t.tea.length ? filled : unfilled).push(line);
+    if (added.length || t.type !== row.type) notion_patch_page(t.id, props, ctx.constants);
+    var who = (row.guest && !t.presenter.length ? [row.guest] : names_of(t.presenter, ctx.people))
+      .concat(t.tea.length ? ['tea: ' + names_of(t.tea, ctx.people).join(', ')] : []);
+    var line = fmt_day(row.start) + ' · ' + t.type + (t.type !== row.type ? ' (was ' + row.type + ', nobody available)' : '') + ': ' + (who.join(', ') || 'nobody available') +
+      (who.length && still_open.length ? ' (no ' + still_open.join(' or ').replace('tea', 'tea person') + ': nobody available)' : '');
+    (added.length ? filled : unfilled).push(line);
   });
   log_row(ctx, 'schedule', rota, null, 'filled slots', filled.length + ' filled, ' + unfilled.length + ' without anyone');
   return {filled: filled, unfilled: unfilled, warnings: warnings};
@@ -265,6 +287,7 @@ function fill_slots(rota, ctx){
 
 function sched_talk(row){
   var t = {id: row.id, date: fmt_iso_date(row.start), type: row.type, presenter: row.presenter_ids.slice(), tea: row.tea_ids.slice()};
+  if (row.guest) t.guest = true;
   if (row.type === 'Coffee Cleaning' && row.end) t.date_end = fmt_iso_date(row.end);
   return t;
 }

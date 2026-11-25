@@ -252,9 +252,9 @@ const TOOLS = [
   { name: 'plan_slots', description: 'Organisers: create the slots for these dates (bank holidays and closed dates skipped, existing slots kept) and fill them fairly. They stay tentative until finalise. rota: TNJC, MLJC, Coffee Cleaning or talks (talks take research_from/research_to and tea_from/tea_to instead of from/to).',
     inputSchema: obj({ rota: str, from: str, to: str, research_from: str, research_to: str, tea_from: str, tea_to: str }, ['rota']),
     run: async (a) => { const { rota, ...ranges } = a; const r = await api('api_plan_slots', TOKEN, rota, ranges); changed(); return r; } },
-  { name: 'fill_slots', description: 'Organisers: fill the empty tentative slots of a rota again, fairly.',
+  { name: 'fill_slots', description: 'Organisers: fill the open duties of the tentative slots of a rota fairly: a missing presenter or tea person (the people already on a slot stay; cancelled slots are left alone). rota: TNJC, MLJC, Coffee Cleaning or talks (research and tea talks).',
     inputSchema: obj({ rota: str }, ['rota']), run: async (a) => { const r = await api('api_fill_slots', TOKEN, a.rota); changed(); return r; } },
-  { name: 'finalise', description: 'Organisers: put the tentative slots of a rota on the calendar; email_group also sends the usual "schedule updated" email to the group.',
+  { name: 'finalise', description: 'Organisers: put the tentative slots of a rota on the calendar; email_group also sends the usual "schedule updated" email to the group. rota: TNJC, MLJC, Coffee Cleaning or talks.',
     inputSchema: obj({ rota: str, email_group: bool }, ['rota']), run: async (a) => { const r = await api('api_finalise', TOKEN, a.rota, !!a.email_group); changed(); return r; } },
 ];
 
