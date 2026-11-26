@@ -275,7 +275,9 @@ function api_answer_swap_mine(token, code, accept){
 // Cancelling is a last resort: the page offers "Can't make it" (the bot hands it on) and Swap first, and asks
 // for a reason. duty: 'presenter' (a talk: cancel_slot, tea stays) or 'tea' (tea or coffee duty: cancel_tea_duty;
 // a just tea: the whole just tea).
-function api_cancel(token, row_id, reason, duty){
+// announce: 'reason' (default) or 'neutral' (a private reason: the organiser alone gets it)
+function api_cancel(token, row_id, reason, duty, announce){
+  var mode = announce === 'neutral' ? 'neutral' : 'reason';
   var ctx = page_context(token);
   var role = duty === 'tea' ? 'tea' : 'presenter';
   var row = to_row(notion_get_page(row_id, ctx.constants));
@@ -285,11 +287,21 @@ function api_cancel(token, row_id, reason, duty){
   reason = String(reason || '').trim().slice(0, 1000);
   if (reason.length < 10) throw new Error('Please say briefly why it can\'t go ahead and nobody can take over.');
   if (role === 'tea' && row.type !== 'Just Tea'){
-    cancel_tea_duty(row, ctx.me.id, ctx, reason);
-    return 'Cancelled. The organiser has been told, and you will be scheduled again soon.';
+    cancel_tea_duty(row, ctx.me.id, ctx, reason, mode);
+    return 'Cancelled. ' + (is_tentative(row) ? 'The organiser has been told' : 'Everyone it affects has been told') + ', and you keep your turn.';
   }
-  cancel_slot(row, ctx, {source: 'page', by: ctx.me.name, reason: reason});
-  return 'Cancelled. The organiser has been told, and you will be scheduled again soon.';
+  var told = cancel_slot(row, ctx, {source: 'page', by: ctx.me.name, reason: reason, announce: {mode: mode, by: {id: ctx.me.id}}});
+  return 'Cancelled' + (told.announced ? ' and announced to ' + told.announced : '') + '. You keep your turn, so you will be scheduled again soon.';
+}
+
+// what the cancel dialog shows: who hears about it, and the email in both versions
+function api_cancel_preview(token, row_id, duty){
+  var ctx = page_context(token);
+  var role = duty === 'tea' ? 'tea' : 'presenter';
+  var row = to_row(notion_get_page(row_id, ctx.constants));
+  if ((role === 'tea' ? row.tea_ids : row.presenter_ids).indexOf(ctx.me.id) < 0) throw new Error('This is not your duty (any more). Please reload the page.');
+  if (is_tentative(row)) return {to: '', tentative: true};
+  return cancel_preview(row, role === 'tea' && row.type === 'Just Tea' ? 'tea' : role, ctx, {id: ctx.me.id});
 }
 
 function api_cant_make_it(token, row_id, duty){

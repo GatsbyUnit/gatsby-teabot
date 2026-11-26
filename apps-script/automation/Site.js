@@ -750,11 +750,15 @@ function api_site_cancel_slot(token, id, reason, options){
   var mine = String(me && me.email || '').toLowerCase();
   var by_organiser = !!mine && split_list(admin_email_for_type(row.type, ed.constants) || '').some(function(e){ return e.toLowerCase() === mine; });
   var badge = ROYAL_BADGES[ed.rights.royal];
-  var told = cancel_slot(row, ctx, {source: 'site', by: badge ? 'The ' + badge.label : site_name(ed), reason: reason,
-                                    keep_tea: options.keep_tea !== false, email: email, by_organiser: by_organiser});
+  var by = badge ? 'The ' + badge.label : site_name(ed);
+  // announce: 'reason' (default), 'neutral' (the reason to the organiser only) or 'none' (only the people chosen in email)
+  var mode = options.announce === 'neutral' || options.announce === 'none' ? options.announce : 'reason';
+  var told = cancel_slot(row, ctx, {source: 'site', by: by, reason: reason,
+                                    keep_tea: options.keep_tea !== false, email: email, by_organiser: by_organiser,
+                                    announce: {mode: mode, by: {title: by}}});
   site_forget('data');
   log_site_edit(ed, 'cancelled ' + row.type + (options.keep_tea === false ? ' and tea' : '') + ' slot ' + site_date(page.properties['Date'].date.start));
-  return {slot: site_slot(notion_get_page(hyphenate_id(id), ed.constants)), emailed: told.emailed, no_address: told.no_address};
+  return {slot: site_slot(notion_get_page(hyphenate_id(id), ed.constants)), emailed: told.emailed, no_address: told.no_address, announced: told.announced || ''};
 }
 
 // Removes a slot, for slots not needed (bank holidays, closures), together with its calendar event: deleting

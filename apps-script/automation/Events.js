@@ -173,7 +173,11 @@ function swap_done_blocks(row, what, from_name, to_name, undo, turns, taken){
 // Rotas site; both with how.by and how.reason), 'deleted' or 'renamed' (by hand in the calendar). One email to
 // the people on the slot (how.email: only these ids), with the organiser in cc; nobody chosen: the organiser
 // alone, unless they cancelled it themselves (how.by_organiser). Returns {emailed: [names], no_address: [names]}.
+// how.announce {mode: 'reason' | 'neutral', by: {id} or {title}}: a confirmed slot's cancellation is announced to
+// the group instead (Announce.js).
 function cancel_slot(row, ctx, how){
+  var before = Object.assign({}, row, {presenter_ids: row.presenter_ids.slice(), tea_ids: row.tea_ids.slice()});
+  var announce = how.announce && how.announce.mode !== 'none' && !is_tentative(row) ? how.announce : null;
   var just_tea = row.type === 'Just Tea';
   var drop_tea = !just_tea && how.keep_tea === false && row.tea_ids.length > 0;
   var thing = just_tea ? 'just tea' : drop_tea ? 'talk and tea' : 'talk';
@@ -204,6 +208,11 @@ function cancel_slot(row, ctx, how){
   }
 
   var has_address = function(id){ return !!(ctx.people[id] && ctx.people[id].email); };
+  if (announce){
+    log_row(ctx, how.source, row.type, row.start, drop_tea ? 'cancelled talk and tea' : 'cancelled', how.by + ': ' + how.reason + (was ? ' (was: ' + was + ')' : ''));
+    var a = send_cancel_announcement(before, just_tea ? 'tea' : 'presenter', ctx, announce.by, announce.mode, how.reason, {drop_tea: drop_tea});
+    return {emailed: a.to.length ? [a.label] : [], no_address: names_of(on_duty.filter(function(id){ return !has_address(id); }), ctx.people), announced: a.label};
+  }
   var chosen = how.email ? on_duty.filter(function(id){ return how.email.indexOf(id) >= 0; }) : on_duty;
   var to = emails_of(chosen, ctx.people);
   var by_person = how.source === 'page' || how.source === 'site';

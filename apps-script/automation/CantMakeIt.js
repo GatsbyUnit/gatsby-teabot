@@ -119,11 +119,14 @@ function can_cancel(row, ctx, role){
 
 // someone takes themselves off the tea or coffee duty of a slot, nobody in their place (a just tea: the whole
 // just tea is cancelled, as cancel_slot does). They keep their turn. One email to them, the organiser in cc.
-function cancel_tea_duty(row, id, ctx, reason){
+// mode 'reason' | 'neutral': a confirmed slot's cancellation is announced (Announce.js) instead of the email below
+function cancel_tea_duty(row, id, ctx, reason, mode){
   var name = names_of([id], ctx.people)[0];
+  var before = Object.assign({}, row, {presenter_ids: row.presenter_ids.slice(), tea_ids: row.tea_ids.slice()});
   set_duty(row, 'tea', row.tea_ids.filter(function(x){ return x !== id; }), ctx);
   try { uninvite(row, [id], ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
   log_row(ctx, 'page', row.type, row.start, 'cancelled tea duty', name + ': ' + reason);
+  if (mode && mode !== 'none' && !is_tentative(row)){ send_cancel_announcement(before, 'tea', ctx, {id: id}, mode, reason); return; }
   var coffee = row.type === 'Coffee Cleaning';
   var what = coffee ? 'coffee cleaning' : 'tea duty';
   var organiser = admin_email_for_type(row.type, ctx.constants);

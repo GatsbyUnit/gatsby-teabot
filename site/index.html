@@ -73,6 +73,10 @@
   .duty-dialog button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .duty-dialog button:disabled { opacity: .55; cursor: default; }
   .duty-dialog .msg.err { color: var(--alert); }
+  .duty-dialog { max-height: calc(100vh - 2rem); overflow: auto; }
+  .mail-preview { margin-top: .3rem; padding: .7rem .8rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); font-size: .85rem; max-height: 16rem; overflow: auto; }
+  .mail-subject { font-weight: 650; margin-bottom: .4rem; }
+  .mail-body { white-space: pre-wrap; color: var(--text-2); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
   .hidden { display: none !important; }
   /* waiting for the bot: the page stays hidden behind the bar (as on the Rotas site); actions get a small bar */
@@ -160,7 +164,7 @@
   // the usual time, then ever slower. Loading a page hides it behind the bar, as on the Rotas site; an action
   // shows a small bar under its button.
   var TIMES = 'gatsby-tea-times';
-  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…', api_swap_undo_info: 'Getting the swap…', api_takeable: 'Getting the slots…',
+  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…', api_swap_undo_info: 'Getting the swap…', api_takeable: 'Getting the slots…', api_cancel_preview: 'Getting the email…',
                 api_leave_info: 'Getting your details…', api_confirm_email: 'Confirming your address…'};
   function usual(fn){
     try { var t = (JSON.parse(localStorage.getItem(TIMES) || '{}')[fn] || []).slice().sort(function(a, b){ return a - b; }); return t.length ? t[Math.floor(t.length / 2)] : 4000; }
@@ -229,7 +233,7 @@
   }
   // Now and then Google never delivers the bot's answer to one call (the bot was done in seconds; asking again
   // works). Calls that only read are asked again after 15 seconds, twice; changes are never sent twice.
-  var READS = ['api_state', 'api_debug_state', 'api_link_people', 'api_rotas', 'api_leave_info'];
+  var READS = ['api_state', 'api_debug_state', 'api_link_people', 'api_rotas', 'api_leave_info', 'api_takeable', 'api_cancel_preview'];
   // Each attempt also goes to the anonymous diagnostics (telemetry.js): the call's name, time and outcome.
   function track(fn, t0, outcome, attempt, detail){
     if (window.GatsbyTelemetry) window.GatsbyTelemetry.call(fn, Date.now() - t0, outcome, attempt, detail);
@@ -707,31 +711,59 @@
   }
 
   // Cancelling is a last resort: always next to Swap, in red, and it asks first (with a reason and a tick).
+  // Cancelling is a last resort: always next to Swap, in red, and it asks first (a reason and a tick). A confirmed
+  // slot's cancellation is announced to the people it affects: with the reason (default) or, for a private reason,
+  // as a neutral note (the organiser still gets the reason). The dialog shows the email as it will go out.
   function showCancel(d, msg){
     var talk = d.duty === 'presenter';
     var reason = el('textarea', {placeholder: talk ? 'Why can\'t it go ahead, and why can\'t anyone take over?' : 'Why can\'t you do it, and why not hand it on?'});
     var check = el('input', {type: 'checkbox', style: 'width:auto;margin:0 8px 0 0'});
-    var effect = talk
-      ? 'The calendar shows the talk as cancelled and the organiser is told. Tea still goes ahead (just tea). You keep your turn.'
-      : d.duty_label.indexOf('just tea') >= 0 ? 'The just tea is cancelled and the organiser is told. You keep your turn.'
-      : 'Nobody will be on ' + d.duty_label.toLowerCase() + ' then, and the organiser is told. You keep your turn.';
+    var radio = function(value, label, on){
+      var r = el('input', {type: 'radio', name: 'announce', value: value, style: 'width:auto;margin:0 8px 0 0'});
+      r.checked = !!on;
+      return el('label', {style: 'display:flex;align-items:flex-start;color:var(--text);font-size:14px;margin:.3rem 0'}, [r, label]);
+    };
+    var choice = el('div', {class: 'hidden'}, [
+      radio('reason', 'Tell them why (the reason goes into the email)', true),
+      radio('neutral', 'My reason is private: send a neutral note (only the organiser gets the reason)')
+    ]);
+    var who = el('p', {class: 'muted', style: 'margin:.6rem 0 .3rem', text: 'Getting the email that goes out…'});
+    var preview = el('div', {class: 'mail-preview hidden'});
+    var p = null;
+    var mode = function(){ var r = choice.querySelector('input:checked'); return r ? r.value : 'reason'; };
+    var show = function(){
+      if (!p || p.tentative) return;
+      var m = p[mode()], typed = reason.value.trim() || '…';
+      preview.innerHTML = '';
+      preview.appendChild(el('div', {class: 'mail-subject', text: m.subject}));
+      preview.appendChild(el('div', {class: 'mail-body', text: m.text.split(p.mark).join(typed)}));
+    };
     dutyDialog({
       title: '🚨 Cancel ' + (talk ? 'the talk' : 'your ' + d.duty_label.toLowerCase()) + '?',
       alerting: true,
       body: [el('p', {}, [el('strong', {text: 'A cancellation is a gap for everyone. '}), d.can_hand_on
                ? 'Please use "Can\'t make it" instead: the bot finds someone for you.'
                : 'Please try a swap with a colleague first.']),
-             el('p', {class: 'muted', text: d.when + '. ' + effect}),
-             el('label', {text: 'Reason (the organiser sees it)'}), reason,
+             el('p', {class: 'muted', text: d.when + '. You keep your turn.'}),
+             el('label', {text: 'Reason'}), reason, choice, who, preview,
              el('label', {style: 'display:flex;align-items:center;color:var(--text);font-size:14px;margin-top:10px'}, [check, talk ? 'Nobody can take over, so it has to be cancelled.' : 'I really want to cancel it.'])],
       yes: 'Yes, cancel it', no: 'Keep it',
       ready: function(yes){
         yes.disabled = true;
-        var update = function(){ yes.disabled = !(check.checked && reason.value.trim().length >= 10); };
+        var update = function(){ yes.disabled = !(check.checked && reason.value.trim().length >= 10); show(); };
         check.addEventListener('change', update);
         reason.addEventListener('input', update);
+        choice.addEventListener('change', show);
+        call('api_cancel_preview', [TOKEN, d.row_id, d.duty], function(r){
+          p = r;
+          if (r.tentative){ who.textContent = 'Still tentative: only the organiser is told.'; return; }
+          who.textContent = 'This email goes to ' + r.to + (r.cc ? ', with you, the organiser and anyone else on the slot in cc' : '') + ':';
+          choice.classList.remove('hidden');
+          preview.classList.remove('hidden');
+          show();
+        }, who);
       },
-      run: function(done, m, yes){ call('api_cancel', [TOKEN, d.row_id, reason.value, d.duty], function(res){ done(); ok(msg, res); setTimeout(load, 2500); }, m, yes); }
+      run: function(done, m, yes){ call('api_cancel', [TOKEN, d.row_id, reason.value, d.duty, mode()], function(res){ done(); ok(msg, res); setTimeout(load, 2500); }, m, yes); }
     });
   }
 

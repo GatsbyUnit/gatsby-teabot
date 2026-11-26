@@ -46,7 +46,8 @@ function api_take_over(token, row_id, duty, from_id){ return TeaBot.api_take_ove
 function api_swap_undo_info(code){ return TeaBot.api_swap_undo_info(code); }
 function api_undo_swap(code){ return TeaBot.api_undo_swap(code); }
 function api_title(token, row_id, title, description){ return TeaBot.api_title(token, row_id, title, description); }
-function api_cancel(token, row_id, reason, duty){ return TeaBot.api_cancel(token, row_id, reason, duty); }
+function api_cancel(token, row_id, reason, duty, announce){ return TeaBot.api_cancel(token, row_id, reason, duty, announce); }
+function api_cancel_preview(token, row_id, duty){ return TeaBot.api_cancel_preview(token, row_id, duty); }
 function api_cant_make_it(token, row_id, duty){ return TeaBot.api_cant_make_it(token, row_id, duty); }
 function api_add_away(token, from, to, reason){ return TeaBot.api_add_away(token, from, to, reason); }
 function api_remove_away(token, row_number){ return TeaBot.api_remove_away(token, row_number); }

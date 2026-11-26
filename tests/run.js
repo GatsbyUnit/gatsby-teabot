@@ -1498,6 +1498,49 @@ t('cancelling tea duty: off the slot, nobody in their place, one email with the 
   assert.deepStrictEqual(patched[0].Tea.relation, []);
   assert.deepStrictEqual(got, [['lena@x', '🍵 Cancelled: tea duty on ' + fmt_day(soon), 'tsar@x']]);
 });
+function ann_ctx(){ var c = ctx(false); c.constants = {admin_email: 'tsar@x', tnjc_admin_email: 'tnjc@x', unit_wide_email: 'unit@x', tnjc_email: 'tnjclist@x', csnjc_email: 'csnjclist@x', mljc_email: 'mljclist@x', mljc_admin_email: 'mljc@x'};
+  c.settings.auto_rotas = ['talks']; c.cal = {getEventById: () => ({getDateCreated: () => new Date('2026-10-21T12:00:00Z')})}; __props = {'auto:talks': JSON.stringify({since: '2026-10-20'})}; return c; }
+t('cancellation announced: to the group, with the reason, what they could have done and how they knew', () => {
+  var c = ann_ctx(), r = row({type: 'Research Talk', presenter_ids: ['b'], tea_ids: ['a'], start: new Date(Date.now() + 5 * 864e5)});
+  var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'reason', 'my experiment ran over');
+  assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['nikolai@x', 'lena@x', 'tsar@x']]);
+  assert.ok(a.subject.startsWith('🧪 Research talk on ') && a.subject.endsWith(' cancelled by Nikolai Petrov'), a.subject);
+  var text = blocks_to_text(a.blocks);
+  ['Nikolai Petrov has cancelled the research talk', 'Their reason: "my experiment ran over"', 'Tea still happens', 'what Nikolai could have done instead',
+   'by ' + fmt_day(parse_iso_date(handon_deadline(r, 'presenter'))) + ': the bot would have handed it', 'hand it over with Swap',
+   'when they were pencilled in', 'On the shared calendar since Wed 21 Oct 2026', 'Reminder emails to whoever is on duty, two weeks and one week before', 'just a little disappointed']
+    .forEach(x => assert.ok(text.replace(/\\*\\*/g, '').replace(/\\s+/g, ' ').indexOf(x) >= 0, x + ' in: ' + text));
+  assert.ok(!/death|silence|RIP/i.test(text));
+});
+t('cancellation announced, neutral: no reason, no record, the name stays; the organiser gets the reason alone', () => {
+  var c = ann_ctx(), r = row({type: 'Tea Talk', presenter_ids: ['b'], tea_ids: [], start: new Date(Date.now() + 20 * 864e5)});
+  var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter');
+  var text = blocks_to_text(a.blocks);
+  assert.ok(text.indexOf('is cancelled (Nikolai Petrov)') >= 0 && text.indexOf('family matter') < 0 && text.indexOf('could have') < 0, text);
+  var got = [], saved = send_mail; send_mail = function(to, subject, blocks, k, o){ got.push([to, subject, (o || {}).cc, blocks_to_text(blocks)]); };
+  try { send_cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter'); } finally { send_mail = saved; }
+  assert.strictEqual(got.length, 2);
+  assert.ok(got[0][0] === 'unit@x' && got[0][3].indexOf('family matter') < 0);
+  assert.ok(got[1][0] === 'tsar@x' && /^The reason \\(private\\)/.test(got[1][1]) && got[1][3].indexOf('family matter') >= 0);
+});
+t('cancellation announced: tea duty goes to the presenter; CSNJC to its list; a tsar signs with their title and gets no record', () => {
+  var c = ann_ctx();
+  var a = cancel_announcement(row({type: 'Research Talk', presenter_ids: ['b'], tea_ids: ['a'], start: soon}), 'tea', c, {id: 'a'}, 'reason', 'ill that week');
+  assert.deepStrictEqual([a.to, a.cc], [['nikolai@x'], ['lena@x', 'tsar@x']]);
+  assert.ok(a.subject.startsWith('🍵 Tea duty on '), a.subject);
+  assert.ok(blocks_to_text(a.blocks).indexOf('nobody is bringing tea') >= 0);
+  assert.deepStrictEqual(cancel_announcement(row({csnjc: true, start: soon}), 'presenter', c, {id: 'b'}, 'reason', 'x').to, ['csnjclist@x']);
+  var t2 = cancel_announcement(row({start: soon}), 'presenter', c, {title: 'The TNJC Tsar'}, 'reason', 'speaker ill');
+  var text = blocks_to_text(t2.blocks);
+  assert.ok(text.indexOf('The TNJC Tsar has cancelled the TNJC') >= 0 && text.indexOf('could have') < 0 && t2.to[0] === 'tnjclist@x', text);
+  var pv = cancel_preview(row({start: soon}), 'presenter', c, {id: 'b'});
+  assert.ok(pv.to === 'the TNJC list' && pv.reason.text.indexOf(pv.mark) >= 0 && pv.neutral.text.indexOf(pv.mark) < 0);
+});
+t('cancelling a tentative slot is not announced: the old email to the people on it', () => {
+  __props = {}; var e = cev('[TNJC Tentative]'); var c = cctx(e); c.constants.tnjc_email = 'tnjclist@x';
+  var told = cancel_slot(row({title: '[TNJC Tentative]', start: soon}), c, {source: 'page', by: 'Nikolai Petrov', reason: 'away after all', announce: {mode: 'reason', by: {id: 'b'}}});
+  assert.ok(!told.announced && mailed.every(m => m.indexOf('tnjclist@x') < 0), mailed.join('; '));
+});
 t('duty labels say what you do, not the slot type and the duty side by side', () => {
   assert.strictEqual(duty_label(row({type: 'Research Talk'}), 'tea'), 'Tea duty at the research talk');
   assert.strictEqual(duty_label(row({type: 'Research Talk', title: 'Cancelled'}), 'tea'), 'Tea duty (just tea: the talk is cancelled)');

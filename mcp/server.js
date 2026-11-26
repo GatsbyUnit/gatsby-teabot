@@ -181,12 +181,14 @@ const TOOLS = [
   { name: 'cancel_slot', description: 'Tsars: cancel an upcoming talk or just tea of your rota (the presenter asked, or it can\'t happen). The slot stays, titled "Cancelled", without its presenter, who keeps their turn; the calendar shows it as cancelled. By default only the talk is cancelled and tea goes ahead ("just tea"); keep_tea false cancels the tea too (the tea people come off and keep their turn). A just tea slot always loses its tea people. Email: by default everyone on the slot gets one email with the reason (organiser in cc); email lists only those to tell, [] tells nobody on it (the organiser is still told unless that is you). A "Cancelled" title set with save_slot tells nobody, so it is refused for slots with people on them.',
     inputSchema: obj({ id: str, reason: { ...str, description: 'goes into the email, e.g. "Alex can\'t make it, so it is just tea this week"' },
       keep_tea: { ...bool, description: 'talks: true (default) = just tea, only the talk is cancelled; false = the tea is cancelled too' },
-      email: { ...strs, description: 'names or ids of the people on the slot to email; leave out to email all of them, [] for none' } }, ['id', 'reason']),
+      email: { ...strs, description: 'only with announce none: names or ids of the people on the slot to email; leave out to email all of them, [] for none' },
+      announce: { type: 'string', enum: ['reason', 'neutral', 'none'], description: 'confirmed slots: reason (default) = one email to the group (unit-wide list, or the TNJC/CSNJC/MLJC list) with the reason, signed with your title; neutral = without the reason (it goes to the organiser alone); none = no announcement, only the email option' } }, ['id', 'reason']),
     run: async (a) => { const b = await data(); const options = {};
       if (a.keep_tea !== undefined) options.keep_tea = a.keep_tea;
       if (a.email !== undefined) options.email = a.email.map((w) => personId(b, w));
+      if (a.announce !== undefined) options.announce = a.announce;
       const r = await api('api_site_cancel_slot', TOKEN, norm(a.id), a.reason, options); changed();
-      return { slot: slotOut(b, r.slot), emailed: r.emailed, no_address: r.no_address }; } },
+      return { slot: slotOut(b, r.slot), emailed: r.emailed, no_address: r.no_address, announced: r.announced || undefined }; } },
   { name: 'remove_slot', description: 'Tsars: remove a slot that is not needed (bank holiday, closure) together with its calendar event. Nobody but invited guests is told: to tell the people on duty, use cancel_slot instead.',
     inputSchema: obj({ id: str }, ['id']), run: async (a) => { const r = await api('api_site_delete_slot', TOKEN, norm(a.id)); changed(); return r; } },
   { name: 'save_person', description: 'Tsars and unit admins: add a person (tea tsar or unit admin, no id) or change one (id or name: only the fields given change). Organisers can only tick or untick their own rota; the tea tsar and unit admins everything, including the registered email. Newcomers: give position and joined, and leave them exempt from all three duties: the bot adds them when the rota rules say. active=false takes someone off the rotas (leavers); the answer then lists the slots they still hold.',
@@ -245,8 +247,9 @@ const TOOLS = [
     inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] } }, ['slot_id', 'duty']),
     run: async (a) => { const r = await api('api_cant_make_it', TOKEN, norm(a.slot_id), a.duty); changed(); return r; } },
   { name: 'cancel_talk', description: 'Everyone: last resort when nobody can do it: cancels your own upcoming talk (tea stays: just tea) or takes you off your tea or coffee duty with nobody in your place (a just tea: cancelled). You keep your turn; the organiser is told. Prefer cant_make_it or a swap. Confirm with the user first.',
-    inputSchema: obj({ slot_id: str, reason: { ...str, description: 'why it cannot go ahead and nobody can take over' }, duty: { type: 'string', enum: ['presenter', 'tea'], description: 'default presenter' } }, ['slot_id', 'reason']),
-    run: async (a) => { const r = await api('api_cancel', TOKEN, norm(a.slot_id), a.reason, a.duty || 'presenter'); changed(); return r; } },
+    inputSchema: obj({ slot_id: str, reason: { ...str, description: 'why it cannot go ahead and nobody can take over' }, duty: { type: 'string', enum: ['presenter', 'tea'], description: 'default presenter' },
+      announce: { type: 'string', enum: ['reason', 'neutral'], description: 'a confirmed slot\'s cancellation is announced to the people it affects (a talk: the group list): reason (default) includes the reason, what they could have done instead and how they knew in advance; neutral (a private reason) only says it is cancelled and by whom, the reason goes to the organiser alone. Ask the user which.' } }, ['slot_id', 'reason']),
+    run: async (a) => { const r = await api('api_cancel', TOKEN, norm(a.slot_id), a.reason, a.duty || 'presenter', a.announce || 'reason'); changed(); return r; } },
   { name: 'add_away', description: 'Everyone: add dates you are away (you will not be scheduled then).',
     inputSchema: obj({ from: { ...str, description: 'YYYY-MM-DD' }, to: { ...str, description: 'YYYY-MM-DD' }, reason: str }, ['from', 'to']),
     run: async (a) => api('api_add_away', TOKEN, a.from, a.to, a.reason || '') },
