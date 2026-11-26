@@ -46,10 +46,10 @@ function page_url(settings){
 }
 
 // The tea page's address with these parameters. Its address is public (GitHub Pages), so links without a
-// personal code (t, swap, confirm) carry the unit key PAGE_KEY; without it, the page shows nothing.
+// personal code (t, swap, confirm, undo) carry the unit key PAGE_KEY; without it, the page shows nothing.
 function page_link(settings, params){
   params = params || {};
-  var q = settings.PAGE_KEY && !(params.t || params.swap || params.confirm) ? ['k=' + encodeURIComponent(settings.PAGE_KEY)] : [];
+  var q = settings.PAGE_KEY && !(params.t || params.swap || params.confirm || params.undo) ? ['k=' + encodeURIComponent(settings.PAGE_KEY)] : [];
   Object.keys(params).forEach(function(k){ q.push(k + '=' + encodeURIComponent(params[k])); });
   return page_url(settings) + (q.length ? '?' + q.join('&') : '');
 }
@@ -202,6 +202,23 @@ function api_answer_swap(code, accept){
   lock.waitLock(120 * 1000);   // the hourly sync can hold it for a minute or two
   try {
     return answer_swap(code, accept === true, ctx);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// the page opened from the undo link in a "Swap done" email (the code in the link is the only key)
+function api_swap_undo_info(code){
+  var ctx = make_context(get_global_constants(), get_settings());
+  return swap_undo_info(code, ctx);
+}
+
+function api_undo_swap(code){
+  var ctx = make_context(get_global_constants(), get_settings());
+  var lock = LockService.getScriptLock();
+  lock.waitLock(120 * 1000);   // the hourly sync can hold it for a minute or two
+  try {
+    return undo_swap(code, ctx);
   } finally {
     lock.releaseLock();
   }

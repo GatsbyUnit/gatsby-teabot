@@ -84,13 +84,14 @@
 <script src="telemetry.js?v=1" data-page="tea" data-version="tea-1"></script>
 <script>
   // A static page (GitHub Pages); everything on it comes from the tea bot's web app ("Gatsby Tea Page"), which
-  // checks the personal code (t, swap, confirm) or, on the general page, the unit key (k) from the link.
+  // checks the personal code (t, swap, undo, confirm) or, on the general page, the unit key (k) from the link.
   var EXEC_URL = 'https://script.google.com/macros/s/AKfycbxjB4wiJ-jluRobucTdMruvxRofOwb1TXVIxgIe_vnPr06t2gg3hybxrV8Rmfp9Ufmx/exec';
   var QUERY = new URLSearchParams(location.search);
   function param(name, re){ var v = QUERY.get(name) || ''; return re.test(v) ? v : ''; }
   var TOKEN = param('t', /^[0-9a-f]{40}$/);
   var CONFIRM = param('confirm', /^[0-9a-f]{32}$/);
   var SWAP = param('swap', /^[0-9a-f]{32}$/);
+  var UNDO = param('undo', /^[0-9a-f]{32}$/);
   var LEAVE = QUERY.get('leave') ? '1' : '';
   var KEY = param('k', /^[\w-]{6,64}$/);
   // the tea tsar's (and the bot account's) read-only debug view of someone's page: ?as=<person id>
@@ -120,7 +121,7 @@
   // the usual time, then ever slower. Loading a page hides it behind the bar, as on the Rotas site; an action
   // shows a small bar under its button.
   var TIMES = 'gatsby-tea-times';
-  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…',
+  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…', api_swap_undo_info: 'Getting the swap…',
                 api_leave_info: 'Getting your details…', api_confirm_email: 'Confirming your address…'};
   function usual(fn){
     try { var t = (JSON.parse(localStorage.getItem(TIMES) || '{}')[fn] || []).slice().sort(function(a, b){ return a - b; }); return t.length ? t[Math.floor(t.length / 2)] : 4000; }
@@ -261,6 +262,26 @@
         el('div', {class: 'when', text: r.when}),
         r.title ? el('div', {class: 'title', text: r.title}) : null,
         el('div', {class: 'row', style: 'margin-top:12px'}, [yes, no])
+      ]), msg);
+    }, msg);
+  }
+
+  // ---- undoing a swap (link in the "Swap done" email; undoing takes a click, as mail scanners open links) ----
+  function renderUndo(){
+    app.innerHTML = '';
+    app.appendChild(el('h1', {text: 'Undo a swap'}));
+    var msg = el('div', {class: 'msg'});
+    app.appendChild(msg);
+    call('api_swap_undo_info', [UNDO], function(r){
+      msg.className = 'msg'; msg.textContent = '';
+      var yes = el('button', {class: 'primary', text: 'Undo: give it back to ' + r.from});
+      yes.addEventListener('click', function(){ call('api_undo_swap', [UNDO], function(res){ yes.disabled = true; ok(msg, res); }, msg, yes); });
+      app.insertBefore(el('div', {class: 'card'}, [
+        el('p', {}, [el('strong', {text: r.from}), ' handed their ' + r.what + ' to ', el('strong', {text: r.to}), '.']),
+        el('div', {class: 'when', text: r.when}),
+        r.title ? el('div', {class: 'title', text: r.title}) : null,
+        el('p', {class: 'muted', text: 'Undoing puts ' + r.from + ' back on the slot. You both get an email.'}),
+        el('div', {class: 'row', style: 'margin-top:12px'}, [yes])
       ]), msg);
     }, msg);
   }
@@ -571,7 +592,7 @@
       if (!sel.value){ msg.className = 'msg err'; msg.textContent = 'Please choose a person.'; return; }
       call('api_swap', [TOKEN, d.row_id, d.duty, sel.value], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, btn);
     });
-    panel.appendChild(el('p', {class: 'muted', text: 'They get an email to accept. Nothing changes until they do; if they have not answered after a day, you get a reminder. A slot less than a day away is swapped straight away.'}));
+    panel.appendChild(el('p', {class: 'muted', text: 'Please agree it with them first: the swap goes through straight away. You both get an email, with a link to undo it in case it was a mistake.'}));
     panel.appendChild(sel);
     panel.appendChild(note);
     panel.appendChild(el('div', {class: 'row', style: 'margin-top:8px'}, [btn, el('button', {text: 'Cancel', onclick: function(){ panel.classList.add('hidden'); }})]));
@@ -747,9 +768,10 @@
     .catch(function(){});
 
   function route(){
-    var view = AS ? 'debug' : SWAP ? 'swap' : CONFIRM ? 'confirm' : LEAVE ? 'leave' : (TOKEN || (!LEAVE && remembered())) ? 'personal' : KEY ? 'landing' : 'no-key';
+    var view = AS ? 'debug' : UNDO ? 'undo' : SWAP ? 'swap' : CONFIRM ? 'confirm' : LEAVE ? 'leave' : (TOKEN || (!LEAVE && remembered())) ? 'personal' : KEY ? 'landing' : 'no-key';
     if (window.GatsbyTelemetry){ window.GatsbyTelemetry.signedIn(TOKEN || remembered() ? 'member' : 'no'); window.GatsbyTelemetry.view(view); }
     if (AS) renderDebug();
+    else if (UNDO) renderUndo();
     else if (SWAP) renderSwapAnswer();
     else if (CONFIRM) renderConfirm();
     else if (LEAVE && TOKEN) renderLeave();

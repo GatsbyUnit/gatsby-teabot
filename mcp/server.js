@@ -143,7 +143,7 @@ const TOOLS = [
       if (r.rules) can.push('edit the rota rules');
       if (r.access) can.push('decide who else may use the site (site_access: readers and unit admins)');
       return { name: me?.name, id: r.person, tea_tsar: !!r.tea_tsar, unit_admin: !!r.unit_admin, can }; } },
-  { name: 'my_tea_page', description: "Everyone: your own tea page: your upcoming duties (with each slot's id), swap requests to you and from you, away dates, and the organiser tools you have (rotas you can plan, with the next dates to plan).",
+  { name: 'my_tea_page', description: "Everyone: your own tea page: your upcoming duties (with each slot's id), swap requests to you and from you (only ones made before swaps went through at once), away dates, and the organiser tools you have (rotas you can plan, with the next dates to plan).",
     inputSchema: obj({}), run: async () => { const s = await api('api_state', TOKEN); const who = Object.fromEntries((s.people || []).map((p) => [p.id, p.name]));
       (s.duties || []).forEach((d) => { d.usual = (d.usual || []).map((id) => who[id] || id); });  // who usually does this duty: the people to ask for a swap
       delete s.people; delete s.badge; return s; } },
@@ -228,10 +228,10 @@ const TOOLS = [
   { name: 'set_talk_title', description: 'Everyone: set the title and description (abstract, paper link, speaker bio) of any upcoming talk, not only your own (the calendar and the reminder emails show them). Not for tentative or cancelled slots. slot_id from schedule or my_tea_page.',
     inputSchema: obj({ slot_id: str, title: str, description: str }, ['slot_id', 'title']),
     run: async (a) => { const r = await api('api_title', TOKEN, norm(a.slot_id), a.title, a.description || ''); changed(); return r; } },
-  { name: 'ask_swap', description: 'Everyone: ask someone to take over one of your duties (my_tea_page lists who usually does it) (they accept or decline by email or on their tea page; less than a day before the slot it goes through at once).',
+  { name: 'ask_swap', description: 'Everyone: hand one of your duties to someone (my_tea_page lists who usually does it). Agree it with them first: it goes through at once, and you both get an email with a link to undo it.',
     inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] }, to: { ...str, description: 'name or id' } }, ['slot_id', 'duty', 'to']),
     run: async (a) => { const b = await data(); const r = await api('api_swap', TOKEN, norm(a.slot_id), a.duty, personId(b, a.to)); changed(); return r; } },
-  { name: 'answer_swap', description: 'Everyone: accept or decline a swap request made to you (code from my_tea_page, "incoming").',
+  { name: 'answer_swap', description: 'Everyone: accept or decline an old swap request made to you (code from my_tea_page, "incoming").',
     inputSchema: obj({ code: str, accept: bool }, ['code', 'accept']), run: async (a) => { const r = await api('api_answer_swap_mine', TOKEN, a.code, a.accept); changed(); return r; } },
   { name: 'withdraw_swap', description: 'Everyone: withdraw a swap request you made (code from my_tea_page, a duty\'s "pending").',
     inputSchema: obj({ code: str }, ['code']), run: async (a) => { const r = await api('api_withdraw_swap', TOKEN, a.code); changed(); return r; } },
