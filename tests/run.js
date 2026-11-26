@@ -1332,8 +1332,8 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.mails.map(m => m.to).sort(), ['an@x', 'bo@x', 'cy@x', 'di@x', 'org@x']);
   var an = W.to('an@x')[0], cy = W.to('cy@x')[0];
   assert.strictEqual(an.subject, '🤖 You are presenting at MLJC on Mon 30 Nov 2026');
-  assert.ok(an.text.indexOf('hand it over with Swap') >= 0 && an.text.indexOf('Press Can') < 0, an.text);
-  assert.ok(cy.text.indexOf("make it on your tea page by Mon 30 Nov 2026") >= 0, cy.text);
+  assert.ok(an.text.indexOf('make it on your tea page by Fri 20 Nov 2026') >= 0, an.text);
+  assert.ok(cy.text.indexOf("make it on your tea page by Fri 4 Dec 2026") >= 0, cy.text);
   assert.ok(cy.text.indexOf('It goes on the calendar on Mon 23 Nov 2026.') >= 0 && cy.text.indexOf('https://page/?t=cy') >= 0);
   assert.strictEqual(W.to('org@x')[0].subject, 'MLJC: next slots planned, on the calendar on Mon 23 Nov 2026');
 
@@ -1345,7 +1345,7 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.on('2026-12-21').presenter_ids, ['an']);
   assert.strictEqual(W.to('di@x')[0].subject, '🤖 Handed on: presenting at MLJC on Mon 21 Dec 2026');
   var take = W.to('an@x')[0];
-  assert.ok(take.text.indexOf('You take over from Di,') >= 0 && take.text.indexOf('your tea page by Mon 7 Dec 2026') >= 0, take.text);
+  assert.ok(take.text.indexOf('You take over from Di,') >= 0 && take.text.indexOf('your tea page by Fri 11 Dec 2026') >= 0, take.text);
   assert.ok(W.mails.some(m => m.to === 'org@x' && m.subject === 'MLJC: slots handed on because of away dates' && m.text.indexOf('Di → An') >= 0));
   assert.deepStrictEqual(W.fin, ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21']);
   assert.strictEqual(W.to('an@x').length, 1, 'nobody is told twice');
@@ -1447,7 +1447,7 @@ ap_t('away dates on the tea page: which of your slots the bot hands on, which ta
   assert.strictEqual(away_clash_note('bo', parse_iso_date('2026-12-01'), parse_iso_date('2027-01-10'), w.c), '');
 });
 ap_t('can\\'t make it: the next person in line takes over, passes on down the queue and never back, undo, nobody free, too close', () => {
-  var w = ap_world({rows: [ap_row('s', 'MLJC', '2027-01-11T13:30:00Z', ['cy']), ap_row('near', 'MLJC', '2026-12-07T13:30:00Z', ['di'])]}), W = w.W, c = w.c;
+  var w = ap_world({rows: [ap_row('s', 'MLJC', '2027-01-11T13:30:00Z', ['cy']), ap_row('near', 'MLJC', '2026-11-30T13:30:00Z', ['di'])]}), W = w.W, c = w.c;
   c.settings.PAGE_URL = 'https://page'; __props = {};
   var uuid = Utilities.getUuid; Utilities.getUuid = () => require_crypto.randomUUID();
   try {
@@ -1475,7 +1475,7 @@ ap_t('can\\'t make it: the next person in line takes over, passes on down the qu
     var code = swap_undos().filter(u => u.from === 'cy')[0].code;
     assert.throws(() => undo_swap(code, c), /changed since/, 'an handed it on since, so the undo no longer applies');
   } finally { to_row = saved[0]; notion_get_page = saved[1]; }
-  assert.throws(() => hand_on(find('near'), 'presenter', 'di', c), /less than two weeks away/);
+  assert.throws(() => hand_on(find('near'), 'presenter', 'di', c), /less than 10 days away/);
   assert.throws(() => hand_on(find('s'), 'presenter', 'cy', c), /not your duty/);
   } finally { Utilities.getUuid = uuid; }
 });
@@ -1584,22 +1584,19 @@ t('cancelling your own duty is tentative until the rota\\'s tsar signs it off; t
     assert.ok(!__props['cancelreq:old']);
   } finally { identity_rows = saved[0]; to_row = saved[1]; notion_get_page = saved[2]; send_mail = saved[3]; }
 });
-t('cancellation league: only with enough data; noisy rank rounded to 10%', () => {
+t('cancellation league: only with enough data; rank rounded up to 10%', () => {
   var c = ctx(false); c.people = {};
   for (var i = 0; i < 20; i++) c.people['p' + i] = {id: 'p' + i, name: 'Person' + i + ' X', active: true};
   var day = 864e5, today = fmt_iso_date(start_of_today());
   __props = {cancelcount: JSON.stringify({since: today, counts: {p0: 5, p1: 2}, total: 12})};
-  assert.strictEqual(cancel_rank('p0', c, () => 0.5), 0, 'counting for less than 90 days');
+  assert.strictEqual(cancel_rank('p0', c), 0, 'counting for less than 90 days');
   var since = fmt_iso_date(new Date(start_of_today().getTime() - 100 * day));
   __props = {cancelcount: JSON.stringify({since: since, counts: {p0: 5, p1: 2}, total: 4})};
-  assert.strictEqual(cancel_rank('p0', c, () => 0.5), 0, 'fewer than 10 cancellations counted');
+  assert.strictEqual(cancel_rank('p0', c), 0, 'fewer than 10 cancellations counted');
   __props = {cancelcount: JSON.stringify({since: since, counts: {p0: 5, p1: 2, p2: 1, p3: 1, p4: 1}, total: 10})};
-  assert.strictEqual(cancel_rank('p0', c, () => 0.5), 10, 'no noise: the most cancellations is the top 10%');
-  assert.strictEqual(cancel_rank('p1', c, () => 0.5), 10);
-  assert.strictEqual(cancel_rank('p2', c, () => 0.5), 20);
-  assert.ok(/top 10%\\*\\* of the Unit's cancellers/.test(cancel_rank_line('p0', c, false, () => 0.5)));
-  var ranks = {}; for (var k = 0; k < 200; k++) ranks[cancel_rank('p9', c)] = true;
-  assert.ok(Object.keys(ranks).length > 1 && Object.keys(ranks).every(r => r % 10 === 0), 'noisy, in 10% steps');
+  assert.deepStrictEqual(['p0', 'p1', 'p2', 'p9'].map(p => cancel_rank(p, c)), [10, 10, 20, 30]);
+  var line = cancel_rank_line('p0', c);
+  assert.ok(line.indexOf("top 10%** of the Unit's cancellers") >= 0 && !/privacy|noise/.test(line), line);
 });
 t('duty labels say what you do, not the slot type and the duty side by side', () => {
   assert.strictEqual(duty_label(row({type: 'Research Talk'}), 'tea'), 'Tea duty at the research talk');
@@ -1665,6 +1662,20 @@ const reCopies = ['apps-script/automation/Schedule.js', 'apps-script/cron-jobs/U
 const reBad = reCopies.filter(([, re]) => !re || re !== reCopies[0][1]).map(([f]) => f);
 console.log((reBad.length ? 'FAIL' : 'ok  ') + ' cancelled-title pattern: the same in bot, Cron Jobs, site and MCP' + (reBad.length ? ' (differs: ' + reBad + ')' : ''));
 if (reBad.length) process.exitCode = 1;
+// the reminders' "Can't make it" line: until the cut-off the button, after it a swap
+const tpl = vm.createContext({Logger: {log: () => {}}, Utilities: {formatDate: (d) => d.toDateString()}});
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'cron-jobs', 'TeaPageLink.js'), 'utf8'), tpl);
+const inDays = (n) => { const d = new Date(); d.setHours(15, 0, 0, 0); d.setDate(d.getDate() + n); return d; };
+const tplOk = /by .*: the bot hands it/.test(tpl.cant_make_it_line(inDays(14), 'presenter')) && /by /.test(tpl.cant_make_it_line(inDays(10), 'presenter'))
+  && /Agree a swap/.test(tpl.cant_make_it_line(inDays(7), 'presenter')) && /by /.test(tpl.cant_make_it_line(inDays(7), 'tea')) && /Agree a swap/.test(tpl.cant_make_it_line(inDays(2), 'tea'));
+console.log((tplOk ? 'ok  ' : 'FAIL') + " reminders: Can't make it after the two-week reminder (talks) and the one-week one (tea), a swap after the cut-off");
+if (!tplOk) process.exitCode = 1;
+// "Can't make it" cut-offs: the same in the automation and in the Cron Jobs' reminders
+const hoCopies = ['apps-script/automation/CantMakeIt.js', 'apps-script/cron-jobs/TeaPageLink.js']
+  .map(f => [f, (fs.readFileSync(path.join(__dirname, '..', f), 'utf8').match(/HANDON_DAYS = (\{[^}]+\});/) || [])[1]]);
+const hoBad = hoCopies.filter(([, m]) => !m || m !== hoCopies[0][1]).map(([f]) => f);
+console.log((hoBad.length ? 'FAIL' : 'ok  ') + " can't-make-it cut-offs: the same in the bot and the reminders" + (hoBad.length ? ' (differs: ' + hoBad + ')' : ''));
+if (hoBad.length) process.exitCode = 1;
 // one emoji per kind of slot: the same in the bot's emails, on the site and on the tea page
 const emCopies = ['apps-script/automation/Schedule.js', 'site/rotas/app.js', 'site/index.html']
   .map(f => [f, (fs.readFileSync(path.join(__dirname, '..', f), 'utf8').match(/const TYPE_EMOJI = (\{.+\});/) || [])[1]]);

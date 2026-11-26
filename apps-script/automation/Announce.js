@@ -184,7 +184,7 @@ function request_cancellation(row, role, me_id, reason, mode, ctx){
   var what = slot_word(row, role);
   var slot = fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type;
   var organiser = admin_email_for_type(row.type, ctx.constants);
-  var a = cancel_announcement(row, role, ctx, {id: me_id, signed: signer}, mode, reason, {rank: mode === 'reason' ? cancel_rank_line(me_id, ctx, true) : ''});
+  var a = cancel_announcement(row, role, ctx, {id: me_id, signed: signer}, mode, reason, {rank: mode === 'reason' ? cancel_rank_line(me_id, ctx) : ''});
   if (organiser) send_mail(organiser, with_emoji(row, role, 'To sign off: ' + name + ' wants to cancel the ' + what + ' on ' + fmt_day(row.start)), [
     '**' + name + '** wants to cancel the ' + what + ':',
     {table: [['Slot', slot], ['Reason', reason], ['Announcement', mode === 'neutral' ? 'neutral (the reason stays with you)' : 'with the reason']]},
@@ -220,7 +220,7 @@ function cancel_request_check(code, ctx){
 // what the sign-off page shows
 function cancel_request_info(code, ctx){
   var c = cancel_request_check(code, ctx), req = c.req, row = c.row;
-  var a = cancel_announcement(row, req.role, ctx, {id: req.from, signed: cancel_signer(row, ctx)}, req.mode, req.reason, {rank: req.mode === 'reason' ? cancel_rank_line(req.from, ctx, true) : ''});
+  var a = cancel_announcement(row, req.role, ctx, {id: req.from, signed: cancel_signer(row, ctx)}, req.mode, req.reason, {rank: req.mode === 'reason' ? cancel_rank_line(req.from, ctx) : ''});
   return {who: mail_name(req.from, ctx.people), what: slot_word(row, req.role), when: fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)),
           type: row.type, reason: req.reason, mode: req.mode, signer: cancel_signer(row, ctx), to: a.label, subject: a.subject, text: blocks_to_text(a.blocks)};
 }
@@ -270,15 +270,13 @@ function prune_cancel_requests(now){
   cancel_requests().forEach(function(r){ if (r.start <= now) drop_cancel_request(r.code); });
 }
 
-// ---- the cancellation league: where someone ranks, with differential privacy ----
+// ---- the cancellation league: where someone ranks ----
 // Signed-off cancellations of one's own duties are counted per person from CANCEL_COUNT_KEY's `since` on. The
-// announcement says where the person now ranks among the active members, as "top N%": each count gets Laplace
-// noise (scale 1 / CANCEL_DP_EPSILON) before ranking, and N is rounded up to a multiple of 10, so no single
-// announcement gives away anyone's exact count. Only once there is enough data: CANCEL_RANK_MIN_DAYS since
-// counting began and CANCEL_RANK_MIN_TOTAL cancellations counted.
+// announcement says where the person now ranks among the active members, as "top N%" (N rounded up to a multiple
+// of 10: only the top 10% if nobody has cancelled more). Only once there is enough data: CANCEL_RANK_MIN_DAYS
+// since counting began and CANCEL_RANK_MIN_TOTAL cancellations counted.
 
 const CANCEL_COUNT_KEY = 'cancelcount';
-const CANCEL_DP_EPSILON = 1;
 const CANCEL_RANK_MIN_DAYS = 90;
 const CANCEL_RANK_MIN_TOTAL = 10;
 
@@ -299,32 +297,25 @@ function count_cancellation(id){
   PropertiesService.getScriptProperties().setProperty(CANCEL_COUNT_KEY, JSON.stringify(st));
 }
 
-function laplace(scale, rnd){
-  var u = (rnd || Math.random)() - 0.5;
-  return -scale * (u < 0 ? -1 : 1) * Math.log(1 - 2 * Math.abs(u));
-}
-
-// "top N%" for this person among the active members (noisy, rounded up to 10%), or 0 before there is enough data;
-// rnd: a random source (tests)
-function cancel_rank(id, ctx, rnd){
+// "top N%" for this person among the active members, or 0 before there is enough data
+function cancel_rank(id, ctx){
   var st = load_cancel_counts();
   var days = (start_of_today().getTime() - parse_iso_date(st.since).getTime()) / 864e5;
   if (days < CANCEL_RANK_MIN_DAYS || (st.total || 0) < CANCEL_RANK_MIN_TOTAL) return 0;
   var ids = Object.keys(ctx.people).filter(function(p){ return ctx.people[p].active; });
   if (ids.indexOf(id) < 0) ids.push(id);
   if (ids.length < 10) return 0;
-  var noisy = {};
-  ids.forEach(function(p){ noisy[p] = (st.counts[p] || 0) + laplace(1 / CANCEL_DP_EPSILON, rnd); });
-  var above = ids.filter(function(p){ return p !== id && noisy[p] > noisy[id]; }).length;   // others who cancel more
+  var mine = st.counts[id] || 0;
+  var above = ids.filter(function(p){ return p !== id && (st.counts[p] || 0) > mine; }).length;   // others who cancelled more
   return Math.min(100, Math.max(10, Math.ceil(100 * (above + 1) / ids.length / 10) * 10));
 }
 
-// the line for the announcement ('' before there is enough data); preview: for the tsar's sign-off page
-function cancel_rank_line(id, ctx, preview, rnd){
-  var top = cancel_rank(id, ctx, rnd);
+// the line for the announcement ('' before there is enough data)
+function cancel_rank_line(id, ctx){
+  var top = cancel_rank(id, ctx);
   if (!top) return '';
   var name = mail_name(id, ctx.people);
   var since = fmt_day(parse_iso_date(load_cancel_counts().since));
   return '📊 Cancellation league: ' + name + ' now ranks in the **top ' + top + '%** of the Unit\'s cancellers' + (top > 50 ? ' (still the more reliable half)' : '') +
-    ' (counted since ' + since + '; rounded to 10%, with differential-privacy noise' + (preview ? ', drawn again when it goes out' : '') + ').';
+    ' (cancellations counted since ' + since + ').';
 }

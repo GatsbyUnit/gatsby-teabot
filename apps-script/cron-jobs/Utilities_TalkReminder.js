@@ -281,7 +281,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
             "Time: " + talk_start_time + " - " + talk_end_time + ", " + talk_date_string + "\n" +
             "Presenter: " + presenter_names.join(", ") + "\n" +
             "Tea: " + tea_people_names.join(", ") + "\n" +
-            "Zoom Link: " + gatsby_zoom_link + "\n=============\n\n" + tea_page_line(email_list), constants, admin_email );
+            "Zoom Link: " + gatsby_zoom_link + "\n=============\n\n" + cant_make_it_line(talk_date, 'tea') + tea_page_line(email_list), constants, admin_email );
         } 
       }
 
@@ -315,7 +315,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
             "Zoom Link: " + gatsby_zoom_link + "\n" +
             "Description: " + talk_description + "\n=============\n\n" +
             "⏰ Research talks start at 3pm and should be kept to **50 minutes including audience questions** \n⏱️ Tea talks start at 3:30pm and should be kept to **15 minutes including audience questions** \n\n" +
-            "Please update your talk title and description (include paper url wherever relevant) on your tea page if you haven't already done so. They will be made available on the Google Calendar and sent out with the reminder email on the day of the presentation. For journal club presenters, it is *important* for you to include the paper url in advance." + "\n\n" + tea_page_line(email_list), constants, replyto_email );
+            "Please update your talk title and description (include paper url wherever relevant) on your tea page if you haven't already done so. They will be made available on the Google Calendar and sent out with the reminder email on the day of the presentation. For journal club presenters, it is *important* for you to include the paper url in advance." + "\n\n" + cant_make_it_line(talk_date, 'presenter') + tea_page_line(email_list), constants, replyto_email );
         }
       }
     }
@@ -347,7 +347,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
             "This is a reminder for your coffee cleaning duty. " + wed_special_text + "\n\n=============\n\n" +
             "Week: " + talk_start_date + " - " + talk_end_date + ", i.e. " + talk_date_name + "\n" +
             "In-charge: " + tea_people_names.join(", ") + "\n" +
-            "Duty description: " + talk_description + "\n=============\n\n" + tea_page_line(email_list), constants, admin_email_coffee);
+            "Duty description: " + talk_description + "\n=============\n\n" + cant_make_it_line(talk_date, 'tea') + tea_page_line(email_list), constants, admin_email_coffee);
         }
       }
     }

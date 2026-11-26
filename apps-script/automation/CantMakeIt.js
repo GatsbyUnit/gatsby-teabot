@@ -1,13 +1,14 @@
-// "Can't make it" on the tea page: the normal way to get out of a duty. Far enough ahead (HANDON_DAYS: two weeks
-// for a talk, so the next person can prepare; three days for tea and coffee duty), the bot hands the duty to the
-// next free person in line by the scheduling rules (fairness queue, away dates, nobody presenting within a week of
+// "Can't make it" on the tea page: the normal way to get out of a duty. Far enough ahead (HANDON_DAYS: ten days
+// for a talk, so the next person can prepare; three days for tea and coffee duty; both after the two-week reminder
+// email, which says until when, as do the later reminders: Cron Jobs TeaPageLink.js, same HANDON_DAYS, tests check),
+// the bot hands the duty to the next free person in line by the scheduling rules (fairness queue, away dates, nobody presenting within a week of
 // it, nobody already on the slot), straight away. The one who handed it on keeps their turn; the new person's
 // counts. Both are emailed; the one who handed it on gets a link to undo it. The new person can press "Can't make
 // it" too: the duty passes on down the queue and never back to anyone who passed it on (Script Properties
 // passed:<slot id>|<duty>, until the slot is over). Nobody free: nothing changes, the person and the organiser
 // are told. Closer than that: swap with a colleague, or cancel as a last resort.
 
-const HANDON_DAYS = {presenter: 14, tea: 3};
+const HANDON_DAYS = {presenter: 10, tea: 3};
 const PASSED_PREFIX = 'passed:';
 
 // the last day on which "Can't make it" still hands this duty on (yyyy-MM-dd)
@@ -69,7 +70,7 @@ function hand_on(row, role, from_id, ctx){
   if (!is_live(ctx, row.type)) throw new Error('The tea bot does not look after ' + row.type + ' yet. Please ask the organiser.');
   var today = fmt_iso_date(start_of_today());
   if (!can_hand_on(row, role, today)){
-    throw new Error('This is less than ' + (role === 'tea' ? HANDON_DAYS.tea + ' days' : 'two weeks') + ' away, too close for the bot to hand it on. Please agree it with a colleague and hand it over with Swap, or cancel as a last resort.');
+    throw new Error('This is less than ' + HANDON_DAYS[role === 'tea' ? 'tea' : 'presenter'] + ' days' + ' away, too close for the bot to hand it on. Please agree it with a colleague and hand it over with Swap, or cancel as a last resort.');
   }
   var rota = rota_of_type(row.type);
   var past = sched_past(rota, row.start, row.start, [row.id], ctx);

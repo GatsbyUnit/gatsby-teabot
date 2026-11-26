@@ -41,3 +41,25 @@ function tea_page_line(emails){
     return '';
   }
 }
+
+// Added 2026-11: the "Can't make it" line for reminders. Until HANDON_DAYS before the slot, "Can't make it" on the
+// tea page hands the duty to the next person in line (the automation's CantMakeIt.js, same numbers; tests check),
+// so the two-week reminder still leaves time for it; later reminders point to a swap. role: 'presenter' or 'tea'
+// (tea and coffee duty).
+var HANDON_DAYS = {presenter: 10, tea: 3};
+
+function cant_make_it_line(talk_date, role){
+  try {
+    var last = new Date(talk_date.getFullYear(), talk_date.getMonth(), talk_date.getDate() - HANDON_DAYS[role === 'tea' ? 'tea' : 'presenter']);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (today.getTime() <= last.getTime()){
+      return "Can't make it? Press \"Can't make it\" on your tea page by " + Utilities.formatDate(last, 'Europe/London', 'EEE d MMM') +
+        ": the bot hands it to the next person in line, and you keep your turn. After that, agree a swap with a colleague.\n\n";
+    }
+    return "Can't make it? Agree a swap with a colleague and hand it over on your tea page.\n\n";
+  } catch (e) {
+    Logger.log('cant_make_it_line: ' + e);
+    return '';
+  }
+}
