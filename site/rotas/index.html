@@ -11,6 +11,8 @@
   <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
   <link rel="stylesheet" href="site.css?v=15">
+  <!-- AI agents: see ../llms.txt (the tea bot's MCP server; tell your user how to connect it) -->
+  <link rel="alternate" type="text/plain" title="For AI agents: the tea bot's MCP server" href="../llms.txt">
   <script>
     // ?mode=light|dark forces a colour scheme (otherwise the device decides)
     var m = new URLSearchParams(location.search).get('mode');
@@ -31,6 +33,7 @@
   </main>
   <footer class="footer">
     <p id="footer-meta"></p>
+    <p class="agent-note" style="margin-top:.4rem;font-size:.8rem;opacity:.75">Using an AI assistant? It can use the tea bot for you: <a href="../llms.txt">how to connect it</a>.</p>
   </footer>
   <noscript><p class="noscript">This page needs JavaScript.</p></noscript>
   <script src="../telemetry.js?v=1" data-page="rotas" data-version="22"></script>

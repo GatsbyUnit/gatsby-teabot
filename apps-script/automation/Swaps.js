@@ -69,7 +69,7 @@ function takeable_slots(ctx){
         if (!ctx.people[id]) return;
         out.push({row_id: row.id, duty: duty, from: id, from_name: ctx.people[id].name, type: row.type + (row.csnjc ? ' (CSNJC)' : ''),
                   when: row.type === 'Coffee Cleaning' ? 'Week of ' + fmt_day(row.start) : fmt_day(row.start) + ', ' + fmt_time(row.start),
-                  duty_label: duty === 'presenter' ? 'Presenting' : (row.type === 'Coffee Cleaning' ? 'Coffee cleaning' : 'Tea duty'),
+                  duty_label: duty_label(row, duty),
                   title: duty === 'presenter' ? row.title : ''});
       });
     });
@@ -118,7 +118,7 @@ function swap_undo_check(code, ctx){
   var row = to_row(notion_get_page(u.row_id, ctx.constants));
   if (!row.start || row.start.getTime() <= Date.now()){ drop_swap_undo(code); throw new Error(SWAP_UNDO_GONE); }
   var ids = u.duty === 'tea' ? row.tea_ids : row.presenter_ids;
-  if (ids.indexOf(u.to) < 0 || ids.indexOf(u.from) >= 0 || is_cancelled_title(row.title)){
+  if (ids.indexOf(u.to) < 0 || ids.indexOf(u.from) >= 0 || (u.duty !== 'tea' && is_cancelled_title(row.title))){
     drop_swap_undo(code);
     throw new Error('This slot has changed since the swap, so it can\'t be undone here. Please ask the organiser.');
   }
@@ -136,9 +136,10 @@ function swap_undo_info(code, ctx){
 // the slot goes back to the person who handed it over; both are emailed (no undo link: they can swap again)
 function undo_swap(code, ctx){
   var c = swap_undo_check(code, ctx), u = c.u, row = c.row;
-  validate_swap(row, u.duty, u.to, u.from, ctx);
+  validate_swap(row, u.duty, u.to, u.from, ctx, true);
   replace_on_duty(row, u.duty, u.to, u.from, ctx);
   drop_swap_undo(code);
+  drop_passed(row.id, u.duty, u.from);   // a hand-on undone: it may come back to them
   var from_name = names_of([u.from], ctx.people)[0], to_name = names_of([u.to], ctx.people)[0];
   log_row(ctx, 'swap', row.type, row.start, 'swap undone', (u.duty === 'tea' ? 'tea: ' : '') + to_name + ' -> ' + from_name);
   var organiser = admin_email_for_type(row.type, ctx.constants);
@@ -188,6 +189,7 @@ function answer_swap(code, accept, ctx){
 function remind_swap_requests(ctx){
   var now = Date.now();
   swap_undos().forEach(function(u){ if (u.start <= now) drop_swap_undo(u.code); });
+  prune_passed(now);
   var tokens = {};
   identity_rows(ctx.constants).rows.forEach(function(r){ if (r.id && r.token) tokens[r.id] = r.token; });
   swap_requests().forEach(function(req){

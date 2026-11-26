@@ -79,13 +79,17 @@ Useful from the Apps Script editor:
 ## Agents (MCP)
 `mcp/server.js` lets an AI agent (Claude Code, Claude Desktop, …) use the tea bot the way a person uses the tea page
 and the Rotas site. Everyone: read the schedule, people, rota rules and pages; see their own duties and who usually
-does them; ask for, answer and withdraw swaps; set talk titles; cancel a talk; add and remove away dates; change
+does them; "can't make it" (the bot hands a duty to the next person in line); swap or take over a slot; set talk titles; cancel a duty; add and remove away dates; change
 their photo (from a picture file; needs macOS or ImageMagick) and email; leave the tea system. Tsars and organisers
 also: add, change, cancel (with an email to the people on duty) and remove slots; change people and rota rules; edit pages; plan, fill and finalise a rota. It
 acts as the person whose personal tea-page code it is given and may do exactly what they may do; the bot logs every
 change under their name. Nothing to install (Node 18 or later), nothing to host:
 
-    claude mcp add -s user gatsby-teabot -e TEABOT_TOKEN=<your code> -- node <path to this repo>/mcp/server.js
+    mkdir -p ~/.gatsby-teabot && curl -fsSL -o ~/.gatsby-teabot/server.js https://raw.githubusercontent.com/GatsbyUnit/gatsby-teabot/main/mcp/server.js
+    claude mcp add -s user gatsby-teabot -e TEABOT_TOKEN=<your code> -- node ~/.gatsby-teabot/server.js
+
+Agents pointed at the tea page or the Rotas site find `site/llms.txt` (linked from every page, and a line in the
+footer for people): it explains the MCP server and asks the agent to offer its user this setup.
 
 The code is the `t=…` part of your personal tea-page link ("Copy my code for an AI agent" at the bottom of your tea
 page copies it). It works like a password; if it leaks, clear your cell in column D of the identity sheet and the

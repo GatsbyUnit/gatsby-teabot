@@ -94,10 +94,11 @@ function finalise_rows(rows, ctx){
 
 // Swap one person's duty in a slot for another person: rota data, calendar, and one email to both.
 // Returns a short message for the person who asked; throws with a readable message if not possible.
-function validate_swap(row, duty, from_id, to_id, ctx){
+// allow_tentative: undoing a hand-on of a pencilled-in slot
+function validate_swap(row, duty, from_id, to_id, ctx, allow_tentative){
   var ids = duty === 'tea' ? row.tea_ids : row.presenter_ids;
-  if (is_tentative(row)) throw new Error('This slot is still tentative, so it cannot be swapped yet.');
-  if (is_cancelled_title(row.title)) throw new Error('This talk has been cancelled.');
+  if (!allow_tentative && is_tentative(row)) throw new Error('This slot is still tentative, so it cannot be swapped yet.');
+  if (duty !== 'tea' && is_cancelled_title(row.title)) throw new Error('This talk has been cancelled.');   // its tea (just tea) still happens
   if (ids.indexOf(from_id) < 0) throw new Error('This slot has changed in the meantime. Please reload the page.');
   if (from_id === to_id) throw new Error('The slot already belongs to this person.');
   if (!ctx.people[to_id] || !ctx.people[to_id].active) throw new Error('That person is not on the active list.');
@@ -132,7 +133,11 @@ function apply_swap(row, duty, from_id, to_id, ctx, how){
 // one person's duty in a slot goes to another: rota data, and the calendar event if there is one (no emails)
 function replace_on_duty(row, duty, from_id, to_id, ctx){
   var ids = duty === 'tea' ? row.tea_ids : row.presenter_ids;
-  var new_ids = ids.map(function(id){ return id === from_id ? to_id : id; });
+  set_duty(row, duty, ids.map(function(id){ return id === from_id ? to_id : id; }), ctx);
+}
+
+// the people on one duty of a slot are now new_ids: rota data, and the calendar event if there is one (no emails)
+function set_duty(row, duty, new_ids, ctx){
   var props = {};
   props[duty === 'tea' ? 'Tea' : 'Presenter'] = {relation: new_ids.map(function(id){ return {id: hyphenate_id(id)}; })};
   notion_patch_page(row.id, props, ctx.constants);

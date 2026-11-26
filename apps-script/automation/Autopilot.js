@@ -109,7 +109,7 @@ function auto_recheck(rota, ctx, today, st){
     var row = c.row;
     var t = sched_talk(row);
     var others = past.filter(function(x){ return x.id !== row.id; });
-    var to = sched_pick(t, c.role, others, people, row.presenter_ids.concat(row.tea_ids));
+    var to = sched_pick(t, c.role, others, people, row.presenter_ids.concat(row.tea_ids).concat(passed_ids(row.id, c.role)));
     if (!to){
       var key = t.date + '|' + row.id + '|' + c.id;
       if (st.stuck.indexOf(key) < 0){ st.stuck.push(key); stuck.push(c); }
@@ -225,11 +225,6 @@ function auto_organiser(rota, ctx){
   return String(ctx.constants[ROTAS[rota].admin] || ctx.constants['admin_email'] || '');
 }
 
-// the last day on which adding away dates still hands this slot on (the check runs the next morning)
-function handover_deadline(row){
-  return sched_add_days(fmt_iso_date(row.start), -AUTO_HANDOVER_DAYS - 1);
-}
-
 // One email to a person on duty. opts.live: the day it goes on the calendar (yyyy-MM-dd; empty = it is on it
 // already); opts.from: the person they take over from. Returns whether an email went out.
 function duty_mail(row, role, id, ctx, today, opts){
@@ -239,10 +234,10 @@ function duty_mail(row, role, id, ctx, today, opts){
   var blocks = [m.text];
   if (opts.from) blocks.push('You take over from ' + names_of([opts.from], ctx.people)[0] + ', who can\'t make it.');
   blocks = blocks.concat(m.more);
-  var deadline = handover_deadline(row);
+  var deadline = handon_deadline(row, role);
   blocks.push(deadline >= today
-    ? 'Away then? Add it to your away dates on your tea page by the end of **' + fmt_day(parse_iso_date(deadline)) + '**, and the bot hands the slot to the next free person. After that, ask someone to swap on your tea page.'
-    : 'If you can\'t make it, ask someone to swap on your tea page.');
+    ? 'Can\'t make it? Press **Can\'t make it** on your tea page by **' + fmt_day(parse_iso_date(deadline)) + '**, and the bot hands it to the next person in line (you keep your turn). After that, agree it with a colleague and hand it over with Swap.'
+    : 'If you can\'t make it, agree it with a colleague and hand it over with Swap on your tea page.');
   blocks.push({link: 'Open my tea page', url: tea_page_link_for(id, ctx)});
   var cal = on_calendar(row.type);
   blocks.push((opts.live ? (cal ? 'It goes on the calendar on ' : 'It is confirmed on ') + fmt_day(parse_iso_date(opts.live)) + '.'
@@ -352,7 +347,7 @@ function duty_name(row, role){
 function away_clash_note(person_id, from, to, ctx){
   var auto = ctx.settings.auto_rotas || [];
   var handover_from = add_days(start_of_today(), AUTO_HANDOVER_DAYS + 1);
-  var hand = [], swap = [];
+  var hand = [], button = [], swap = [];
   ALL_TYPES.forEach(function(type){
     load_rows(type, add_days(from, -6), to, ctx).forEach(function(r){
       if (is_cancelled_title(r.title)) return;
@@ -360,11 +355,14 @@ function away_clash_note(person_id, from, to, ctx){
       var duty = on_duty(r).filter(function(d){ return d.id === person_id; })[0];
       if (!duty || !sched_overlap(t.date, t.date_end || t.date, [fmt_iso_date(from)], [fmt_iso_date(to)])) return;
       var name = duty_name(r, duty.role);
-      if (auto.indexOf(rota_of_type(r.type)) >= 0 && r.start >= handover_from) hand.push(name); else swap.push(name);
+      if (auto.indexOf(rota_of_type(r.type)) >= 0 && r.start >= handover_from) hand.push(name);
+      else if (can_hand_on(r, duty.role)) button.push(name);
+      else swap.push(name);
     });
   });
   var out = '';
   if (hand.length) out += ' Tomorrow morning the bot hands this to the next free person and emails you both: ' + hand.join('; ') + '.';
+  if (button.length) out += ' You are still down for this; press "Can\'t make it" on it and the bot hands it to the next person in line: ' + button.join('; ') + '.';
   if (swap.length) out += ' You are still down for this, so please ask someone to swap: ' + swap.join('; ') + '.';
   return out;
 }

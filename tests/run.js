@@ -201,7 +201,7 @@ t('event listed as deleted by the Calendar API counts as gone', () => { __props 
 t('deleted event never seen before: reported, not cancelled', () => { __props = {}; var out = sync_row(row({start: soon}), cctx(null), start_of_today()); assert.strictEqual(out.finding.kind, 'missing_event'); assert.strictEqual(patched.length, 0); });
 t('renamed to cancelled by hand: recorded, title kept', () => { __props = {}; var r = row({start: soon}); save_state('ev1', {t: 'TNJC: Nikolai Petrov', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = cev('No TNJC this week'); sync_row(r, cctx(e), start_of_today()); assert.strictEqual(patched[0].Title.title[0].text.content, 'Cancelled'); assert.strictEqual(e.title, 'No TNJC this week'); assert.strictEqual(mailed.length, 1); });
 t('slot cancelled in Notion is left alone (no new event)', () => { __props = {}; var c = ctx(false); c.baseline = false; c.no_event = []; c.cal = cal_stub(); created = []; sync_row(row({title: 'Cancelled', gcal_id: '', start: soon}), c, start_of_today()); assert.strictEqual(created.length, 0); });
-t('page offers cancel only for a single presenter of an upcoming confirmed talk', () => { var c = ctx(false); assert.ok(can_cancel(row({start: soon}), c)); assert.ok(!can_cancel(row({start: soon, presenter_ids: ['a', 'b']}), c)); assert.ok(!can_cancel(row({start: soon, title: '[TNJC Tentative]'}), c)); assert.ok(!can_cancel(row({start: soon, type: 'Coffee Cleaning'}), c)); assert.ok(!can_cancel(row({start: new Date(Date.now() - 864e5)}), c)); });
+t('page offers cancel for a single presenter of an upcoming talk, and for tea and coffee duty', () => { var c = ctx(false); assert.ok(can_cancel(row({start: soon}), c)); assert.ok(!can_cancel(row({start: soon, presenter_ids: ['a', 'b']}), c)); assert.ok(can_cancel(row({start: soon, title: '[TNJC Tentative]'}), c), 'pencilled in: cancel is there too'); assert.ok(!can_cancel(row({start: soon, type: 'Coffee Cleaning', presenter_ids: []}), c)); assert.ok(can_cancel(row({start: soon, type: 'Coffee Cleaning', presenter_ids: [], tea_ids: ['a']}), c, 'tea')); assert.ok(!can_cancel(row({start: soon, title: 'Cancelled'}), c)); assert.ok(can_cancel(row({start: soon, title: 'Cancelled', presenter_ids: [], tea_ids: ['a'], type: 'Research Talk'}), c, 'tea'), 'tea of a cancelled talk (just tea)'); assert.ok(!can_cancel(row({start: new Date(Date.now() - 864e5)}), c)); });
 // calendar invitations
 var guests_ev = {};
 function cal_api(attendees){ guests_ev = {attendees: attendees, patches: []}; Calendar = {Events: {get: () => ({attendees: guests_ev.attendees.map(a => Object.assign({}, a))}), patch: (body, cal, id, opt) => { guests_ev.patches.push({emails: body.attendees.map(a => a.email).sort(), send: opt.sendUpdates}); guests_ev.attendees = body.attendees; }}}; }
@@ -1330,8 +1330,8 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.mails.map(m => m.to).sort(), ['an@x', 'bo@x', 'cy@x', 'di@x', 'org@x']);
   var an = W.to('an@x')[0], cy = W.to('cy@x')[0];
   assert.strictEqual(an.subject, 'You are presenting at MLJC on Mon 30 Nov 2026');
-  assert.ok(an.text.indexOf('ask someone to swap') >= 0 && an.text.indexOf('Away then?') < 0, 'less than three weeks away: swap only');
-  assert.ok(cy.text.indexOf('by the end of Sun 22 Nov 2026') >= 0, cy.text);
+  assert.ok(an.text.indexOf('hand it over with Swap') >= 0 && an.text.indexOf('Press Can') < 0, an.text);
+  assert.ok(cy.text.indexOf("make it on your tea page by Mon 30 Nov 2026") >= 0, cy.text);
   assert.ok(cy.text.indexOf('It goes on the calendar on Mon 23 Nov 2026.') >= 0 && cy.text.indexOf('https://page/?t=cy') >= 0);
   assert.strictEqual(W.to('org@x')[0].subject, 'MLJC: next slots planned, on the calendar on Mon 23 Nov 2026');
 
@@ -1343,7 +1343,7 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.on('2026-12-21').presenter_ids, ['an']);
   assert.strictEqual(W.to('di@x')[0].subject, 'Handed on: presenting at MLJC on Mon 21 Dec 2026');
   var take = W.to('an@x')[0];
-  assert.ok(take.text.indexOf('You take over from Di X') >= 0 && take.text.indexOf('by the end of Sun 29 Nov 2026') >= 0, take.text);
+  assert.ok(take.text.indexOf('You take over from Di X') >= 0 && take.text.indexOf('your tea page by Mon 7 Dec 2026') >= 0, take.text);
   assert.ok(W.mails.some(m => m.to === 'org@x' && m.subject === 'MLJC: slots handed on because of away dates' && m.text.indexOf('Di X → An X') >= 0));
   assert.deepStrictEqual(W.fin, ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21']);
   assert.strictEqual(W.to('an@x').length, 1, 'nobody is told twice');
@@ -1434,14 +1434,75 @@ ap_t('autopilot: fills dates that never had a slot, also before one added far ah
   W.run('2026-11-20');
   assert.deepStrictEqual(W.rows.filter(r => r.id.indexOf('new') === 0).map(r => fmt_iso_date(r.start)), ['2026-11-30', '2026-12-14', '2026-12-21']);
 });
-ap_t('away dates on the tea page: which of your slots the bot hands on and which need a swap', () => {
+ap_t('away dates on the tea page: which of your slots the bot hands on, which take the button, and which need a swap', () => {
   var w = ap_world({auto: ['MLJC'], rows: [ap_row('a1', 'MLJC', '2027-01-04T13:30:00Z', ['an']), ap_row('a2', 'MLJC', '2026-12-07T13:30:00Z', ['an']),
-                                           ap_row('a3', 'TNJC', '2027-01-05T13:30:00Z', ['an'])]}), W = w.W;
+                                           ap_row('a3', 'TNJC', '2027-01-05T13:30:00Z', ['an']), ap_row('a4', 'TNJC', '2026-12-01T13:30:00Z', ['an'])]}), W = w.W;
   W.day('2026-11-23');
   var note = away_clash_note('an', parse_iso_date('2026-12-01'), parse_iso_date('2027-01-10'), w.c);
   assert.ok(note.indexOf('hands this to the next free person and emails you both: presenting at MLJC on Mon 4 Jan 2027.') >= 0, note);
-  assert.ok(note.indexOf('please ask someone to swap: presenting at TNJC on Tue 5 Jan 2027; presenting at MLJC on Mon 7 Dec 2026.') >= 0, note);
+  assert.ok(note.indexOf('make it" on it and the bot hands it to the next person in line: presenting at TNJC on Tue 5 Jan 2027; presenting at MLJC on Mon 7 Dec 2026.') >= 0, note);
+  assert.ok(note.indexOf('please ask someone to swap: presenting at TNJC on Tue 1 Dec 2026.') >= 0, note);
   assert.strictEqual(away_clash_note('bo', parse_iso_date('2026-12-01'), parse_iso_date('2027-01-10'), w.c), '');
+});
+ap_t('can\\'t make it: the next person in line takes over, passes on down the queue and never back, undo, nobody free, too close', () => {
+  var w = ap_world({rows: [ap_row('s', 'MLJC', '2027-01-11T13:30:00Z', ['cy']), ap_row('near', 'MLJC', '2026-12-07T13:30:00Z', ['di'])]}), W = w.W, c = w.c;
+  c.settings.PAGE_URL = 'https://page'; __props = {};
+  var uuid = Utilities.getUuid; Utilities.getUuid = () => require_crypto.randomUUID();
+  try {
+  W.day('2026-11-26');
+  var find = id => W.rows.filter(r => r.id === id)[0];
+  var res = hand_on(find('s'), 'presenter', 'cy', c);
+  assert.deepStrictEqual(find('s').presenter_ids, ['an'], 'an presented longest ago');
+  assert.ok(/An X is next in line/.test(res), res);
+  assert.strictEqual(W.to('an@x')[0].subject, 'You are presenting at MLJC on Mon 11 Jan 2027');
+  assert.ok(W.to('an@x')[0].text.indexOf('You take over from Cy X') >= 0);
+  var cy = W.to('cy@x')[0];
+  assert.ok(cy.subject === 'Handed on: presenting at MLJC on Mon 11 Jan 2027' && /keep your turn/.test(cy.text) && /https:\\/\\/page\\?undo=[0-9a-f]{32}/.test(cy.text), cy.text);
+  assert.deepStrictEqual(W.to('org@x'), [], 'the organiser only hears when nobody is free');
+  W.day('2026-11-26');
+  hand_on(find('s'), 'presenter', 'an', c);
+  assert.deepStrictEqual(find('s').presenter_ids, ['bo'], 'passes on down the queue, not back to cy');
+  W.day('2026-11-26');
+  W.away.di = [['2027-01-01', '2027-01-20']];
+  hand_on(find('s'), 'presenter', 'bo', c);
+  assert.deepStrictEqual(find('s').presenter_ids, ['bo'], 'di is away and everyone else passed: nothing changes');
+  assert.strictEqual(W.to('org@x')[0].subject, 'Nobody free to take over: presenting at MLJC on Mon 11 Jan 2027');
+  // cy undoes: back to cy, and cy may get it again later
+  var saved = [to_row, notion_get_page]; notion_get_page = id => find(id); to_row = r => r;
+  try {
+    var code = swap_undos().filter(u => u.from === 'cy')[0].code;
+    assert.throws(() => undo_swap(code, c), /changed since/, 'an handed it on since, so the undo no longer applies');
+  } finally { to_row = saved[0]; notion_get_page = saved[1]; }
+  assert.throws(() => hand_on(find('near'), 'presenter', 'di', c), /less than two weeks away/);
+  assert.throws(() => hand_on(find('s'), 'presenter', 'cy', c), /not your duty/);
+  } finally { Utilities.getUuid = uuid; }
+});
+ap_t('can\\'t make it, undone straight away: the slot goes back and the person may be picked again', () => {
+  var w = ap_world({rows: [ap_row('s', 'MLJC', '2027-01-11T13:30:00Z', ['cy'], [], {title: '[MLJC Tentative]'})]}), W = w.W, c = w.c;
+  c.settings.PAGE_URL = 'https://page'; __props = {};
+  W.day('2026-11-26');
+  var find = id => W.rows.filter(r => r.id === id)[0];
+  hand_on(find('s'), 'presenter', 'cy', c);
+  assert.deepStrictEqual(passed_ids('s', 'presenter'), ['cy']);
+  var saved = [to_row, notion_get_page]; notion_get_page = id => find(id); to_row = r => r;
+  try { undo_swap(swap_undos()[0].code, c); } finally { to_row = saved[0]; notion_get_page = saved[1]; }
+  assert.deepStrictEqual(find('s').presenter_ids, ['cy'], 'a pencilled-in slot can be undone too');
+  assert.deepStrictEqual(passed_ids('s', 'presenter'), []);
+});
+t('cancelling tea duty: off the slot, nobody in their place, one email with the organiser in cc', () => {
+  var c = ctx(false); c.cal = {getEventById: () => null}; var got = []; var saved = send_mail;
+  send_mail = function(to, subject, blocks, k, o){ got.push([to, subject, (o || {}).cc]); };
+  try { cancel_tea_duty(row({type: 'Research Talk', start: soon, tea_ids: ['a']}), 'a', c, 'ill that week'); } finally { send_mail = saved; }
+  assert.deepStrictEqual(patched[0].Tea.relation, []);
+  assert.deepStrictEqual(got, [['lena@x', 'Cancelled: tea duty on ' + fmt_day(soon), 'tsar@x']]);
+});
+t('duty labels say what you do, not the slot type and the duty side by side', () => {
+  assert.strictEqual(duty_label(row({type: 'Research Talk'}), 'tea'), 'Tea duty at the research talk');
+  assert.strictEqual(duty_label(row({type: 'Research Talk', title: 'Cancelled'}), 'tea'), 'Tea duty (just tea: the talk is cancelled)');
+  assert.strictEqual(duty_label(row({type: 'Research Talk'}), 'presenter'), 'Giving the research talk');
+  assert.strictEqual(duty_label(row({csnjc: true}), 'presenter'), 'Presenting at TNJC (CSNJC)');
+  assert.strictEqual(duty_label(row({type: 'Coffee Cleaning'}), 'tea'), 'Coffee cleaning');
+  assert.strictEqual(duty_label(row({type: 'Just Tea'}), 'tea'), 'Tea duty (just tea)');
 });
 t('autopilot: duty emails per kind of slot', () => {
   var d = new Date('2026-12-07T15:00:00Z');

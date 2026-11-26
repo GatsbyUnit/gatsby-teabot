@@ -136,7 +136,7 @@ const obj = (properties, required = []) => ({ type: 'object', properties, requir
 const TOOLS = [
   { name: 'whoami', description: 'Everyone: who the server acts as, and what they may do. Everyone can read the rotas and look after their own duties (swaps, talk titles, away dates, photo, email); tsars can also edit slots, people, rota rules and pages.',
     inputSchema: obj({}), run: async () => { const b = await data(true); const r = b.me || {}; const me = b.data.people.find((p) => p.id === r.person);
-      const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: swaps, taking over a colleague\'s slot, talk titles, cancelling a talk, away dates', 'change your own photo and email'];
+      const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: can\'t make it (the bot hands it on), swaps, taking over a colleague\'s slot, talk titles, cancelling, away dates', 'change your own photo and email'];
       if (r.slots?.length) can.push('edit the slots of ' + r.slots.join(', ') + ', and cancel their talks and just teas (cancel_slot: the people on them are emailed)');
       if (r.people?.includes('all')) can.push('edit and add people, with their emails'); else if (r.people?.length) can.push('tick or untick ' + r.people.join(', ') + ' on people');
       if (r.pages) can.push('edit the site\'s pages');
@@ -241,9 +241,12 @@ const TOOLS = [
     inputSchema: obj({ code: str, accept: bool }, ['code', 'accept']), run: async (a) => { const r = await api('api_answer_swap_mine', TOKEN, a.code, a.accept); changed(); return r; } },
   { name: 'withdraw_swap', description: 'Everyone: withdraw a swap request you made (code from my_tea_page, a duty\'s "pending").',
     inputSchema: obj({ code: str }, ['code']), run: async (a) => { const r = await api('api_withdraw_swap', TOKEN, a.code); changed(); return r; } },
-  { name: 'cancel_talk', description: 'Everyone: last resort when nobody can take over your talk: cancels it (you keep your turn; the organiser is told). Only for your own upcoming talk.',
-    inputSchema: obj({ slot_id: str, reason: { ...str, description: 'who you asked, and why it cannot happen' } }, ['slot_id', 'reason']),
-    run: async (a) => { const r = await api('api_cancel', TOKEN, norm(a.slot_id), a.reason); changed(); return r; } },
+  { name: 'cant_make_it', description: "Everyone: the normal way out of one of your duties: the bot hands it to the next free person in line (fair rules, away dates) and emails you both; you keep your turn, and your email has an undo link. Until 14 days before a talk, 3 days before tea or coffee duty; closer than that, swap (ask_swap) after agreeing it with a colleague. my_tea_page shows can_hand_on per duty.",
+    inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] } }, ['slot_id', 'duty']),
+    run: async (a) => { const r = await api('api_cant_make_it', TOKEN, norm(a.slot_id), a.duty); changed(); return r; } },
+  { name: 'cancel_talk', description: 'Everyone: last resort when nobody can do it: cancels your own upcoming talk (tea stays: just tea) or takes you off your tea or coffee duty with nobody in your place (a just tea: cancelled). You keep your turn; the organiser is told. Prefer cant_make_it or a swap. Confirm with the user first.',
+    inputSchema: obj({ slot_id: str, reason: { ...str, description: 'why it cannot go ahead and nobody can take over' }, duty: { type: 'string', enum: ['presenter', 'tea'], description: 'default presenter' } }, ['slot_id', 'reason']),
+    run: async (a) => { const r = await api('api_cancel', TOKEN, norm(a.slot_id), a.reason, a.duty || 'presenter'); changed(); return r; } },
   { name: 'add_away', description: 'Everyone: add dates you are away (you will not be scheduled then).',
     inputSchema: obj({ from: { ...str, description: 'YYYY-MM-DD' }, to: { ...str, description: 'YYYY-MM-DD' }, reason: str }, ['from', 'to']),
     run: async (a) => api('api_add_away', TOKEN, a.from, a.to, a.reason || '') },

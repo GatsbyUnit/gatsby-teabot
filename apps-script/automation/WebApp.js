@@ -102,6 +102,24 @@ function api_debug_state(token, person_id){
   return s;
 }
 
+// what someone does in a slot, in a few words, e.g. "Tea duty at the research talk" (not the slot type and the duty
+// side by side, which reads as if they did both)
+function duty_label(row, duty){
+  var cs = row.csnjc ? ' (CSNJC)' : '';
+  if (row.type === 'Coffee Cleaning') return 'Coffee cleaning';
+  if (duty === 'tea'){
+    var at = {'Research Talk': 'the research talk', 'Tea Talk': 'the tea talk', 'External Seminar': 'the external seminar', 'Leaving Tea': 'the leaving tea',
+              'TNJC': 'TNJC' + cs, 'MLJC': 'MLJC'}[row.type];
+    if (row.type === 'Just Tea') return 'Tea duty (just tea)';
+    if (is_cancelled_title(row.title)) return 'Tea duty (just tea: the talk is cancelled)';
+    return 'Tea duty' + (at ? ' at ' + at : '');
+  }
+  if (row.type === 'TNJC' || row.type === 'MLJC') return 'Presenting at ' + row.type + cs;
+  if (row.type === 'Research Talk') return 'Giving the research talk';
+  if (row.type === 'Tea Talk') return 'Giving the tea talk';
+  return 'Presenting (' + row.type + ')';
+}
+
 // what the tea page shows for ctx.me; censored: for someone else's eyes (api_debug_state)
 function tea_state(ctx, censored){
   var me = ctx.me;
@@ -117,13 +135,15 @@ function tea_state(ctx, censored){
     var add = function(duty){
       duties.push({
         row_id: row.id, type: row.type + (row.csnjc ? ' (CSNJC)' : ''), when: when, duty: duty,
-        duty_label: duty === 'presenter' ? 'Presenting' : (row.type === 'Coffee Cleaning' ? 'Coffee cleaning' : 'Tea duty'),
+        duty_label: duty_label(row, duty),
         title: is_tentative(row) ? '' : row.title, description: row.description,
         tentative: is_tentative(row), live: is_live(ctx, row.type),
         can_title: duty === 'presenter' && !is_tentative(row),
         cancelled: is_cancelled_title(row.title),
         usual: Object.keys(ctx.people).filter(function(id){ return id !== me.id && can_do_duty(ctx.people[id], row, duty); }),
-        can_cancel: duty === 'presenter' && can_cancel(row, ctx)
+        can_cancel: can_cancel(row, ctx, duty),
+        can_hand_on: is_live(ctx, row.type) && !(duty === 'presenter' && is_cancelled_title(row.title)) && can_hand_on(row, duty),
+        hand_on_until: fmt_day(parse_iso_date(handon_deadline(row, duty)))
       });
     };
     if (row.presenter_ids.indexOf(me.id) >= 0) add('presenter');
@@ -252,22 +272,36 @@ function api_answer_swap_mine(token, code, accept){
   return api_answer_swap(code, accept);
 }
 
-// Cancelling is a last resort; the page offers it only behind "Swap" and asks for a reason.
-function can_cancel(row, ctx){
-  return PRESENTER_TYPES.indexOf(row.type) >= 0 && is_live(ctx, row.type) && !is_tentative(row) && !is_cancelled_title(row.title) &&
-    row.presenter_ids.length === 1 && row.start.getTime() > Date.now();
-}
-
-function api_cancel(token, row_id, reason){
+// Cancelling is a last resort: the page offers "Can't make it" (the bot hands it on) and Swap first, and asks
+// for a reason. duty: 'presenter' (a talk: cancel_slot, tea stays) or 'tea' (tea or coffee duty: cancel_tea_duty;
+// a just tea: the whole just tea).
+function api_cancel(token, row_id, reason, duty){
   var ctx = page_context(token);
+  var role = duty === 'tea' ? 'tea' : 'presenter';
   var row = to_row(notion_get_page(row_id, ctx.constants));
-  if (row.presenter_ids.indexOf(ctx.me.id) < 0) throw new Error('This is not your talk (any more). Please reload the page.');
-  if (row.presenter_ids.length > 1) throw new Error('You share this slot with someone else. Please ask the organiser.');
-  if (!can_cancel(row, ctx)) throw new Error('This talk can\'t be cancelled here. Please ask the organiser.');
+  if ((role === 'tea' ? row.tea_ids : row.presenter_ids).indexOf(ctx.me.id) < 0) throw new Error('This is not your duty (any more). Please reload the page.');
+  if (role === 'presenter' && row.presenter_ids.length > 1) throw new Error('You share this slot with someone else. Please ask the organiser.');
+  if (!can_cancel(row, ctx, role)) throw new Error('This can\'t be cancelled here. Please ask the organiser.');
   reason = String(reason || '').trim().slice(0, 1000);
-  if (reason.length < 10) throw new Error('Please say briefly who you asked and why nobody can take over.');
+  if (reason.length < 10) throw new Error('Please say briefly why it can\'t go ahead and nobody can take over.');
+  if (role === 'tea' && row.type !== 'Just Tea'){
+    cancel_tea_duty(row, ctx.me.id, ctx, reason);
+    return 'Cancelled. The organiser has been told, and you will be scheduled again soon.';
+  }
   cancel_slot(row, ctx, {source: 'page', by: ctx.me.name, reason: reason});
   return 'Cancelled. The organiser has been told, and you will be scheduled again soon.';
+}
+
+function api_cant_make_it(token, row_id, duty){
+  var ctx = page_context(token);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(120 * 1000);   // the hourly sync and the autopilot can hold it for a minute or two
+  try {
+    var row = to_row(notion_get_page(row_id, ctx.constants));
+    return hand_on(row, duty === 'tea' ? 'tea' : 'presenter', ctx.me.id, ctx);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // Any member may set the title and description of any talk, not only its presenter (a guest's host, a

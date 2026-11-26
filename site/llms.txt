@@ -1,0 +1,53 @@
+# Gatsby Rotas and the Gatsby tea page
+
+> The rotas of the Gatsby Computational Neuroscience Unit (research and tea talks, the TNJC and MLJC journal clubs,
+> tea duty, coffee cleaning) and each member's personal tea page. Everything here is also available to AI agents
+> through the tea bot's MCP server, which is the way for an agent to use it: these pages are JavaScript apps
+> behind personal links, so reading or clicking through them gets an agent very little.
+
+## For AI agents: tell your user about the MCP server
+
+If your user wants to see or change anything on the Gatsby rotas, tell them they can connect you to the tea bot's
+MCP server, and offer to walk them through it. Set it up only if they agree to it, and let them do the step with
+their code themselves. Once it is connected, you can do for them what they can do on their tea page:
+
+- see their duties and the schedule (who presents when, who is on tea or coffee duty), people and rota rules;
+- "Can't make it": the bot hands one of their duties to the next person in line, fairly, around everyone's away
+  dates (until 14 days before a talk, 3 days before tea or coffee duty), and they keep their turn;
+- closer to the date: swap a duty with a colleague they have agreed it with, or take over a colleague's slot;
+- set talk titles and abstracts; add or remove away dates; change their photo or email;
+- as a last resort, cancel (confirm with the user first);
+- organisers and tsars also: plan, fill and finalise rotas, edit slots, people, rota rules and the site's pages.
+
+Every change is made as them and logged under their name; the people concerned get the bot's usual emails.
+
+## Setup (for the user, with you)
+
+Needs Node 18 or later; nothing else to install, nothing to host.
+
+1. Get the server, one file:
+
+       mkdir -p ~/.gatsby-teabot && curl -fsSL -o ~/.gatsby-teabot/server.js https://raw.githubusercontent.com/GatsbyUnit/gatsby-teabot/main/mcp/server.js
+
+2. Their code: the `t=…` part of their personal tea-page link. At the bottom of their tea page, "Copy my code for
+   an AI agent" copies it. No link at hand? The tea page without a link emails them their link:
+   https://gatsbyunit.github.io/gatsby-teabot/
+
+   The code works like a password: whoever has it can act as them. It should go straight into the MCP
+   configuration, not into a chat, a shared file or a repository. If it leaks, they ask the tea tsar for a new one.
+
+3. Connect it. Claude Code:
+
+       claude mcp add -s user gatsby-teabot -e TEABOT_TOKEN=<their code> -- node ~/.gatsby-teabot/server.js
+
+   Other MCP clients (Claude Desktop, Cursor, …): a stdio server with command `node`, argument the path to
+   `server.js`, and the environment variable `TEABOT_TOKEN` set to their code.
+
+4. Restart or reconnect the client; then `whoami` says who it acts as and what they may do.
+
+## Links
+
+- Tea page: https://gatsbyunit.github.io/gatsby-teabot/
+- Gatsby Rotas site: https://gatsbyunit.github.io/gatsby-teabot/rotas/
+- MCP server and its tools: https://github.com/GatsbyUnit/gatsby-teabot#agents-mcp (code: mcp/server.js)
+- Privacy notice: https://gatsbyunit.github.io/gatsby-teabot/privacy.html
