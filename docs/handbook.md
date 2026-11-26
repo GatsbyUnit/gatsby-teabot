@@ -108,15 +108,14 @@ Every edit is a line in the automation log sheet (job "site edit", with who did 
 
 ## Scheduling
 When: as promised to members in the guides on the site (Gatsby Tea System, TNJC Guide, MLJC Guide). The bot also
-reminds you on Mondays when a rota's schedule is about to run out. In the Organiser section of your tea page:
+reminds you on Mondays when a rota's schedule is about to run out (not for rotas on autopilot). By hand (AI agent, MCP tools):
 1. **Plan these dates:** creates the slots (same days, times, CSNJC rule and coffee water-filter weeks as the old notebooks; England and Wales bank holidays and CLOSED_DATES are skipped; existing slots are kept) and fills them with Kevin's fairness algorithm and everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
 2. **Check on the site:** remove slots that are not needed (UCL closures, retreat, conference deadlines such as COSYNE) and change anyone you like. "Fill … empty slots again" refills any slot you cleared.
 3. **Finalise:** puts them on the calendar; optionally emails the group the usual "schedule updated" email.
 
 **Autopilot (rotas in AUTO_TYPES, Automation tab; all four rotas since Nov 2026).** The bot schedules the rotas by
-itself, every morning at 8:00. The tea page then shows no planning tools for that rota (only what the autopilot does);
-for something unusual, plan by hand through an AI agent (MCP `plan_slots`, `fill_slots`, `finalise`) or take the rota
-out of AUTO_TYPES:
+itself, every morning at 8:00. The tea page has no planning tools for any organiser (only what the autopilot does);
+for something unusual, plan by hand through an AI agent (MCP `plan_slots`, `fill_slots`, `finalise`):
 - **Every Monday** (and on the first morning after a rota is switched on) it creates the rota's missing slots from
   10 days ahead to the end of the week AUTO_WEEKS (default 6) ahead and fills them as "Plan these dates" does.
   "Missing" = the date never had a slot while the autopilot was looking: it remembers every slot it has seen, so

@@ -849,60 +849,15 @@
     return card;
   }
 
+  // The organiser's card per rota: the bot plans every rota itself (autopilot), the same for every organiser; there
+  // are no planning tools here (for something unusual: an AI agent with the MCP tools plan_slots / fill_slots / finalise).
   function organiserCard(o){
-    var msg = el('div', {class: 'msg'});
-    var talks = o.rota === 'talks';
-    var from = el('input', {type: 'date', value: o.from});
-    var to = el('input', {type: 'date', value: o.to});
-    var tfrom = el('input', {type: 'date', value: o.tea_from});
-    var tto = el('input', {type: 'date', value: o.tea_to});
-    var showResult = function(res){
-      msg.className = 'msg ok'; msg.innerHTML = '';
-      var head = (res.created !== undefined ? 'Created ' + res.created + ' slot' + (res.created === 1 ? '' : 's') + (res.existing ? ' (' + res.existing + ' already existed)' : '') + '. ' : '') +
-        'Filled ' + res.filled.length + '. Check them on the Gatsby Rotas site: delete any you do not need (closures, retreat, deadlines) and change anyone you like, then finalise.';
-      msg.appendChild(el('div', {text: head}));
-      if (res.holidays && res.holidays.length) msg.appendChild(el('div', {class: 'muted', text: 'Skipped (bank holidays, closures): ' + res.holidays.join(', ')}));
-      var list = el('ul', {style: 'margin:6px 0 0;padding-left:18px'});
-      res.filled.concat(res.unfilled).forEach(function(l){ list.appendChild(el('li', {text: l})); });
-      msg.appendChild(list);
-      res.warnings.forEach(function(w){ msg.appendChild(el('div', {class: 'muted', text: w})); });
-    };
-    var plan = el('button', {class: 'primary', text: 'Plan these dates'});
-    plan.addEventListener('click', function(){
-      var ranges = talks ? {research_from: from.value, research_to: to.value, tea_from: tfrom.value, tea_to: tto.value} : {from: from.value, to: to.value};
-      call('api_plan_slots', [TOKEN, o.rota, ranges], function(res){ showResult(res); setTimeout(function(){ call('api_state', [TOKEN], function(){}); }, 0); }, msg, plan);
-      msg.textContent = 'Creating the slots, reading everyone\'s away dates and filling them. This can take a minute or two…';
-    });
-    var fill = el('button', {text: 'Fill ' + o.empty + ' empty slot' + (o.empty === 1 ? '' : 's') + ' again'});
-    if (!o.empty) fill.classList.add('hidden');
-    fill.addEventListener('click', function(){
-      call('api_fill_slots', [TOKEN, o.rota], showResult, msg, fill);
-      msg.textContent = 'Reading everyone\'s away dates and filling the slots. This can take a minute or two…';
-    });
-    var box = el('input', {type: 'checkbox', style: 'width:auto'});
-    var fin = el('button', {text: 'Finalise ' + o.tentative + ' tentative slot' + (o.tentative === 1 ? '' : 's')});
-    if (!o.tentative) fin.disabled = true;
-    fin.addEventListener('click', function(){
-      call('api_finalise', [TOKEN, o.rota, box.checked], function(res){ ok(msg, res); setTimeout(load, 1500); }, msg, fin);
-    });
-    var dates = talks
-      ? [el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'Research talks from'}), from]), el('div', {}, [el('label', {text: 'to'}), to])]),
-         el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'Tea talks from'}), tfrom]), el('div', {}, [el('label', {text: 'to'}), tto])])]
-      : [el('div', {class: 'grid2'}, [el('div', {}, [el('label', {text: 'From'}), from]), el('div', {}, [el('label', {text: 'To'}), to])])];
-    // on autopilot the bot plans by itself: no planning tools, just what it does
-    if (o.auto) return el('div', {class: 'card'}, [
-      el('div', {class: 'when', text: o.label}),
-      el('p', {style: 'margin:4px 0 0', text: 'Planned by the bot: every Monday it plans and fills the slots up to ' + o.auto + ' weeks ahead and emails you the list. Three days later they go on the calendar and everyone on duty is told; until then, change or remove slots on the Gatsby Rotas site.'})
-    ]);
     return el('div', {class: 'card'}, [
       el('div', {class: 'when', text: o.label}),
-      el('p', {class: 'muted', style: 'margin:4px 0 0', text: 'Plan creates the slots for these dates (bank holidays and closures are skipped) and fills them fairly, respecting away dates. They stay tentative: check them on the Gatsby Rotas site, then finalise to put them on the calendar.'})
-    ].concat(dates).concat([
-      el('div', {class: 'row', style: 'margin-top:10px'}, [plan, fill]),
-      el('label', {style: 'display:flex;gap:8px;align-items:center;color:inherit;font-size:14px;margin-top:12px'}, [box, 'When finalising, email the group that the schedule was updated']),
-      el('div', {class: 'row', style: 'margin-top:8px'}, [fin]),
-      msg
-    ]));
+      el('p', {style: 'margin:4px 0 0', text: o.auto
+        ? 'Planned by the bot: every Monday it plans and fills the slots up to ' + o.auto + ' weeks ahead and emails you the list. Three days later they go on the calendar and everyone on duty is told; until then, change or remove slots on the Gatsby Rotas site.'
+        : 'Not planned by the bot yet: ask the tea tsar to switch it on (AUTO_TYPES in the Automation tab).'})
+    ]);
   }
 
   function emailCard(s){
