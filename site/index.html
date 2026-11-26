@@ -781,14 +781,14 @@
       yes: 'Ask to cancel', no: 'Keep it',
       ready: function(yes){
         yes.disabled = true;
-        var update = function(){ yes.disabled = !(check.checked && reason.value.trim().length >= 10); show(); };
+        var update = function(){ yes.disabled = !(check.checked && reason.value.trim().length >= 3); show(); };
         check.addEventListener('change', update);
         reason.addEventListener('input', update);
         choice.addEventListener('change', show);
         call('api_cancel_preview', [TOKEN, d.row_id, d.duty], function(r){
           p = r;
           if (r.tentative){ who.textContent = 'Still tentative: only the organiser is told.'; return; }
-          who.textContent = 'Once the ' + r.signer + ' signs it off, this email goes to ' + r.to + (r.cc ? ', with you, the organiser and anyone else on the slot in cc' : '') + ':';
+          who.textContent = 'Once the ' + r.signer + ' signs it off, this email goes to ' + r.to + ', with a copy to ' + r.copies + ':';
           choice.classList.remove('hidden');
           preview.classList.remove('hidden');
           show();

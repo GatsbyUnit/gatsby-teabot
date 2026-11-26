@@ -138,7 +138,12 @@ function cancel_preview(row, role, ctx, by){
     return {subject: a.subject, text: blocks_to_text(a.blocks)};
   };
   var a = cancel_announcement(row, role, ctx, by, 'reason', null);
-  return {to: a.label, cc: a.cc.length, reason: text('reason'), neutral: text('neutral'), mark: REASON_MARK, signer: by.signed};
+  // who gets a copy, in words: you, the tsar, and the others on the slot (a talk: its tea people)
+  var others = role === 'presenter' ? row.tea_ids.filter(function(id){ return id !== by.id && ctx.people[id] && ctx.people[id].email; }) : [];
+  var copies = ['you', 'the ' + by.signed].concat(others.map(function(id){ return mail_name(id, ctx.people) + ' (tea)'; }));
+  var to = a.list ? a.label + ' (everyone on it)' : a.label;
+  return {to: to, copies: copies.slice(0, -1).join(', ') + (copies.length > 1 ? ' and ' : '') + copies[copies.length - 1],
+          reason: text('reason'), neutral: text('neutral'), mark: REASON_MARK, signer: by.signed};
 }
 
 // ---- tentative cancellations: the tsar signs off ----

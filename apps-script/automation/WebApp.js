@@ -297,7 +297,7 @@ function api_cancel(token, row_id, reason, duty, announce){
   if (role === 'presenter' && row.presenter_ids.length > 1) throw new Error('You share this slot with someone else. Please ask the organiser.');
   if (!can_cancel(row, ctx, role)) throw new Error('This can\'t be cancelled here. Please ask the organiser.');
   reason = String(reason || '').trim().slice(0, 1000);
-  if (reason.length < 10) throw new Error('Please say briefly why it can\'t go ahead and nobody can take over.');
+  if (reason.length < 3) throw new Error('Please give a reason, even a short one (e.g. "ill").');
   // tentative until the tsar of the rota signs it off (Announce.js)
   return request_cancellation(row, role === 'tea' && row.type === 'Just Tea' ? 'tea' : role, ctx.me.id, reason, mode, ctx);
 }

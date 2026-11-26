@@ -1538,7 +1538,7 @@ t('cancellation announced: tea duty goes to the presenter; CSNJC to its list; a 
   var text = blocks_to_text(t2.blocks);
   assert.ok(text.indexOf('The TNJC Tsar has cancelled the TNJC') >= 0 && text.indexOf('could have') < 0 && t2.to[0] === 'tnjclist@x', text);
   var pv = cancel_preview(row({start: soon}), 'presenter', c, {id: 'b'});
-  assert.ok(pv.to === 'the TNJC list' && pv.reason.text.indexOf(pv.mark) >= 0 && pv.neutral.text.indexOf(pv.mark) < 0);
+  assert.ok(pv.to === 'the TNJC list (everyone on it)' && pv.copies === 'you and the TNJC Tsar' && pv.reason.text.indexOf(pv.mark) >= 0 && pv.neutral.text.indexOf(pv.mark) < 0);
 });
 t('cancelling a tentative slot is not announced: the old email to the people on it', () => {
   __props = {}; var e = cev('[TNJC Tentative]'); var c = cctx(e); c.constants.tnjc_email = 'tnjclist@x';
