@@ -114,7 +114,9 @@ reminds you on Mondays when a rota's schedule is about to run out. In the Organi
 3. **Finalise:** puts them on the calendar; optionally emails the group the usual "schedule updated" email.
 
 **Autopilot (rotas in AUTO_TYPES, Automation tab; all four rotas since Nov 2026).** The bot schedules the rotas by
-itself, every morning at 8:00, so the steps above are only needed by hand for something unusual:
+itself, every morning at 8:00. The tea page then shows no planning tools for that rota (only what the autopilot does);
+for something unusual, plan by hand through an AI agent (MCP `plan_slots`, `fill_slots`, `finalise`) or take the rota
+out of AUTO_TYPES:
 - **Every Monday** (and on the first morning after a rota is switched on) it creates the rota's missing slots from
   10 days ahead to the end of the week AUTO_WEEKS (default 6) ahead and fills them as "Plan these dates" does.
   "Missing" = the date never had a slot while the autopilot was looking: it remembers every slot it has seen, so

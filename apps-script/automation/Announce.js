@@ -9,7 +9,8 @@
 // Once signed off, the people it affects hear it in one email:
 //   a talk, a just tea: the group's list (unit-wide list; TNJC, CSNJC or MLJC list), cc whoever cancelled, the tea
 //                       people and the organiser;
-//   tea duty:           the presenter(s), cc whoever cancelled and the organiser (coffee: the organiser);
+//   tea duty:           the same list as the talk (coffee: the coffee list), cc whoever cancelled, the presenter(s)
+//                       and the organiser;
 // mode 'reason' (default): who, their reason and, when they cancelled their own, what they could have done instead
 // and how they knew in advance; mode 'neutral' (a private reason): only that it is cancelled and by whom; the
 // reason then goes to the organiser alone. mode 'none' (tsars only): no announcement, the old emails.
@@ -28,13 +29,10 @@ function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
 // who hears about it: {to: [emails], label (for the page), list: true when a group list}
 function cancel_audience(row, role, ctx){
   var c = ctx.constants;
-  if (role === 'tea' && row.type !== 'Just Tea'){
-    var pres = emails_of(row.presenter_ids, ctx.people);
-    return pres.length ? {to: pres, label: mail_names(row.presenter_ids, ctx.people).join(', ') + ' (presenting)'} : {to: [], label: 'the organiser'};
-  }
-  var key = row.type === 'TNJC' ? (row.csnjc && c['csnjc_email'] ? 'csnjc_email' : 'tnjc_email') : row.type === 'MLJC' ? 'mljc_email' : 'unit_wide_email';
+  // tea duty affects everyone at the talk, so it goes to the same list as the talk; coffee to the coffee list
+  var key = row.type === 'Coffee Cleaning' ? 'coffee_email' : row.type === 'TNJC' ? (row.csnjc && c['csnjc_email'] ? 'csnjc_email' : 'tnjc_email') : row.type === 'MLJC' ? 'mljc_email' : 'unit_wide_email';
   var list = String(c[key] || '').trim();
-  var label = {tnjc_email: 'the TNJC list', csnjc_email: 'the CSNJC list', mljc_email: 'the MLJC list', unit_wide_email: 'the unit mailing list'}[key];
+  var label = {tnjc_email: 'the TNJC list', csnjc_email: 'the CSNJC list', mljc_email: 'the MLJC list', unit_wide_email: 'the unit mailing list', coffee_email: 'the coffee list'}[key];
   return list ? {to: [list], label: label, list: true} : {to: [], label: 'the organiser'};
 }
 
@@ -105,7 +103,7 @@ function cancel_announcement(row, role, ctx, by, mode, reason, opts){
   if (by.signed) blocks.push('Signed off by the ' + by.signed + '.');
   var cc = [];
   if (by.id) cc = cc.concat(emails_of([by.id], ctx.people));
-  if (talk) cc = cc.concat(emails_of(row.tea_ids, ctx.people));
+  cc = cc.concat(emails_of(talk ? row.tea_ids : row.presenter_ids, ctx.people));   // the others on the slot
   if (organiser) cc.push(organiser);
   cc = cc.filter(function(e, i, a){ return e && a.indexOf(e) === i && aud.to.indexOf(e) < 0; });
   var to = aud.to.length ? aud.to : (organiser ? [organiser] : []);
@@ -139,8 +137,8 @@ function cancel_preview(row, role, ctx, by){
   };
   var a = cancel_announcement(row, role, ctx, by, 'reason', null);
   // who gets a copy, in words: you, the tsar, and the others on the slot (a talk: its tea people)
-  var others = role === 'presenter' ? row.tea_ids.filter(function(id){ return id !== by.id && ctx.people[id] && ctx.people[id].email; }) : [];
-  var copies = ['you', 'the ' + by.signed].concat(others.map(function(id){ return mail_name(id, ctx.people) + ' (tea)'; }));
+  var others = (role === 'presenter' ? row.tea_ids : row.presenter_ids).filter(function(id){ return id !== by.id && ctx.people[id] && ctx.people[id].email; });
+  var copies = ['you', 'the ' + by.signed].concat(others.map(function(id){ return mail_name(id, ctx.people) + (role === 'presenter' ? ' (tea)' : ' (presenting)'); }));
   var to = a.list ? a.label + ' (everyone on it)' : a.label;
   return {to: to, copies: copies.slice(0, -1).join(', ') + (copies.length > 1 ? ' and ' : '') + copies[copies.length - 1],
           reason: text('reason'), neutral: text('neutral'), mark: REASON_MARK, signer: by.signed};

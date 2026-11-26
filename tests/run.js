@@ -1527,10 +1527,10 @@ t('cancellation announced, private reason: a neutral note, the name stays; the o
   assert.ok(got[0][0] === 'unit@x' && got[0][3].indexOf('family matter') < 0);
   assert.ok(got[1][0] === 'tsar@x' && /^The reason \\(private\\)/.test(got[1][1]) && got[1][3].indexOf('family matter') >= 0);
 });
-t('cancellation announced: tea duty goes to the presenter; CSNJC to its list; a tsar signs with their title and gets no record', () => {
+t('cancellation announced: tea duty goes to the list of the talk too, the presenter in cc; CSNJC to its list; a tsar signs with their title and gets no record', () => {
   var c = ann_ctx();
   var a = cancel_announcement(row({type: 'Research Talk', presenter_ids: ['b'], tea_ids: ['a'], start: soon}), 'tea', c, {id: 'a'}, 'reason', 'ill that week');
-  assert.deepStrictEqual([a.to, a.cc], [['nikolai@x'], ['lena@x', 'tsar@x']]);
+  assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['lena@x', 'nikolai@x', 'tsar@x']]);
   assert.ok(a.subject.startsWith('🍵 Tea duty on '), a.subject);
   assert.ok(blocks_to_text(a.blocks).indexOf('nobody is bringing tea') >= 0);
   assert.deepStrictEqual(cancel_announcement(row({csnjc: true, start: soon}), 'presenter', c, {id: 'b'}, 'reason', 'x').to, ['csnjclist@x']);
