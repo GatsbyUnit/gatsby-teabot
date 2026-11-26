@@ -1332,8 +1332,8 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.mails.map(m => m.to).sort(), ['an@x', 'bo@x', 'cy@x', 'di@x', 'org@x']);
   var an = W.to('an@x')[0], cy = W.to('cy@x')[0];
   assert.strictEqual(an.subject, '🤖 You are presenting at MLJC on Mon 30 Nov 2026');
-  assert.ok(an.text.indexOf('make it on your tea page by Fri 20 Nov 2026') >= 0, an.text);
-  assert.ok(cy.text.indexOf("make it on your tea page by Fri 4 Dec 2026") >= 0, cy.text);
+  assert.ok(an.text.indexOf('hand it over with Swap') >= 0 && an.text.indexOf('Press Can') < 0, an.text);
+  assert.ok(cy.text.indexOf("make it on your tea page by Wed 2 Dec 2026") >= 0, cy.text);
   assert.ok(cy.text.indexOf('It goes on the calendar on Mon 23 Nov 2026.') >= 0 && cy.text.indexOf('https://page/?t=cy') >= 0);
   assert.strictEqual(W.to('org@x')[0].subject, 'MLJC: next slots planned, on the calendar on Mon 23 Nov 2026');
 
@@ -1345,7 +1345,7 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.on('2026-12-21').presenter_ids, ['an']);
   assert.strictEqual(W.to('di@x')[0].subject, '🤖 Handed on: presenting at MLJC on Mon 21 Dec 2026');
   var take = W.to('an@x')[0];
-  assert.ok(take.text.indexOf('You take over from Di,') >= 0 && take.text.indexOf('your tea page by Fri 11 Dec 2026') >= 0, take.text);
+  assert.ok(take.text.indexOf('You take over from Di,') >= 0 && take.text.indexOf('your tea page by Wed 9 Dec 2026') >= 0, take.text);
   assert.ok(W.mails.some(m => m.to === 'org@x' && m.subject === 'MLJC: slots handed on because of away dates' && m.text.indexOf('Di → An') >= 0));
   assert.deepStrictEqual(W.fin, ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21']);
   assert.strictEqual(W.to('an@x').length, 1, 'nobody is told twice');
@@ -1475,7 +1475,7 @@ ap_t('can\\'t make it: the next person in line takes over, passes on down the qu
     var code = swap_undos().filter(u => u.from === 'cy')[0].code;
     assert.throws(() => undo_swap(code, c), /changed since/, 'an handed it on since, so the undo no longer applies');
   } finally { to_row = saved[0]; notion_get_page = saved[1]; }
-  assert.throws(() => hand_on(find('near'), 'presenter', 'di', c), /less than 10 days away/);
+  assert.throws(() => hand_on(find('near'), 'presenter', 'di', c), /less than 12 days away/);
   assert.throws(() => hand_on(find('s'), 'presenter', 'cy', c), /not your duty/);
   } finally { Utilities.getUuid = uuid; }
 });
@@ -1666,7 +1666,7 @@ if (reBad.length) process.exitCode = 1;
 const tpl = vm.createContext({Logger: {log: () => {}}, Utilities: {formatDate: (d) => d.toDateString()}});
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'cron-jobs', 'TeaPageLink.js'), 'utf8'), tpl);
 const inDays = (n) => { const d = new Date(); d.setHours(15, 0, 0, 0); d.setDate(d.getDate() + n); return d; };
-const tplOk = /by .*: the bot hands it/.test(tpl.cant_make_it_line(inDays(14), 'presenter')) && /by /.test(tpl.cant_make_it_line(inDays(10), 'presenter'))
+const tplOk = /by .*: the bot hands it/.test(tpl.cant_make_it_line(inDays(14), 'presenter')) && /by /.test(tpl.cant_make_it_line(inDays(12), 'presenter'))
   && /Agree a swap/.test(tpl.cant_make_it_line(inDays(7), 'presenter')) && /by /.test(tpl.cant_make_it_line(inDays(7), 'tea')) && /Agree a swap/.test(tpl.cant_make_it_line(inDays(2), 'tea'));
 console.log((tplOk ? 'ok  ' : 'FAIL') + " reminders: Can't make it after the two-week reminder (talks) and the one-week one (tea), a swap after the cut-off");
 if (!tplOk) process.exitCode = 1;

@@ -46,7 +46,7 @@ function tea_page_line(emails){
 // tea page hands the duty to the next person in line (the automation's CantMakeIt.js, same numbers; tests check),
 // so the two-week reminder still leaves time for it; later reminders point to a swap. role: 'presenter' or 'tea'
 // (tea and coffee duty).
-var HANDON_DAYS = {presenter: 10, tea: 3};
+var HANDON_DAYS = {presenter: 12, tea: 3};
 
 function cant_make_it_line(talk_date, role){
   try {

@@ -1,4 +1,4 @@
-// "Can't make it" on the tea page: the normal way to get out of a duty. Far enough ahead (HANDON_DAYS: ten days
+// "Can't make it" on the tea page: the normal way to get out of a duty. Far enough ahead (HANDON_DAYS: twelve days
 // for a talk, so the next person can prepare; three days for tea and coffee duty; both after the two-week reminder
 // email, which says until when, as do the later reminders: Cron Jobs TeaPageLink.js, same HANDON_DAYS, tests check),
 // the bot hands the duty to the next free person in line by the scheduling rules (fairness queue, away dates, nobody presenting within a week of
@@ -8,7 +8,7 @@
 // passed:<slot id>|<duty>, until the slot is over). Nobody free: nothing changes, the person and the organiser
 // are told. Closer than that: swap with a colleague, or cancel as a last resort.
 
-const HANDON_DAYS = {presenter: 10, tea: 3};
+const HANDON_DAYS = {presenter: 12, tea: 3};
 const PASSED_PREFIX = 'passed:';
 
 // the last day on which "Can't make it" still hands this duty on (yyyy-MM-dd)

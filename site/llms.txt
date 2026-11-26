@@ -13,7 +13,7 @@ their code themselves. Once it is connected, you can do for them what they can d
 
 - see their duties and the schedule (who presents when, who is on tea or coffee duty), people and rota rules;
 - "Can't make it": the bot hands one of their duties to the next person in line, fairly, around everyone's away
-  dates (until 10 days before a talk, 3 days before tea or coffee duty), and they keep their turn;
+  dates (until 12 days before a talk, 3 days before tea or coffee duty), and they keep their turn;
 - closer to the date: swap a duty with a colleague they have agreed it with, or take over a colleague's slot;
 - set talk titles and abstracts; add or remove away dates; change their photo or email;
 - as a last resort, cancel (confirm with the user first);
