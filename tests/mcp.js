@@ -31,7 +31,7 @@ const fake = http.createServer((req, res) => {
       if (fn === 'api_site_bundle') result = { pages, data: { schedule, people, rota_rules: [], options: { rules: {} } }, me: { person: 'b'.repeat(32), slots: [], people: [], pages: false, rules: false } };
       else if (fn === 'api_state') result = { name: 'Nikolai Petrov', duties: [{ row_id: '2'.repeat(32), duty: 'presenter', usual: ['a'.repeat(32)] }], people: [{ id: 'a'.repeat(32), name: 'Lena Weber' }], badge: null };
       else if (fn === 'api_site_save_photo') result = 'v2';
-      else if (fn === 'api_change_email' || fn === 'api_leave' || fn === 'api_swap') result = 'done ' + fn;
+      else if (fn === 'api_change_email' || fn === 'api_leave' || fn === 'api_swap' || fn === 'api_take_over') result = 'done ' + fn;
       else { ok = false; error = 'Exception: Only the tsars can change this.'; }
     } else if (args[0] === 'tok' || args[1] === 'tok') {
       if (fn === 'api_site_bundle') result = { pages, data: { schedule, people, rota_rules: [], options: { rules: {} } }, me: { person: 'a'.repeat(32), slots: ['TNJC'], people: ['TNJC', 'CSNJC'], pages: true } };
@@ -123,6 +123,11 @@ fake.listen(0, '127.0.0.1', async () => {
     calls.length = 0;
     await m.tool('ask_swap', { slot_id: '2'.repeat(32), duty: 'presenter', to: 'Lena Weber' });
     assert.deepStrictEqual(calls.find((c) => c[0] === 'api_swap')[1], ['tok2', '2'.repeat(32), 'presenter', 'a'.repeat(32)]);
+    calls.length = 0;
+    await m.tool('take_over', { slot_id: '1'.repeat(32), duty: 'presenter' });
+    assert.deepStrictEqual(calls.find((c) => c[0] === 'api_take_over')[1], ['tok2', '1'.repeat(32), 'presenter', 'a'.repeat(32)]);
+    const none = await m.tool('take_over', { slot_id: '1'.repeat(32), duty: 'tea' });
+    assert.ok(none.error && /Nobody/.test(none.text), none.text);
     const slot = await m.tool('save_slot', { id: '2'.repeat(32), title: 'x' });
     assert.ok(slot.error && /tsars/.test(slot.text));
   });

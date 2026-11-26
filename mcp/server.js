@@ -136,7 +136,7 @@ const obj = (properties, required = []) => ({ type: 'object', properties, requir
 const TOOLS = [
   { name: 'whoami', description: 'Everyone: who the server acts as, and what they may do. Everyone can read the rotas and look after their own duties (swaps, talk titles, away dates, photo, email); tsars can also edit slots, people, rota rules and pages.',
     inputSchema: obj({}), run: async () => { const b = await data(true); const r = b.me || {}; const me = b.data.people.find((p) => p.id === r.person);
-      const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: swaps, talk titles, cancelling a talk, away dates', 'change your own photo and email'];
+      const can = ['read the rotas, people, rota rules and pages', 'look after your own duties: swaps, taking over a colleague\'s slot, talk titles, cancelling a talk, away dates', 'change your own photo and email'];
       if (r.slots?.length) can.push('edit the slots of ' + r.slots.join(', ') + ', and cancel their talks and just teas (cancel_slot: the people on them are emailed)');
       if (r.people?.includes('all')) can.push('edit and add people, with their emails'); else if (r.people?.length) can.push('tick or untick ' + r.people.join(', ') + ' on people');
       if (r.pages) can.push('edit the site\'s pages');
@@ -231,6 +231,12 @@ const TOOLS = [
   { name: 'ask_swap', description: 'Everyone: hand one of your duties to someone (my_tea_page lists who usually does it). Agree it with them first: it goes through at once, and you both get an email with a link to undo it.',
     inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] }, to: { ...str, description: 'name or id' } }, ['slot_id', 'duty', 'to']),
     run: async (a) => { const b = await data(); const r = await api('api_swap', TOKEN, norm(a.slot_id), a.duty, personId(b, a.to)); changed(); return r; } },
+  { name: 'take_over', description: 'Everyone: take over a colleague\'s duty (slot_id from schedule). Agree it with them first: it goes through at once, and you both get an email with a link to undo it. from: whose duty, when several people are on it.',
+    inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] }, from: { ...str, description: 'name or id; optional when one person is on that duty' } }, ['slot_id', 'duty']),
+    run: async (a) => { const b = await data(); const slot = b.data.schedule.find((s) => norm(s.id) === norm(a.slot_id)); if (!slot) throw new Error('Unknown slot.');
+      const on = a.duty === 'tea' ? slot.tea : slot.presenter; const from = a.from ? personId(b, a.from) : on.length === 1 ? on[0] : null;
+      if (!from) throw new Error(on.length ? 'Several people are on that duty; say whose with from.' : 'Nobody is on that duty.');
+      const r = await api('api_take_over', TOKEN, norm(a.slot_id), a.duty, from); changed(); return r; } },
   { name: 'answer_swap', description: 'Everyone: accept or decline an old swap request made to you (code from my_tea_page, "incoming").',
     inputSchema: obj({ code: str, accept: bool }, ['code', 'accept']), run: async (a) => { const r = await api('api_answer_swap_mine', TOKEN, a.code, a.accept); changed(); return r; } },
   { name: 'withdraw_swap', description: 'Everyone: withdraw a swap request you made (code from my_tea_page, a duty\'s "pending").',

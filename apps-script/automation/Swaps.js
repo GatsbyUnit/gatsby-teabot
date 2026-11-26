@@ -1,4 +1,5 @@
-// Swaps go through straight away: the slot changes on the site and the calendar, and both people get one email
+// Swaps go through straight away, whether someone hands their slot to a colleague or takes over a colleague's
+// slot from their own tea page: the slot changes on the site and the calendar, and both people get one email
 // with a link to undo it, in case it was a mistake (the link opens a page with an Undo button, as mail scanners
 // open links). Either of them can undo until the slot starts, as long as nobody has changed the slot since. Undo
 // records live in Script Properties (swapundo:<code>) until used or the slot has passed.
@@ -40,10 +41,49 @@ function slot_table(row){
 
 // a swap from someone's tea page: straight away (apply_swap emails both, with the undo link); an old open
 // request for the same duty is dropped, as it no longer applies
-function request_swap(row, duty, from_id, to_id, ctx){
-  var res = apply_swap(row, duty, from_id, to_id, ctx);
+function request_swap(row, duty, from_id, to_id, ctx, how){
+  var res = apply_swap(row, duty, from_id, to_id, ctx, how);
   swap_requests().filter(function(r){ return r.row_id === row.id && r.duty === duty && r.from === from_id; }).forEach(function(r){ drop_swap_request(r.code); });
   return res;
+}
+
+// ---- taking over someone else's slot (from your own tea page) ----
+
+const TAKE_OVER_WEEKS = 8;
+
+// confirmed upcoming slots of the next weeks with a duty me could do (same rules as scheduling) and someone
+// else on it; me on the slot already (either duty): left out
+function takeable_slots(ctx){
+  var me = ctx.me, today = start_of_today();
+  var pages = notion_query(ctx.constants['notion_talk_db_id'], {and: [
+    {property: 'Date', date: {on_or_after: fmt_iso_date(today)}},
+    {property: 'Date', date: {before: fmt_iso_date(add_days(today, 7 * TAKE_OVER_WEEKS))}}
+  ]}, [{property: 'Date', direction: 'ascending'}], ctx.constants);
+  var out = [];
+  pages.map(to_row).forEach(function(row){
+    if (!row.start || row.start.getTime() <= Date.now() || is_tentative(row) || is_cancelled_title(row.title) || !is_live(ctx, row.type)) return;
+    if (row.presenter_ids.indexOf(me.id) >= 0 || row.tea_ids.indexOf(me.id) >= 0) return;
+    ['presenter', 'tea'].forEach(function(duty){
+      if (!can_do_duty(me, row, duty)) return;
+      (duty === 'tea' ? row.tea_ids : row.presenter_ids).forEach(function(id){
+        if (!ctx.people[id]) return;
+        out.push({row_id: row.id, duty: duty, from: id, from_name: ctx.people[id].name, type: row.type + (row.csnjc ? ' (CSNJC)' : ''),
+                  when: row.type === 'Coffee Cleaning' ? 'Week of ' + fmt_day(row.start) : fmt_day(row.start) + ', ' + fmt_time(row.start),
+                  duty_label: duty === 'presenter' ? 'Presenting' : (row.type === 'Coffee Cleaning' ? 'Coffee cleaning' : 'Tea duty'),
+                  title: duty === 'presenter' ? row.title : ''});
+      });
+    });
+  });
+  return out;
+}
+
+// me takes over from_id's duty: straight away, both emailed with the undo link
+function take_over(row, duty, from_id, ctx){
+  var me = ctx.me;
+  if (row.presenter_ids.indexOf(me.id) >= 0 || row.tea_ids.indexOf(me.id) >= 0) throw new Error('You are already on this slot.');
+  if (!row.start || row.start.getTime() <= Date.now()) throw new Error('This slot is already over.');
+  request_swap(row, duty, from_id, me.id, ctx, {taken: true});
+  return 'Done: the ' + duty_word(row, duty) + ' on ' + fmt_day(row.start) + ' is yours now. You both got an email, with a link to undo it in case it was a mistake.';
 }
 
 // ---- undoing a swap (link in the "Swap done" email) ----

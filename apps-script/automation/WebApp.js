@@ -190,6 +190,17 @@ function api_swap(token, row_id, duty, to_id){
   return request_swap(row, duty, ctx.me.id, normalise_id(to_id), ctx);
 }
 
+// slots someone could take over from a colleague (asked for when they open that part of their page)
+function api_takeable(token){
+  return takeable_slots(page_context(token));
+}
+
+function api_take_over(token, row_id, duty, from_id){
+  var ctx = page_context(token);
+  var row = to_row(notion_get_page(row_id, ctx.constants));
+  return take_over(row, duty === 'tea' ? 'tea' : 'presenter', normalise_id(from_id), ctx);
+}
+
 // the page opened from a swap-request email (the code in the link is the only key)
 function api_swap_request(code){
   var ctx = make_context(get_global_constants(), get_settings());

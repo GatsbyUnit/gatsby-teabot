@@ -121,7 +121,7 @@
   // the usual time, then ever slower. Loading a page hides it behind the bar, as on the Rotas site; an action
   // shows a small bar under its button.
   var TIMES = 'gatsby-tea-times';
-  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…', api_swap_undo_info: 'Getting the swap…',
+  var LABELS = {api_state: 'Getting your tea page…', api_link_people: 'Getting the names…', api_swap_request: 'Getting the swap request…', api_swap_undo_info: 'Getting the swap…', api_takeable: 'Getting the slots…',
                 api_leave_info: 'Getting your details…', api_confirm_email: 'Confirming your address…'};
   function usual(fn){
     try { var t = (JSON.parse(localStorage.getItem(TIMES) || '{}')[fn] || []).slice().sort(function(a, b){ return a - b; }); return t.length ? t[Math.floor(t.length / 2)] : 4000; }
@@ -475,6 +475,9 @@
     if (!s.duties.length) app.appendChild(el('p', {class: 'muted', text: 'Nothing scheduled for you at the moment.'}));
     s.duties.forEach(function(d){ app.appendChild(dutyCard(d, s.people)); });
 
+    app.appendChild(el('h2', {text: 'Take over a slot'}));
+    app.appendChild(takeOverCard());
+
     app.appendChild(el('h2', {text: 'Away dates'}));
     app.appendChild(awayCard(s));
 
@@ -571,6 +574,36 @@
     card.appendChild(panel);
     card.appendChild(msg);
     return card;
+  }
+
+  // Taking over a colleague's slot: the list (next weeks, duties you could be scheduled for) loads on request.
+  function takeOverCard(){
+    var msg = el('div', {class: 'msg'});
+    var list = el('div');
+    var show = el('button', {text: 'Show slots I could take over'});
+    show.addEventListener('click', function(){
+      call('api_takeable', [TOKEN], function(items){
+        show.remove();
+        msg.className = 'msg'; msg.textContent = '';
+        if (!items.length){ list.appendChild(el('p', {class: 'muted', text: 'No confirmed slots you could take over in the next weeks.'})); return; }
+        items.forEach(function(t){
+          var m = el('div', {class: 'msg'});
+          var take = el('button', {class: 'primary', text: 'Take over'});
+          take.addEventListener('click', function(){
+            call('api_take_over', [TOKEN, t.row_id, t.duty, t.from], function(res){ ok(m, res); take.disabled = true; setTimeout(load, 2500); }, m, take);
+          });
+          list.appendChild(el('div', {style: 'border-top:1px solid var(--line);padding:8px 0'}, [
+            el('div', {class: 'row'}, [el('span', {class: 'when', text: t.when}), el('span', {class: 'chip', text: t.type}), el('span', {class: 'chip', text: t.duty_label})]),
+            el('div', {style: 'margin-top:4px'}, [el('strong', {text: t.from_name}), t.title ? ': ' + t.title : '']),
+            el('div', {class: 'row', style: 'margin-top:6px'}, [take]), m
+          ]));
+        });
+      }, msg, show);
+    });
+    return el('div', {class: 'card'}, [
+      el('p', {class: 'muted', style: 'margin-top:0', text: 'Step in for a colleague. Please agree it with them first: it goes through straight away, and you both get an email with a link to undo it.'}),
+      show, list, msg
+    ]);
   }
 
   function showSwap(panel, d, people, msg){

@@ -105,12 +105,13 @@ function validate_swap(row, duty, from_id, to_id, ctx){
   return ids;
 }
 
-function apply_swap(row, duty, from_id, to_id, ctx){
+// how.taken: the new person took the slot over on their own tea page (the email says so)
+function apply_swap(row, duty, from_id, to_id, ctx, how){
   validate_swap(row, duty, from_id, to_id, ctx);
   replace_on_duty(row, duty, from_id, to_id, ctx);
   var from_name = names_of([from_id], ctx.people)[0];
   var to_name = names_of([to_id], ctx.people)[0];
-  log_row(ctx, 'swap', row.type, row.start, 'swapped', (duty === 'tea' ? 'tea: ' : '') + from_name + ' -> ' + to_name);
+  log_row(ctx, 'swap', row.type, row.start, how && how.taken ? 'taken over' : 'swapped', (duty === 'tea' ? 'tea: ' : '') + from_name + ' -> ' + to_name);
 
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var both = emails_of([from_id, to_id], ctx.people);
@@ -123,7 +124,7 @@ function apply_swap(row, duty, from_id, to_id, ctx){
     ? 'It counts as ' + to_first + '\'s turn on the rota. '
     : to_first + ' is not on this rota, so it counts as nobody\'s turn. ')
     + from_first + ' keeps their turn and will be scheduled again sooner.';
-  send_mail(both.length ? both.join(',') : organiser, 'Swap done: ' + fmt_day(row.start) + ' ' + row.type, swap_done_blocks(row, what, from_name, to_name, undo, turns), ctx.constants, {reply_to: organiser, as: both.length ? undefined : row.type});
+  send_mail(both.length ? both.join(',') : organiser, 'Swap done: ' + fmt_day(row.start) + ' ' + row.type, swap_done_blocks(row, what, from_name, to_name, undo, turns, how && how.taken), ctx.constants, {reply_to: organiser, as: both.length ? undefined : row.type});
   if (both.length < 2) send_mail(organiser, 'Swap: please check', ['A swap went through, but one of the two people has no registered email, so they were not told.', {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Before', from_name], ['Now', to_name]]}, {link: 'Undo this swap', url: undo}], ctx.constants, {as: row.type});
   return 'Done: ' + to_name + ' now has this ' + what + '. You both got an email, with a link to undo it in case it was a mistake.';
 }
@@ -147,15 +148,16 @@ function replace_on_duty(row, duty, from_id, to_id, ctx){
 }
 
 // undo: the undo page's address (tea-page swaps only); without it, the email has no undo link
-// turns: a line on how the swap counts for the rota's turns
-function swap_done_blocks(row, what, from_name, to_name, undo, turns){
+// turns: a line on how the swap counts for the rota's turns; taken: to_name took it over on their tea page
+function swap_done_blocks(row, what, from_name, to_name, undo, turns, taken){
   var blocks = [
-    'The ' + what + ' for this slot has been swapped. The site and the shared calendar are updated.',
+    taken ? to_name + ' has taken over this ' + what + ' from ' + from_name + ' on their tea page. The site and the shared calendar are updated.'
+          : 'The ' + what + ' for this slot has been swapped. The site and the shared calendar are updated.',
     {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Before', from_name], ['Now', to_name]]}
   ];
   if (turns) blocks.push(turns);
   blocks.push('[Open on the site](' + row.url + ')');
-  if (undo) blocks.push('A mistake? Either of you can undo the swap until the slot starts; it then goes back to ' + from_name + '.', {link: 'Undo this swap', url: undo});
+  if (undo) blocks.push((taken ? 'Not agreed, or a mistake?' : 'A mistake?') + ' Either of you can undo the swap until the slot starts; it then goes back to ' + from_name + '.', {link: 'Undo this swap', url: undo});
   return blocks;
 }
 
