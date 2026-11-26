@@ -245,7 +245,7 @@ function duty_mail(row, role, id, ctx, today, opts){
     : (cal ? 'It is on the calendar.' : 'It is confirmed.')) + ' You will get the usual reminders before' + (cal ? '.' : ', and an email every day of that week.'));
   blocks.push('The rotas are planned automatically and fairly about six weeks ahead, around everyone\'s away dates.');
   var organiser = auto_organiser(rota_of_type(row.type), ctx).split(',')[0].trim();
-  send_mail(p.email, m.subject, blocks, ctx.constants, organiser ? {reply_to: organiser} : {});
+  send_mail(p.email, with_emoji(row, role, m.subject), blocks, ctx.constants, organiser ? {reply_to: organiser} : {});
   return true;
 }
 
@@ -254,7 +254,7 @@ function released_mail(row, role, from, to, ctx){
   var p = ctx.people[from];
   if (!p || !p.email) return;
   var organiser = auto_organiser(rota_of_type(row.type), ctx).split(',')[0].trim();
-  send_mail(p.email, 'Handed on: ' + duty_name(row, role), [
+  send_mail(p.email, with_emoji(row, role, 'Handed on: ' + duty_name(row, role)), [
     'Your away dates cover this, so the bot has handed it to **' + names_of([to], ctx.people)[0] + '**:',
     {table: [['Slot', fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type], ['Now', names_of([to], ctx.people)[0]]]},
     'You keep your place in the queue, so you will be scheduled again soon. If the away dates were a mistake, ask ' + names_of([to], ctx.people)[0] + ' to swap back on your tea page.',

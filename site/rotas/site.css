@@ -1,5 +1,5 @@
-/* Gatsby Rotas (site/rotas/): plain type, hairlines and one green accent; the only nod to Gatsby is the small
-   green light beside the next talk. Dark mode follows the device. Editing (tsars) at the end. */
+/* Gatsby Rotas (site/rotas/): plain type, hairlines and ink for anything to press; the only nod to Gatsby is the
+   small green light beside the next talk. Each kind of slot has its colour and emoji (badges). Dark mode follows the device. Editing (tsars) at the end. */
 
 :root {
   --bg: #fbfaf8;
@@ -10,9 +10,9 @@
   --muted: #747069;
   --line: #e6e2da;
   --line-strong: #d2ccc1;
-  --accent: #0c6b4e;
+  --accent: #1d1c1a;   /* ink: buttons, links, focus; the green light is the only green */
   --green-light: #13b07c;
-  --focus: #0c6b4e;
+  --focus: #1d1c1a;
 
   --t-research: #6b4fa0;
   --t-tea-talk: #a9601c;
@@ -46,9 +46,9 @@
     --muted: #96928a;
     --line: #2e2d2a;
     --line-strong: #403e3a;
-    --accent: #62d1a6;
+    --accent: #ecebe7;
     --green-light: #3ddc97;
-    --focus: #62d1a6;
+    --focus: #ecebe7;
     --t-research: #b9a3ef; --t-tea-talk: #eeae6e; --t-external: #86bdf0; --t-leaving: #f09595; --t-just-tea: #d8c884;
     --t-mljc: #ec98c1; --t-tnjc: #86d4a3; --t-csnjc: #8fd2de; --t-coffee: #d6aa82; --t-other: #aaa;
     color-scheme: dark;
@@ -63,9 +63,9 @@
   --muted: #96928a;
   --line: #2e2d2a;
   --line-strong: #403e3a;
-  --accent: #62d1a6;
+  --accent: #ecebe7;
   --green-light: #3ddc97;
-  --focus: #62d1a6;
+  --focus: #ecebe7;
   --t-research: #b9a3ef; --t-tea-talk: #eeae6e; --t-external: #86bdf0; --t-leaving: #f09595; --t-just-tea: #d8c884;
   --t-mljc: #ec98c1; --t-tnjc: #86d4a3; --t-csnjc: #8fd2de; --t-coffee: #d6aa82; --t-other: #aaa;
   color-scheme: dark;
@@ -209,6 +209,7 @@ details.toggle > summary:hover { color: var(--accent); }
 }
 .badge { color: var(--c, var(--t-other)); background: color-mix(in srgb, var(--c, var(--t-other)) 11%, transparent); }
 .chip { color: var(--muted); background: var(--surface-2); font-weight: 500; }
+.badge .emoji { margin-right: .3em; font-size: 1.05em; line-height: 0; }
 .chip-tentative { color: var(--t-tea-talk); background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-tea-talk) 40%, transparent); }
 .chip-water { color: var(--t-external); background: color-mix(in srgb, var(--t-external) 10%, transparent); }
 .chip-you { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }

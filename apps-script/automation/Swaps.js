@@ -144,7 +144,7 @@ function undo_swap(code, ctx){
   log_row(ctx, 'swap', row.type, row.start, 'swap undone', (u.duty === 'tea' ? 'tea: ' : '') + to_name + ' -> ' + from_name);
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var both = emails_of([u.from, u.to], ctx.people);
-  send_mail(both.length ? both.join(',') : organiser, 'Swap undone: ' + fmt_day(row.start) + ' ' + row.type, [
+  send_mail(both.length ? both.join(',') : organiser, with_emoji(row, u.duty, 'Swap undone: ' + fmt_day(row.start) + ' ' + row.type), [
     'The swap was undone, so the ' + duty_word(row, u.duty) + ' is back with ' + from_name + '. The site and the shared calendar are updated.',
     {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Back with', from_name], ['Instead of', to_name]]},
     '[Open on the site](' + row.url + ')'

@@ -126,6 +126,22 @@ function cancelled_title(row, people){
 // MCP server; tests/run.js checks the copies agree
 const CANCELLED_TITLE_RE = /\bcan?c+[ae]?l+(?:e?d|ation|ing)?\b|\bcalled\s+off\b|\bno\s+(?:tnjc|mljc|csnjc|jc|talk|research\s+talk|tea|seminar|journal\s+club)\b/i;
 
+// one emoji per kind of slot ("Tea": tea duty), the same on the site (rotas/app.js), the tea page (index.html) and
+// in the bot's email subjects; tests/run.js checks the copies agree
+const TYPE_EMOJI = {"Research Talk": "🧪", "Tea Talk": "🎤", "External Seminar": "🎓", "Leaving Tea": "👋", "Just Tea": "🫖", "MLJC": "🤖", "TNJC": "🧠", "CSNJC": "🧠", "Coffee Cleaning": "☕", "Tea": "🍵"};
+
+// the emoji for what someone does in a slot: tea duty 🍵 (coffee ☕), else the slot's own
+function duty_emoji(row, role){
+  if (row.type === 'Coffee Cleaning') return TYPE_EMOJI['Coffee Cleaning'];
+  if (role === 'tea' && row.type !== 'Just Tea') return TYPE_EMOJI['Tea'];
+  return TYPE_EMOJI[row.csnjc ? 'CSNJC' : row.type] || '';
+}
+
+function with_emoji(row, role, subject){
+  var e = duty_emoji(row, role);
+  return e ? e + ' ' + subject : subject;
+}
+
 function is_cancelled_title(title){
   return CANCELLED_TITLE_RE.test(String(title));
 }

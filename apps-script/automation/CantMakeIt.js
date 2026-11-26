@@ -98,7 +98,7 @@ function hand_on(row, role, from_id, ctx){
   ], ctx.constants, {as: rota});
   var undo = page_link(ctx.settings, {undo: new_swap_undo(row, role, from_id, to)});
   var me = ctx.people[from_id];
-  if (me && me.email) send_mail(me.email, 'Handed on: ' + duty_name(row, role), [
+  if (me && me.email) send_mail(me.email, with_emoji(row, role, 'Handed on: ' + duty_name(row, role)), [
     'You can\'t make it, so the bot has handed it to the next person in line, **' + to_name + '**, who has been told:',
     {table: [['Slot', slot], ['Now', to_name]]},
     'You keep your turn, so you will be scheduled again sooner.',
@@ -134,7 +134,7 @@ function cancel_tea_duty(row, id, ctx, reason){
     'Organiser: if someone should do it after all, put them on it on the Gatsby Rotas site.'
   ];
   var to = emails_of([id], ctx.people);
-  var subject = 'Cancelled: ' + what + ' ' + (coffee ? 'in the week of ' : 'on ') + fmt_day(row.start);
+  var subject = with_emoji(row, 'tea', 'Cancelled: ' + what) + ' ' + (coffee ? 'in the week of ' : 'on ') + fmt_day(row.start);
   if (to.length) send_mail(to[0], subject, blocks, ctx.constants, {reply_to: organiser, cc: organiser});
   else send_mail(organiser, subject, blocks, ctx.constants, {as: row.type});
 }

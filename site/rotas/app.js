@@ -30,6 +30,9 @@ const TYPES = {
   'TNJC': { cls: 'tnjc', label: 'TNJC', talk: true },
   'Coffee Cleaning': { cls: 'coffee', label: 'Coffee' },
 };
+// one emoji per kind of slot ("Tea": tea duty), the same in the bot's emails and on the tea page (tests/run.js checks)
+const TYPE_EMOJI = {"Research Talk": "🧪", "Tea Talk": "🎤", "External Seminar": "🎓", "Leaving Tea": "👋", "Just Tea": "🫖", "MLJC": "🤖", "TNJC": "🧠", "CSNJC": "🧠", "Coffee Cleaning": "☕", "Tea": "🍵"};
+const ROTA_EMOJI = { TNJC: TYPE_EMOJI.TNJC, CSNJC: TYPE_EMOJI.CSNJC, MLJC: TYPE_EMOJI.MLJC, Coffee: TYPE_EMOJI['Coffee Cleaning'] };
 const UNIT_WIDE = ['Research Talk', 'Tea Talk', 'External Seminar', 'Leaving Tea', 'Just Tea'];
 
 let params = new URLSearchParams(location.search); // again on each move between pages (show)
@@ -504,7 +507,7 @@ function personLinks(ids, d, faces = false) {
 
 function badge(type) {
   const t = TYPES[type] || { cls: 'other', label: type };
-  return `<span class="badge t-${t.cls}">${esc(t.label)}</span>`;
+  return `<span class="badge t-${t.cls}">${TYPE_EMOJI[type] ? `<span class="emoji" aria-hidden="true">${TYPE_EMOJI[type]}</span>` : ''}${esc(t.label)}</span>`;
 }
 
 function slotTitle(s) {
@@ -524,7 +527,7 @@ function slotPeople(s, d) {
   }
   if (s.guest) parts.push(`<span class="role">Guest</span> ${esc(s.guest)}`);
   if (s.presenter.length) parts.push(`<span class="role">${s.type === 'MLJC' || s.type === 'TNJC' ? 'Presenter' : 'Speaker'}</span> ${personLinks(s.presenter, d, true)}`);
-  if (s.tea.length) parts.push(`<span class="role">Tea</span> ${personLinks(s.tea, d, true)}`);
+  if (s.tea.length) parts.push(`<span class="role">${TYPE_EMOJI.Tea} Tea</span> ${personLinks(s.tea, d, true)}`);
   return parts.map((p) => `<span class="who">${p}</span>`).join('');
 }
 
@@ -549,7 +552,7 @@ function slotItem(s, d, nextId) {
   return `<li class="slot t-${TYPES[s.type].cls}${isNext ? ' is-next' : ''}${today ? ' is-today' : ''}" data-slot="${s.id}">
     <time class="slot-when" datetime="${esc(s.start)}">${slotWhen(s)}</time>
     <div class="slot-main">
-      <div class="slot-head">${badge(s.type)}${s.csnjc ? '<span class="badge t-csnjc">CSNJC</span>' : ''}${s.tentative ? '<span class="chip chip-tentative">Tentative</span>' : ''}${mine ? '<span class="chip chip-you">You</span>' : ''}${isNext ? '<span class="green-light" title="Next up"></span><span class="next-label">Next up</span>' : ''}${hooks.slotButton ? hooks.slotButton(s) : ''}</div>
+      <div class="slot-head">${badge(s.type)}${s.csnjc ? `<span class="badge t-csnjc"><span class="emoji" aria-hidden="true">${TYPE_EMOJI.CSNJC}</span>CSNJC</span>` : ''}${s.tentative ? '<span class="chip chip-tentative">Tentative</span>' : ''}${mine ? '<span class="chip chip-you">You</span>' : ''}${isNext ? '<span class="green-light" title="Next up"></span><span class="next-label">Next up</span>' : ''}${hooks.slotButton ? hooks.slotButton(s) : ''}</div>
       <div class="slot-title">${slotTitle(s)}</div>
       <div class="slot-people">${slotPeople(s, d)}</div>
       ${s.description ? `<details class="slot-desc"><summary>Details</summary><p>${linkify(s.description)}</p></details>` : ''}
@@ -599,7 +602,7 @@ function nextUpView(el, d) {
         <p class="eyebrow"><span class="green-light"></span>Next up</p>
         <p class="next-when">${F.full.format(next.startDate)}, ${F.time.format(next.startDate)}</p>
         <p class="next-title">${headline}</p>
-        <p class="next-meta">${badge(next.type)}${next.csnjc ? '<span class="badge t-csnjc">CSNJC</span>' : ''}${next.tentative ? '<span class="chip chip-tentative">Tentative</span>' : ''}</p>
+        <p class="next-meta">${badge(next.type)}${next.csnjc ? `<span class="badge t-csnjc"><span class="emoji" aria-hidden="true">${TYPE_EMOJI.CSNJC}</span>CSNJC</span>` : ''}${next.tentative ? '<span class="chip chip-tentative">Tentative</span>' : ''}</p>
         <p class="slot-people">${subline}</p>
       </div>
       <div class="next-side">
@@ -745,7 +748,7 @@ function personCard(p) {
     <span class="person-text">
       <a class="person-name" href="${personHref(p.id)}">${esc(p.name)}</a>
       <span class="person-pos">${esc(p.position || '')}${p.active ? '' : ' · not on the rotas'}</span>
-      <span class="person-rotas">${p.rotas.map((r) => `<span class="badge t-${r.toLowerCase()}">${r}</span>`).join('')}${exemptChips(p)}</span>
+      <span class="person-rotas">${p.rotas.map((r) => `<span class="badge t-${r.toLowerCase()}">${ROTA_EMOJI[r] ? `<span class="emoji" aria-hidden="true">${ROTA_EMOJI[r]}</span>` : ''}${r}</span>`).join('')}${exemptChips(p)}</span>
     </span>
     ${hooks.personButton ? hooks.personButton(p) : ''}
   </li>`;
@@ -884,7 +887,7 @@ async function renderPerson(id) {
   const facts = [
     p.position && `<div><dt>Position</dt><dd>${esc(p.position)}</dd></div>`,
     p.joined && `<div><dt>Joined</dt><dd>${esc(fmt({ month: 'long', year: 'numeric' }).format(new Date(p.joined + 'T12:00:00Z')))}</dd></div>`,
-    `<div><dt>Rotas</dt><dd>${p.rotas.length ? p.rotas.map((r) => `<span class="badge t-${r.toLowerCase()}">${r}</span>`).join('') : '<span class="muted">Unit-wide talks and tea only</span>'}</dd></div>`,
+    `<div><dt>Rotas</dt><dd>${p.rotas.length ? p.rotas.map((r) => `<span class="badge t-${r.toLowerCase()}">${ROTA_EMOJI[r] ? `<span class="emoji" aria-hidden="true">${ROTA_EMOJI[r]}</span>` : ''}${r}</span>`).join('') : '<span class="muted">Unit-wide talks and tea only</span>'}</dd></div>`,
     p.excluded.length && `<div><dt>Exempt from</dt><dd>${p.excluded.map((x) => `<span class="chip">${EXCLUDED[x].replace(/^no /, '')}</span>`).join('')}</dd></div>`,
     !p.active && '<div><dt>Status</dt><dd>No longer on the rotas</dd></div>',
   ].filter(Boolean).join('');

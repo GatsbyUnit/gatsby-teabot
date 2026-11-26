@@ -125,7 +125,7 @@ function apply_swap(row, duty, from_id, to_id, ctx, how){
     ? 'It counts as ' + to_first + '\'s turn on the rota. '
     : to_first + ' is not on this rota, so it counts as nobody\'s turn. ')
     + from_first + ' keeps their turn and will be scheduled again sooner.';
-  send_mail(both.length ? both.join(',') : organiser, 'Swap done: ' + fmt_day(row.start) + ' ' + row.type, swap_done_blocks(row, what, from_name, to_name, undo, turns, how && how.taken), ctx.constants, {reply_to: organiser, as: both.length ? undefined : row.type});
+  send_mail(both.length ? both.join(',') : organiser, with_emoji(row, duty, 'Swap done: ' + fmt_day(row.start) + ' ' + row.type), swap_done_blocks(row, what, from_name, to_name, undo, turns, how && how.taken), ctx.constants, {reply_to: organiser, as: both.length ? undefined : row.type});
   if (both.length < 2) send_mail(organiser, 'Swap: please check', ['A swap went through, but one of the two people has no registered email, so they were not told.', {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Before', from_name], ['Now', to_name]]}, {link: 'Undo this swap', url: undo}], ctx.constants, {as: row.type});
   return 'Done: ' + to_name + ' now has this ' + what + '. You both got an email, with a link to undo it in case it was a mistake.';
 }
@@ -226,7 +226,7 @@ function cancel_slot(row, ctx, how){
   if (bumped.length) blocks.push((drop_tea ? 'The presenter and the tea person are' : 'The ' + role + ' is') + ' no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
   if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
   blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + (drop_tea ? 'presenter and tea person' : role) + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
-  var subject = 'Cancelled: ' + row.type + (drop_tea ? ' and tea' : '') + ' on ' + fmt_day(row.start) + (!just_tea && row.tea_ids.length ? ' (just tea now)' : '');
+  var subject = with_emoji(row, just_tea ? 'tea' : 'presenter', '') + 'Cancelled: ' + row.type + (drop_tea ? ' and tea' : '') + ' on ' + fmt_day(row.start) + (!just_tea && row.tea_ids.length ? ' (just tea now)' : '');
   if (to.length) send_mail(to.join(','), subject, blocks, ctx.constants, {reply_to: organiser, cc: organiser});
   else if (!how.by_organiser) send_mail(organiser, subject, blocks, ctx.constants, {as: row.type});
   return {emailed: names_of(chosen.filter(has_address), ctx.people),
