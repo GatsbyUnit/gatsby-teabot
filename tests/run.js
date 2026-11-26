@@ -428,6 +428,8 @@ t('site: page edits apply in order; new blocks follow new blocks or go first', (
 });
 t('site: edits to what is gone, views or unknown kinds are refused', () => {
   assert.throws(() => apply_site_ops(site_page(), [{op: 'delete', id: 'c1'}, {op: 'update', id: 'c1', rt: []}], () => 'x'), /changed or gone/);
+  var bySlug = site_page(); apply_site_ops(bySlug, [{op: 'insert', tmp: 'n1', parent: 'tea-system', after: 'b1', type: 'p', rt: [{text: 'new'}]}, {op: 'insert', tmp: 'n2', parent: 'tea-system', after: 'n1', type: 'p', rt: [{text: 'newer'}]}], (() => { var k = 0; return () => 'id' + (++k); })());
+  assert.deepStrictEqual(bySlug.blocks.slice(0, 3).map(b => b.id), ['b1', 'id1', 'id2'], 'parent by slug, after a block made in the same edit');
   assert.throws(() => apply_site_ops(site_page(), [{op: 'update', id: 'v1', rt: []}], () => 'x'), /cannot be edited/);
   assert.throws(() => apply_site_ops(site_page(), [{op: 'insert', tmp: 'n', parent: SITE_PAGE, type: 'image'}], () => 'x'), /Unknown kind/);
   assert.throws(() => apply_site_ops(site_page(), [{op: 'insert', tmp: 'n', parent: 'v1', type: 'p'}], () => 'x'), /cannot go there/);

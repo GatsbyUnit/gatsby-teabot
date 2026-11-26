@@ -336,7 +336,7 @@ function apply_site_ops(page, ops, new_id){
       if (SITE_NEW_TYPES.indexOf(op.type) < 0) throw new Error('Unknown kind of block: ' + op.type);
       var parent = made[op.parent] || String(op.parent || '');
       var list;
-      if (parent === page.id) list = page.blocks;
+      if (parent === page.id || (page.slug && parent === page.slug)) list = page.blocks;   // the page: its id or its slug (as the MCP tool says)
       else {
         var p = find(parent);
         if (p.row || SITE_CONTAINERS.indexOf(p.block.type) < 0) throw new Error('Blocks cannot go there.');

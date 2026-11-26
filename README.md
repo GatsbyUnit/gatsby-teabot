@@ -88,8 +88,8 @@ change under their name. Nothing to install (Node 18 or later), nothing to host:
     mkdir -p ~/.gatsby-teabot && curl -fsSL -o ~/.gatsby-teabot/server.js https://raw.githubusercontent.com/GatsbyUnit/gatsby-teabot/main/mcp/server.js
     claude mcp add -s user gatsby-teabot -e TEABOT_TOKEN=<your code> -- node ~/.gatsby-teabot/server.js
 
-Agents pointed at the tea page or the Rotas site find `site/llms.txt` (linked from every page, and a line in the
-footer for people): it explains the MCP server and asks the agent to offer its user this setup.
+Agents pointed at the tea page or the Rotas site find `site/llms.txt` (linked from the head of every page, for agents
+only; people don't see it): it explains the MCP server and asks the agent to offer its user this setup.
 
 The code is the `t=…` part of your personal tea-page link ("Copy my code for an AI agent" at the bottom of your tea
 page copies it). It works like a password; if it leaks, clear your cell in column D of the identity sheet and the

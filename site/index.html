@@ -67,7 +67,6 @@
   .duty-dialog .msg.err { color: var(--alert); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
   .hidden { display: none !important; }
-  .agent-note { margin-top: .4rem; font-size: .8rem; color: var(--muted); }
   /* waiting for the bot: the page stays hidden behind the bar (as on the Rotas site); actions get a small bar */
   body.is-waiting #app { visibility: hidden; }
   .msg .bar { width: min(12rem, 60vw); height: 3px; margin-top: .35rem; border-radius: 2px; background: var(--line); overflow: hidden; }
@@ -101,7 +100,7 @@
   </div>
 </header>
 <main id="app"></main>
-<footer class="footer"><p id="footer-links"></p><p class="agent-note">Using an AI assistant? It can use the tea bot for you: <a href="llms.txt">how to connect it</a>.</p></footer>
+<footer class="footer"><p id="footer-links"></p></footer>
 
 <script src="telemetry.js?v=1" data-page="tea" data-version="tea-1"></script>
 <script>
