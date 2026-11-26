@@ -1514,11 +1514,13 @@ t('cancellation announced: to the group, with the reason, what they could have d
   var signed = blocks_to_text(cancel_announcement(r, 'presenter', c, {id: 'b', signed: 'Tea Tsar'}, 'reason', 'x').blocks);
   assert.ok(signed.trim().endsWith('Signed off by the Tea Tsar.'), signed);
 });
-t('cancellation announced, neutral: no reason, no record, the name stays; the organiser gets the reason alone', () => {
+t('cancellation announced, private reason: everything but the reason goes out; the organiser gets the reason alone', () => {
   var c = ann_ctx(), r = row({type: 'Tea Talk', presenter_ids: ['b'], tea_ids: [], start: new Date(Date.now() + 20 * 864e5)});
   var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter');
   var text = blocks_to_text(a.blocks);
-  assert.ok(text.indexOf('is cancelled (Nikolai)') >= 0 && text.indexOf('family matter') < 0 && text.indexOf('could have') < 0, text);
+  assert.ok(text.indexOf('Nikolai has cancelled the tea talk') >= 0 && text.indexOf('Their reason: private') >= 0 && text.indexOf('family matter') < 0 && text.indexOf('could have done instead') >= 0, text);
+  var tsarNote = blocks_to_text(cancel_announcement(r, 'presenter', c, {title: 'The Tea Tsar'}, 'neutral', 'family matter').blocks);
+  assert.ok(tsarNote.indexOf('is cancelled (the Tea Tsar)') >= 0 && tsarNote.indexOf('could have') < 0, tsarNote);
   var got = [], saved = send_mail; send_mail = function(to, subject, blocks, k, o){ got.push([to, subject, (o || {}).cc, blocks_to_text(blocks)]); };
   try { send_cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter'); } finally { send_mail = saved; }
   assert.strictEqual(got.length, 2);
@@ -1575,6 +1577,12 @@ t('cancelling your own duty is tentative until the rota\\'s tsar signs it off; t
     request_cancellation(slot, 'presenter', 'b', 'my experiment ran over', 'reason', c);
     got = []; answer_cancellation(cancel_requests()[0].code, false, c);
     assert.ok(got.length === 1 && got[0].to === 'nikolai@x' && /^🧠 Not cancelled/.test(got[0].subject) && slot.title === '', JSON.stringify(got));
+    // a private reason the tsar finds not really private: published
+    slot = row({start: soon}); to_row = () => slot; got = [];
+    request_cancellation(slot, 'presenter', 'b', 'overslept, sorry', 'neutral', c);
+    assert.ok(got[0].text.indexOf('you can publish it') >= 0, got[0].text);
+    got = []; answer_cancellation(cancel_requests()[0].code, true, c, true);
+    assert.ok(got.some(m => m.to === 'tnjclist@x' && m.text.indexOf('"overslept, sorry"') >= 0), JSON.stringify(got));
     // the TNJC tsar cancelling their own TNJC talk: no signature needed
     slot = row({start: soon}); to_row = () => slot; c.me_identity = {email: 'org@x'}; got = [];
     assert.ok(/needed no other signature/.test(request_cancellation(slot, 'presenter', 'b', 'my experiment ran over', 'reason', c)));

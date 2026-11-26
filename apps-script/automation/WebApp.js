@@ -312,12 +312,12 @@ function api_cancel_request(code){
   return cancel_request_info(code, make_context(get_global_constants(), get_settings()));
 }
 
-function api_answer_cancellation(code, approve){
+function api_answer_cancellation(code, approve, publish){
   var ctx = make_context(get_global_constants(), get_settings());
   var lock = LockService.getScriptLock();
   lock.waitLock(120 * 1000);
   try {
-    return answer_cancellation(code, approve === true, ctx);
+    return answer_cancellation(code, approve === true, ctx, publish === true);
   } finally {
     lock.releaseLock();
   }
