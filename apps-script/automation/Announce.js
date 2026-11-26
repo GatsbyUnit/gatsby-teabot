@@ -73,8 +73,7 @@ function could_have(row, role, first){
 // The announcement: {to, cc, subject, blocks}. by: {id} (cancelled their own) or {title} (a tsar, e.g. "The TNJC
 // Tsar"); reason null: a preview, with REASON_MARK in its place.
 // by.signed: the title of the tsar who signed it off; opts.drop_tea: a tsar cancelled the talk and the tea;
-// opts.rank: the cancellation-league line (cancel_rank_line). mode 'neutral' for a member: everything but the
-// reason; for a tsar: a short note
+// opts.rank: the cancellation-league line (cancel_rank_line), for the version with the reason
 function cancel_announcement(row, role, ctx, by, mode, reason, opts){
   opts = opts || {};
   var aud = cancel_audience(row, role, ctx);
@@ -88,14 +87,12 @@ function cancel_announcement(row, role, ctx, by, mode, reason, opts){
   var tea_on = talk && !opts.drop_tea && row.tea_ids.filter(function(id){ return id !== by.id; }).length > 0;
   var subject = with_emoji(row, role, cap(what) + ' ' + (coffee ? 'in the week of ' : 'on ') + fmt_day(row.start) + ' cancelled' + (by.id ? ' by ' + who : ''));
   var blocks;
-  if (mode === 'neutral' && !by.id){   // a tsar's neutral note
+  if (mode === 'neutral'){   // a private reason: a short note
     blocks = [cap(what) + ' ' + (coffee ? 'in ' : 'on ') + '**' + when + '** is cancelled (' + (by.id ? who : who.replace(/^The /, 'the ')) + ').'];
     if (tea_on) blocks.push('Tea still happens, so come anyway: it is just tea this time.');
   } else {
-    // a member's private reason only leaves out the reason itself: everything else goes out as usual
     blocks = ['**' + who + '** has cancelled the ' + what + ' ' + (coffee ? 'in ' : 'on ') + '**' + when + '**.',
-              mode === 'neutral' ? 'Their reason: private (' + (by.signed ? 'the ' + by.signed + ' has seen it' : 'seen by the tsar') + ').'
-                : (by.id ? 'Their reason: ' : 'The reason: ') + '"' + (reason === null || reason === undefined ? REASON_MARK : reason) + '"'];
+              (by.id ? 'Their reason: ' : 'The reason: ') + '"' + (reason === null || reason === undefined ? REASON_MARK : reason) + '"'];
     if (tea_on) blocks.push('Tea still happens, so come anyway: it is just tea this time.');
     if (role === 'tea' && !coffee) blocks.push('So nobody is bringing tea and snacks this time, unless someone steps in.');
     if (by.id){
@@ -187,16 +184,15 @@ function request_cancellation(row, role, me_id, reason, mode, ctx){
   var what = slot_word(row, role);
   var slot = fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type;
   var organiser = admin_email_for_type(row.type, ctx.constants);
-  var a = cancel_announcement(row, role, ctx, {id: me_id, signed: signer}, mode, reason, {rank: cancel_rank_line(me_id, ctx)});
+  var a = cancel_announcement(row, role, ctx, {id: me_id, signed: signer}, mode, reason, {rank: mode === 'reason' ? cancel_rank_line(me_id, ctx) : ''});
   if (organiser) send_mail(organiser, with_emoji(row, role, 'To sign off: ' + name + ' wants to cancel the ' + what + ' on ' + fmt_day(row.start)), [
     '**' + name + '** wants to cancel the ' + what + ':',
-    {table: [['Slot', slot], ['Reason', reason], ['Announcement', mode === 'neutral' ? 'they asked to keep the reason private' : 'with the reason']]},
+    {table: [['Slot', slot], ['Reason', reason], ['Announcement', mode === 'neutral' ? 'neutral (the reason stays with you)' : 'with the reason']]},
     'Nothing happens until you sign it off. If you don\'t, the ' + what + ' stays on and everyone turns up as planned.',
-    mode === 'neutral' ? 'They asked to keep the reason private. If it isn\'t really private (health, family and the like), you can publish it when you sign it off.' : '',
     {link: 'Sign it off or turn it down', url: page_link(ctx.settings, {cancel: req.code})},
     'If you sign it off, this goes to ' + a.label + ':',
     {heading: a.subject}
-  ].filter(function(b){ return b !== ''; }).concat(a.blocks), ctx.constants, {as: row.type, reply_to: emails_of([me_id], ctx.people)[0] || undefined});
+  ].concat(a.blocks), ctx.constants, {as: row.type, reply_to: emails_of([me_id], ctx.people)[0] || undefined});
   var me = ctx.people[me_id];
   if (me && me.email) send_mail(me.email, with_emoji(row, role, 'Tentative: your cancellation of the ' + what + ' on ' + fmt_day(row.start)), [
     'Your cancellation is **tentative**: it goes through only once the ' + signer + ' signs it off. Until then you are still on duty, and the ' + what + ' is on.',
@@ -224,17 +220,14 @@ function cancel_request_check(code, ctx){
 // what the sign-off page shows
 function cancel_request_info(code, ctx){
   var c = cancel_request_check(code, ctx), req = c.req, row = c.row;
-  var by = {id: req.from, signed: cancel_signer(row, ctx)}, rank = cancel_rank_line(req.from, ctx);
-  var a = cancel_announcement(row, req.role, ctx, by, req.mode, req.reason, {rank: rank});
-  var pub = cancel_announcement(row, req.role, ctx, by, 'reason', req.reason, {rank: rank});
+  var by = {id: req.from, signed: cancel_signer(row, ctx)};
+  var a = cancel_announcement(row, req.role, ctx, by, req.mode, req.reason, {rank: req.mode === 'reason' ? cancel_rank_line(req.from, ctx) : ''});
   return {who: mail_name(req.from, ctx.people), what: slot_word(row, req.role), when: fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)),
-          type: row.type, reason: req.reason, mode: req.mode, signer: by.signed, to: a.label, subject: a.subject, text: blocks_to_text(a.blocks),
-          text_published: blocks_to_text(pub.blocks)};
+          type: row.type, reason: req.reason, mode: req.mode, signer: by.signed, to: a.label, subject: a.subject, text: blocks_to_text(a.blocks)};
 }
 
 // the tsar answers (the code in their link is the key)
-// publish: the tsar overrules a private reason (it wasn't really private): the announcement includes it
-function answer_cancellation(code, approve, ctx, publish){
+function answer_cancellation(code, approve, ctx){
   var c = cancel_request_check(code, ctx), req = c.req, row = c.row;
   var signer = cancel_signer(row, ctx);
   drop_cancel_request(code);
@@ -249,7 +242,6 @@ function answer_cancellation(code, approve, ctx, publish){
     log_row(ctx, 'page', row.type, row.start, 'cancellation turned down', names_of([req.from], ctx.people)[0]);
     return 'Turned down. ' + name + ' has been told the ' + what + ' goes ahead.';
   }
-  if (publish && req.mode === 'neutral') req.mode = 'reason';
   return carry_out_cancellation(req, row, ctx, signer);
 }
 
@@ -257,7 +249,7 @@ function answer_cancellation(code, approve, ctx, publish){
 function carry_out_cancellation(req, row, ctx, signer){
   count_cancellation(req.from);
   var by = {id: req.from, signed: signer};
-  var rank = cancel_rank_line(req.from, ctx);
+  var rank = req.mode === 'reason' ? cancel_rank_line(req.from, ctx) : '';
   if (req.role === 'tea' && row.type !== 'Just Tea'){
     cancel_tea_duty(row, req.from, ctx, req.reason, req.mode, {by: by, rank: rank});
   } else {

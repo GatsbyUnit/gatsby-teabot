@@ -50,7 +50,7 @@ function api_cancel(token, row_id, reason, duty, announce){ return TeaBot.api_ca
 function api_cancel_preview(token, row_id, duty){ return TeaBot.api_cancel_preview(token, row_id, duty); }
 function api_withdraw_cancellation(token, code){ return TeaBot.api_withdraw_cancellation(token, code); }
 function api_cancel_request(code){ return TeaBot.api_cancel_request(code); }
-function api_answer_cancellation(code, approve, publish){ return TeaBot.api_answer_cancellation(code, approve, publish); }
+function api_answer_cancellation(code, approve){ return TeaBot.api_answer_cancellation(code, approve); }
 function api_cant_make_it(token, row_id, duty){ return TeaBot.api_cant_make_it(token, row_id, duty); }
 function api_add_away(token, from, to, reason){ return TeaBot.api_add_away(token, from, to, reason); }
 function api_remove_away(token, row_number){ return TeaBot.api_remove_away(token, row_number); }

@@ -56,7 +56,9 @@
   .duty-dialog::backdrop { background: rgb(0 0 0 / .4); }
   .duty-dialog.alerting { border: 3px solid var(--alert); box-shadow: 0 0 0 6px color-mix(in srgb, var(--alert) 25%, transparent), 0 24px 60px rgb(0 0 0 / .5); }
   /* cancelling: the room goes dark red behind the question (a little tongue in cheek) */
-  .duty-dialog.alerting::backdrop { background: radial-gradient(ellipse at center, rgb(110 0 16 / .72), rgb(28 0 5 / .96)); }
+  .duty-dialog.alerting::backdrop { background: radial-gradient(ellipse at center, rgb(110 0 16 / .72), rgb(28 0 5 / .96)); animation: alarm-in .5s ease-out; }
+  @keyframes alarm-in { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .duty-dialog.alerting::backdrop { animation: none; } }
   .duty-dialog h2 { margin: 0 0 .6rem; font: 750 1.15rem/1.3 var(--font-head); }
   .duty-dialog.alerting h2 { color: var(--alert); }
   .duty-dialog p { margin: 0 0 .6rem; }
@@ -335,17 +337,13 @@
       var yes = el('button', {class: 'alert', text: 'Sign it off: cancel and announce'});
       var no = el('button', {text: 'Turn it down: it goes ahead'});
       var done = function(res){ yes.disabled = true; no.disabled = true; ok(msg, res); };
-      var publish = el('input', {type: 'checkbox', style: 'width:auto;margin:0 8px 0 0'});
       var body = el('div', {class: 'mail-body', text: r.text});
-      publish.addEventListener('change', function(){ body.textContent = publish.checked ? r.text_published : r.text; });
-      yes.addEventListener('click', function(){ call('api_answer_cancellation', [SIGN, true, publish.checked], done, msg, yes); });
+      yes.addEventListener('click', function(){ call('api_answer_cancellation', [SIGN, true], done, msg, yes); });
       no.addEventListener('click', function(){ call('api_answer_cancellation', [SIGN, false], done, msg, no); });
       app.insertBefore(el('div', {class: 'card'}, [
         el('p', {}, [el('strong', {text: r.who}), ' wants to cancel the ' + r.what + ' on ' + r.when + '.']),
         el('p', {}, ['Reason: ', el('em', {text: r.reason})]),
-        el('p', {class: 'muted', text: 'Nothing happens until you sign it off. If you sign it off, this goes to ' + r.to + ':'}),
-        r.mode === 'neutral' ? el('label', {style: 'display:flex;align-items:flex-start;font-size:14px;margin:.4rem 0'}, [publish,
-          'They asked to keep the reason private. Not really private? Publish it in the announcement.']) : null,
+        el('p', {class: 'muted', text: 'Nothing happens until you sign it off. If you sign it off, this goes to ' + r.to + (r.mode === 'neutral' ? ' (neutral: the reason stays with you)' : '') + ':'}),
         el('div', {class: 'mail-preview'}, [el('div', {class: 'mail-subject', text: r.subject}), body]),
         el('div', {class: 'row', style: 'margin-top:12px'}, [yes, no])
       ]), msg);
@@ -754,11 +752,11 @@
     var talk = d.duty === 'presenter';
     var reason = el('textarea', {placeholder: talk ? 'Why can\'t it go ahead, and why can\'t anyone take over?' : 'Why can\'t you do it, and why not hand it on?'});
     var check = el('input', {type: 'checkbox', style: 'width:auto;margin:0 8px 0 0'});
-    // a private reason is the exception (health, family): a small tick, and the tsar may still publish it
+    // a private reason is the exception (health, family): a small tick, not an equal choice
     var priv = el('input', {type: 'checkbox', style: 'width:auto;margin:0 8px 0 0'});
     var choice = el('div', {class: 'hidden', style: 'margin:.4rem 0 0'}, [
       el('label', {style: 'display:flex;align-items:flex-start;color:var(--muted);font-size:13px'}, [priv,
-        'My reason is genuinely private (health, family). Only the reason is left out; everything else goes out as usual, and the tsar sees the reason and can still publish it if it isn\'t.'])
+        'My reason is genuinely private (health, family): send a neutral note instead. Only the tsar sees the reason.'])
     ]);
     var who = el('p', {class: 'muted', style: 'margin:.6rem 0 .3rem', text: 'Getting the email that goes out…'});
     var preview = el('div', {class: 'mail-preview hidden'});
