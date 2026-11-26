@@ -140,8 +140,8 @@ function undo_swap(code, ctx){
   replace_on_duty(row, u.duty, u.to, u.from, ctx);
   drop_swap_undo(code);
   drop_passed(row.id, u.duty, u.from);   // a hand-on undone: it may come back to them
-  var from_name = names_of([u.from], ctx.people)[0], to_name = names_of([u.to], ctx.people)[0];
-  log_row(ctx, 'swap', row.type, row.start, 'swap undone', (u.duty === 'tea' ? 'tea: ' : '') + to_name + ' -> ' + from_name);
+  log_row(ctx, 'swap', row.type, row.start, 'swap undone', (u.duty === 'tea' ? 'tea: ' : '') + names_of([u.to], ctx.people)[0] + ' -> ' + names_of([u.from], ctx.people)[0]);
+  var from_name = mail_name(u.from, ctx.people), to_name = mail_name(u.to, ctx.people);
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var both = emails_of([u.from, u.to], ctx.people);
   send_mail(both.length ? both.join(',') : organiser, with_emoji(row, u.duty, 'Swap undone: ' + fmt_day(row.start) + ' ' + row.type), [
@@ -190,6 +190,8 @@ function remind_swap_requests(ctx){
   var now = Date.now();
   swap_undos().forEach(function(u){ if (u.start <= now) drop_swap_undo(u.code); });
   prune_passed(now);
+  prune_cancel_requests(now);
+  load_cancel_counts();   // the cancellation league counts from its first hourly run on
   var tokens = {};
   identity_rows(ctx.constants).rows.forEach(function(r){ if (r.id && r.token) tokens[r.id] = r.token; });
   swap_requests().forEach(function(req){

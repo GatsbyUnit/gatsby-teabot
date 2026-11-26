@@ -75,11 +75,11 @@ function hand_on(row, role, from_id, ctx){
   var past = sched_past(rota, row.start, row.start, [row.id], ctx);
   var exclude = row.presenter_ids.concat(row.tea_ids).concat(passed_ids(row.id, role));
   var to = sched_pick(sched_talk(row), role, past, lazy_sched_people(rota, ctx), exclude);
-  var from_name = names_of([from_id], ctx.people)[0];
+  var from_name = mail_name(from_id, ctx.people);   // emails: first names
   var slot = fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type;
   var organiser = auto_organiser(rota, ctx).split(',')[0].trim();
   if (!to){
-    log_row(ctx, 'swap', row.type, row.start, 'nobody free to hand on to', (role === 'tea' ? 'tea: ' : '') + from_name);
+    log_row(ctx, 'swap', row.type, row.start, 'nobody free to hand on to', (role === 'tea' ? 'tea: ' : '') + names_of([from_id], ctx.people)[0]);
     if (organiser) send_mail(organiser, 'Nobody free to take over: ' + duty_name(row, role), [
       from_name + ' can\'t make it, but nobody else on the rota is free then, so it is still theirs. They were asked to swap with a colleague (or, as a last resort, to cancel).',
       {table: [['Slot', slot], ['On duty', from_name]]},
@@ -89,8 +89,8 @@ function hand_on(row, role, from_id, ctx){
   }
   replace_on_duty(row, role, from_id, to, ctx);
   add_passed(row, role, from_id);
-  var to_name = names_of([to], ctx.people)[0];
-  log_row(ctx, 'swap', row.type, row.start, 'handed on (can\'t make it)', (role === 'tea' ? 'tea: ' : '') + from_name + ' -> ' + to_name);
+  var to_name = mail_name(to, ctx.people);
+  log_row(ctx, 'swap', row.type, row.start, 'handed on (can\'t make it)', (role === 'tea' ? 'tea: ' : '') + names_of([from_id], ctx.people)[0] + ' -> ' + names_of([to], ctx.people)[0]);
   var told = duty_mail(row, role, to, ctx, today, {from: from_id});
   if (!told && organiser) send_mail(organiser, 'Handed on, but not told: ' + duty_name(row, role), [
     from_name + ' can\'t make it, so the bot handed it to the next person in line, ' + to_name + ', who has no registered email. Please let them know.',
@@ -120,20 +120,22 @@ function can_cancel(row, ctx, role){
 // someone takes themselves off the tea or coffee duty of a slot, nobody in their place (a just tea: the whole
 // just tea is cancelled, as cancel_slot does). They keep their turn. One email to them, the organiser in cc.
 // mode 'reason' | 'neutral': a confirmed slot's cancellation is announced (Announce.js) instead of the email below
-function cancel_tea_duty(row, id, ctx, reason, mode){
-  var name = names_of([id], ctx.people)[0];
+// extra: {by (with .signed), rank} from a signed-off request
+function cancel_tea_duty(row, id, ctx, reason, mode, extra){
+  extra = extra || {};
+  var name = mail_name(id, ctx.people);
   var before = Object.assign({}, row, {presenter_ids: row.presenter_ids.slice(), tea_ids: row.tea_ids.slice()});
   set_duty(row, 'tea', row.tea_ids.filter(function(x){ return x !== id; }), ctx);
   try { uninvite(row, [id], ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
-  log_row(ctx, 'page', row.type, row.start, 'cancelled tea duty', name + ': ' + reason);
-  if (mode && mode !== 'none' && !is_tentative(row)){ send_cancel_announcement(before, 'tea', ctx, {id: id}, mode, reason); return; }
+  log_row(ctx, 'page', row.type, row.start, 'cancelled tea duty', names_of([id], ctx.people)[0] + ': ' + reason);
+  if (mode && mode !== 'none' && !is_tentative(row)){ send_cancel_announcement(before, 'tea', ctx, extra.by || {id: id}, mode, reason, {rank: extra.rank}); return; }
   var coffee = row.type === 'Coffee Cleaning';
   var what = coffee ? 'coffee cleaning' : 'tea duty';
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var blocks = [
     name + ' has cancelled their ' + what + (coffee ? ' for the week of ' + fmt_day(row.start) : ' for this ' + row.type) + '. ' + (row.tea_ids.length ? 'The others on it stay.' : 'Nobody is on it now.'),
     {table: [['Slot', fmt_day(row.start) + (coffee ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type], ['Reason', reason]]},
-    name.split(' ')[0] + ' is no longer recorded for it, so they keep their turn and will be scheduled again soon.',
+    name + ' is no longer recorded for it, so they keep their turn and will be scheduled again soon.',
     'Organiser: if someone should do it after all, put them on it on the Gatsby Rotas site.'
   ];
   var to = emails_of([id], ctx.people);

@@ -110,9 +110,8 @@ function validate_swap(row, duty, from_id, to_id, ctx, allow_tentative){
 function apply_swap(row, duty, from_id, to_id, ctx, how){
   validate_swap(row, duty, from_id, to_id, ctx);
   replace_on_duty(row, duty, from_id, to_id, ctx);
-  var from_name = names_of([from_id], ctx.people)[0];
-  var to_name = names_of([to_id], ctx.people)[0];
-  log_row(ctx, 'swap', row.type, row.start, how && how.taken ? 'taken over' : 'swapped', (duty === 'tea' ? 'tea: ' : '') + from_name + ' -> ' + to_name);
+  log_row(ctx, 'swap', row.type, row.start, how && how.taken ? 'taken over' : 'swapped', (duty === 'tea' ? 'tea: ' : '') + names_of([from_id], ctx.people)[0] + ' -> ' + names_of([to_id], ctx.people)[0]);
+  var from_name = mail_name(from_id, ctx.people), to_name = mail_name(to_id, ctx.people);   // emails: first names
 
   var organiser = admin_email_for_type(row.type, ctx.constants);
   var both = emails_of([from_id, to_id], ctx.people);
@@ -120,7 +119,7 @@ function apply_swap(row, duty, from_id, to_id, ctx, how){
   var undo = page_link(ctx.settings, {undo: new_swap_undo(row, duty, from_id, to_id)});
   // turns: whoever is recorded on a slot has had their turn (the scheduler counts the site's data), so the one
   // who hands it over keeps theirs; someone outside the rota taking it over uses nobody's
-  var to_first = to_name.split(' ')[0], from_first = from_name.split(' ')[0];
+  var to_first = to_name, from_first = from_name;
   var turns = (ctx.people[to_id] && can_do_duty(ctx.people[to_id], row, duty)
     ? 'It counts as ' + to_first + '\'s turn on the rota. '
     : to_first + ' is not on this rota, so it counts as nobody\'s turn. ')
@@ -182,8 +181,8 @@ function cancel_slot(row, ctx, how){
   var drop_tea = !just_tea && how.keep_tea === false && row.tea_ids.length > 0;
   var thing = just_tea ? 'just tea' : drop_tea ? 'talk and tea' : 'talk';
   var bumped = (just_tea ? row.tea_ids : row.presenter_ids.concat(drop_tea ? row.tea_ids : [])).slice();
-  var was = (just_tea ? '' : row.guest) || names_of(just_tea ? row.tea_ids : row.presenter_ids, ctx.people).join(', ');
-  var tea_was = just_tea ? '' : names_of(row.tea_ids, ctx.people).join(', ');
+  var was = (just_tea ? '' : row.guest) || mail_names(just_tea ? row.tea_ids : row.presenter_ids, ctx.people).join(', ');
+  var tea_was = just_tea ? '' : mail_names(row.tea_ids, ctx.people).join(', ');
   var on_duty = (just_tea ? row.tea_ids : row.presenter_ids.concat(row.tea_ids)).slice();
   var props = {'Title': {title: [{text: {content: CANCELLED_TITLE}}]}};
   if (just_tea || drop_tea) props['Tea'] = {relation: []};
@@ -210,7 +209,7 @@ function cancel_slot(row, ctx, how){
   var has_address = function(id){ return !!(ctx.people[id] && ctx.people[id].email); };
   if (announce){
     log_row(ctx, how.source, row.type, row.start, drop_tea ? 'cancelled talk and tea' : 'cancelled', how.by + ': ' + how.reason + (was ? ' (was: ' + was + ')' : ''));
-    var a = send_cancel_announcement(before, just_tea ? 'tea' : 'presenter', ctx, announce.by, announce.mode, how.reason, {drop_tea: drop_tea});
+    var a = send_cancel_announcement(before, just_tea ? 'tea' : 'presenter', ctx, announce.by, announce.mode, how.reason, {drop_tea: drop_tea, rank: announce.rank});
     return {emailed: a.to.length ? [a.label] : [], no_address: names_of(on_duty.filter(function(id){ return !has_address(id); }), ctx.people), announced: a.label};
   }
   var chosen = how.email ? on_duty.filter(function(id){ return how.email.indexOf(id) >= 0; }) : on_duty;

@@ -239,6 +239,10 @@ const TOOLS = [
       const on = a.duty === 'tea' ? slot.tea : slot.presenter; const from = a.from ? personId(b, a.from) : on.length === 1 ? on[0] : null;
       if (!from) throw new Error(on.length ? 'Several people are on that duty; say whose with from.' : 'Nobody is on that duty.');
       const r = await api('api_take_over', TOKEN, norm(a.slot_id), a.duty, from); changed(); return r; } },
+  { name: 'sign_off_cancellation', description: 'Tsars: sign off (approve true: cancel and announce) or turn down (it goes ahead) a member\'s tentative cancellation of a slot of your rota (code from my_tea_page, "to_sign"). Confirm with the user first.',
+    inputSchema: obj({ code: str, approve: bool }, ['code', 'approve']), run: async (a) => { const r = await api('api_answer_cancellation', a.code, a.approve); changed(); return r; } },
+  { name: 'withdraw_cancellation', description: 'Everyone: withdraw your own tentative cancellation before it is signed off (code from my_tea_page, a duty\'s "cancel_pending").',
+    inputSchema: obj({ code: str }, ['code']), run: async (a) => { const r = await api('api_withdraw_cancellation', TOKEN, a.code); changed(); return r; } },
   { name: 'answer_swap', description: 'Everyone: accept or decline an old swap request made to you (code from my_tea_page, "incoming").',
     inputSchema: obj({ code: str, accept: bool }, ['code', 'accept']), run: async (a) => { const r = await api('api_answer_swap_mine', TOKEN, a.code, a.accept); changed(); return r; } },
   { name: 'withdraw_swap', description: 'Everyone: withdraw a swap request you made (code from my_tea_page, a duty\'s "pending").',
@@ -246,7 +250,7 @@ const TOOLS = [
   { name: 'cant_make_it', description: "Everyone: the normal way out of one of your duties: the bot hands it to the next free person in line (fair rules, away dates) and emails you both; you keep your turn, and your email has an undo link. Until 14 days before a talk, 3 days before tea or coffee duty; closer than that, swap (ask_swap) after agreeing it with a colleague. my_tea_page shows can_hand_on per duty.",
     inputSchema: obj({ slot_id: str, duty: { type: 'string', enum: ['presenter', 'tea'] } }, ['slot_id', 'duty']),
     run: async (a) => { const r = await api('api_cant_make_it', TOKEN, norm(a.slot_id), a.duty); changed(); return r; } },
-  { name: 'cancel_talk', description: 'Everyone: last resort when nobody can do it: cancels your own upcoming talk (tea stays: just tea) or takes you off your tea or coffee duty with nobody in your place (a just tea: cancelled). You keep your turn; the organiser is told. Prefer cant_make_it or a swap. Confirm with the user first.',
+  { name: 'cancel_talk', description: 'Everyone: last resort when nobody can do it: asks to cancel your own upcoming talk (tea stays: just tea) or tea or coffee duty (nobody in your place; a just tea: cancelled). Tentative until the tsar of that rota signs it off (they get an email; until then you are on duty, and if they don\'t answer, it goes ahead); then it is announced. You keep your turn. Prefer cant_make_it or a swap. Confirm with the user first.',
     inputSchema: obj({ slot_id: str, reason: { ...str, description: 'why it cannot go ahead and nobody can take over' }, duty: { type: 'string', enum: ['presenter', 'tea'], description: 'default presenter' },
       announce: { type: 'string', enum: ['reason', 'neutral'], description: 'a confirmed slot\'s cancellation is announced to the people it affects (a talk: the group list): reason (default) includes the reason, what they could have done instead and how they knew in advance; neutral (a private reason) only says it is cancelled and by whom, the reason goes to the organiser alone. Ask the user which.' } }, ['slot_id', 'reason']),
     run: async (a) => { const r = await api('api_cancel', TOKEN, norm(a.slot_id), a.reason, a.duty || 'presenter', a.announce || 'reason'); changed(); return r; } },

@@ -111,10 +111,11 @@ function leave_tea_system(ctx, how, by){
   // one email to the tea tsar; the organisers of slots they still hold in cc
   var cc = rows.map(function(r){ return admin_email_for_type(r.type, ctx.constants); })
     .filter(function(o, i, a){ return o && o !== tsar && a.indexOf(o) === i; });
+  var who = ctx.people[me.id] ? mail_name(me.id, ctx.people) : me.name;   // emails: first names
   var blocks = how === 'tsar' ? [
-    by + ' took ' + me.name + ' out of the Gatsby tea system (no longer a member of the Unit). They are now inactive, so they will not be scheduled again, and the bot no longer emails them.'
+    by + ' took ' + who + ' out of the Gatsby tea system (no longer a member of the Unit). They are now inactive, so they will not be scheduled again, and the bot no longer emails them.'
   ] : [
-    me.name + ' has left the Gatsby tea system (no longer a member of the Unit), using the link at the end of the bot\'s emails. They are now inactive, so they will not be scheduled again, and the bot no longer emails them.',
+    who + ' has left the Gatsby tea system (no longer a member of the Unit), using the link at the end of the bot\'s emails. They are now inactive, so they will not be scheduled again, and the bot no longer emails them.',
     how === 'own link' ? 'They used their personal link.' : 'They picked their name on the tea page, which anyone could do. If this looks wrong, undo it (below) and let them know.'
   ];
   if (rows.length){
@@ -124,7 +125,7 @@ function leave_tea_system(ctx, how, by){
     blocks.push('They had no upcoming slots.');
   }
   blocks.push('To undo: tick Active on their page on the site and put their email back in column C of the identity sheet.');
-  send_mail(tsar || ctx.constants['tnjc_admin_email'], me.name + ' has left the tea system', blocks, ctx.constants, cc.length ? {cc: cc.join(','), as: 'tsar'} : {as: 'tsar'});
+  send_mail(tsar || ctx.constants['tnjc_admin_email'], who + ' has left the tea system', blocks, ctx.constants, cc.length ? {cc: cc.join(','), as: 'tsar'} : {as: 'tsar'});
   return rows;
 }
 

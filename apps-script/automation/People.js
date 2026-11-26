@@ -125,6 +125,23 @@ function names_of(ids, people){
   return ids.map(function(id){ return people[id] ? people[id].name : '(unknown)'; });
 }
 
+// How emails name unit members: the first name; when another active member has the same first name, with the
+// surname's first letter ("Lena W."). Full names stay for logs and for tsars matching names (Sync).
+function mail_name(id, people){
+  var p = people[id];
+  if (!p || !p.name) return '(unknown)';
+  var parts = String(p.name).trim().split(/\s+/), first = parts[0];
+  var clash = Object.keys(people).some(function(o){
+    var q = people[o];
+    return o !== id && q && q.active && q.name && String(q.name).trim().split(/\s+/)[0].toLowerCase() === first.toLowerCase();
+  });
+  return clash && parts.length > 1 ? first + ' ' + parts[parts.length - 1].charAt(0) + '.' : first;
+}
+
+function mail_names(ids, people){
+  return ids.map(function(id){ return mail_name(id, people); });
+}
+
 function emails_of(ids, people){
   return ids.map(function(id){ return people[id] ? people[id].email : ''; }).filter(function(e){ return e !== ''; });
 }

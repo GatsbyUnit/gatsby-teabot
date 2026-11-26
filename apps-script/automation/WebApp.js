@@ -49,7 +49,7 @@ function page_url(settings){
 // personal code (t, swap, confirm, undo) carry the unit key PAGE_KEY; without it, the page shows nothing.
 function page_link(settings, params){
   params = params || {};
-  var q = settings.PAGE_KEY && !(params.t || params.swap || params.confirm || params.undo) ? ['k=' + encodeURIComponent(settings.PAGE_KEY)] : [];
+  var q = settings.PAGE_KEY && !(params.t || params.swap || params.confirm || params.undo || params.cancel) ? ['k=' + encodeURIComponent(settings.PAGE_KEY)] : [];
   Object.keys(params).forEach(function(k){ q.push(k + '=' + encodeURIComponent(params[k])); });
   return page_url(settings) + (q.length ? '?' + q.join('&') : '');
 }
@@ -154,6 +154,16 @@ function tea_state(ctx, censored){
     var out = requests.filter(function(r){ return r.row_id === d.row_id && r.duty === d.duty && r.from === me.id; })[0];
     if (out) d.pending = {code: out.code, to: names_of([out.to], ctx.people)[0], created: out.created};
   });
+  var cancels = cancel_requests();
+  duties.forEach(function(d){
+    var c = cancels.filter(function(r){ return r.row_id === d.row_id && r.from === me.id && (r.role === d.duty || (d.duty === 'tea' && r.role === 'tea')); })[0];
+    if (c) d.cancel_pending = {code: c.code, signer: cancel_signer({type: c.type}, ctx)};
+  });
+  var to_sign = cancels.filter(function(r){ return r.start > Date.now() && is_slot_tsar({type: r.type}, ctx.me_identity.email, ctx); }).map(function(r){
+    var d = new Date(r.start);
+    return {code: r.code, who: names_of([r.from], ctx.people)[0], what: r.role === 'tea' ? (r.type === 'Coffee Cleaning' ? 'coffee cleaning' : 'tea duty') : r.type,
+            when: fmt_day(d) + (r.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(d)), reason: r.reason};
+  });
   var incoming = requests.filter(function(r){ return r.to === me.id && r.start > Date.now(); }).map(function(r){
     var d = new Date(r.start);
     return {code: r.code, from: names_of([r.from], ctx.people)[0], what: r.duty === 'tea' ? (r.type === 'Coffee Cleaning' ? 'coffee duty' : 'tea duty') : r.type + ' talk',
@@ -173,7 +183,7 @@ function tea_state(ctx, censored){
             tea_from: rota === 'talks' ? range.from : '', tea_to: rota === 'talks' ? fmt_iso_date(add_days(parse_iso_date(range.from), 27)) : ''};
   });
   var out = {
-    name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming,
+    name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming, to_sign: to_sign,
     away: censored ? [] : read_away(me), has_away_sheet: !!me.away_sheet,
     organiser: organiser, badge: royal_badge(ctx), tea_tsar: tea_tsar_contact(ctx.constants),
     notion_url: site_url(ctx.settings)
@@ -183,6 +193,8 @@ function tea_state(ctx, censored){
     out.away_hidden = true;
     duties.forEach(function(d){ if (d.pending) delete d.pending.code; });
     incoming.forEach(function(r){ delete r.code; });
+    out.to_sign = [];
+    duties.forEach(function(d){ if (d.cancel_pending) delete d.cancel_pending.code; });
   }
   return out;
 }
@@ -286,12 +298,29 @@ function api_cancel(token, row_id, reason, duty, announce){
   if (!can_cancel(row, ctx, role)) throw new Error('This can\'t be cancelled here. Please ask the organiser.');
   reason = String(reason || '').trim().slice(0, 1000);
   if (reason.length < 10) throw new Error('Please say briefly why it can\'t go ahead and nobody can take over.');
-  if (role === 'tea' && row.type !== 'Just Tea'){
-    cancel_tea_duty(row, ctx.me.id, ctx, reason, mode);
-    return 'Cancelled. ' + (is_tentative(row) ? 'The organiser has been told' : 'Everyone it affects has been told') + ', and you keep your turn.';
+  // tentative until the tsar of the rota signs it off (Announce.js)
+  return request_cancellation(row, role === 'tea' && row.type === 'Just Tea' ? 'tea' : role, ctx.me.id, reason, mode, ctx);
+}
+
+function api_withdraw_cancellation(token, code){
+  var ctx = page_context(token);
+  return withdraw_cancellation(code, ctx.me.id, ctx);
+}
+
+// the sign-off page (link in the tsar's email; the code is the key)
+function api_cancel_request(code){
+  return cancel_request_info(code, make_context(get_global_constants(), get_settings()));
+}
+
+function api_answer_cancellation(code, approve){
+  var ctx = make_context(get_global_constants(), get_settings());
+  var lock = LockService.getScriptLock();
+  lock.waitLock(120 * 1000);
+  try {
+    return answer_cancellation(code, approve === true, ctx);
+  } finally {
+    lock.releaseLock();
   }
-  var told = cancel_slot(row, ctx, {source: 'page', by: ctx.me.name, reason: reason, announce: {mode: mode, by: {id: ctx.me.id}}});
-  return 'Cancelled' + (told.announced ? ' and announced to ' + told.announced : '') + '. You keep your turn, so you will be scheduled again soon.';
 }
 
 // what the cancel dialog shows: who hears about it, and the email in both versions

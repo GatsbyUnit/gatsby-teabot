@@ -397,8 +397,8 @@ function notify_reinstated(row, actual, notes, ctx){
   var just_tea = row.type === 'Just Tea';
   var to = emails_of(just_tea ? row.tea_ids : row.presenter_ids, ctx.people);
   var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + ', ' + row.type]];
-  if (!just_tea) table.push([row.guest ? 'Guest speaker' : 'Presenter', row.guest || names_of(row.presenter_ids, ctx.people).join(', ')]);
-  table.push(['Tea', names_of(row.tea_ids, ctx.people).join(', ') || '–']);
+  if (!just_tea) table.push([row.guest ? 'Guest speaker' : 'Presenter', row.guest || mail_names(row.presenter_ids, ctx.people).join(', ')]);
+  table.push(['Tea', mail_names(row.tea_ids, ctx.people).join(', ') || '–']);
   var blocks = ['This ' + (just_tea ? 'just tea' : row.type) + ' had been cancelled, but its calendar event has been renamed to "' + actual + '", so the bot has put it back on the site.', {table: table}];
   if (notes.length) blocks.push(notes.join(' '));
   if (row.description) blocks.push('Text typed into the calendar event is now the slot\'s description on the site.');
@@ -470,8 +470,8 @@ function notify_swap_from_calendar(row, old_ids, plan, notes, ctx){
   Object.keys(plan).forEach(function(role){
     involved = involved.concat(old_ids[role], plan[role]);
     var label = role === 'Tea' ? (row.type === 'Coffee Cleaning' ? 'On duty' : 'Tea') : 'Presenter';
-    table.push([label + ', before', names_of(old_ids[role], ctx.people).join(', ') || 'nobody']);
-    table.push([label + ', now', names_of(plan[role], ctx.people).join(', ')]);
+    table.push([label + ', before', mail_names(old_ids[role], ctx.people).join(', ') || 'nobody']);
+    table.push([label + ', now', mail_names(plan[role], ctx.people).join(', ')]);
   });
   var to = emails_of(involved.filter(function(id, i, a){ return a.indexOf(id) === i; }), ctx.people);
   var blocks = [

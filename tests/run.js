@@ -169,10 +169,10 @@ function swap_ctx(){ var c = ctx(false); c.settings.PAGE_URL = 'https://page'; c
 t('a swap goes through straight away, also weeks ahead; one email to both with an undo link', () => { __props = {}; var c = swap_ctx(); var msg = request_swap(row({start: soon}), 'presenter', 'b', 'a', c); assert.strictEqual(patched.length, 1); assert.ok(/^nikolai@x,lena@x \| Swap done/.test(mailed[0]), mailed[0]); assert.ok(/undo/.test(msg)); assert.strictEqual(swap_requests().length, 0); assert.strictEqual(swap_undos().length, 1); assert.deepStrictEqual([swap_undos()[0].from, swap_undos()[0].to], ['b', 'a']); });
 t('a swap drops an old open request for the same duty', () => { __props = {}; save_swap_request({code: 'c1', row_id: 'r1', duty: 'presenter', from: 'b', to: 'e', created: Date.now(), start: soon.getTime(), type: 'TNJC', reminded: false}); var c = swap_ctx(); request_swap(row({start: soon}), 'presenter', 'b', 'a', c); assert.strictEqual(swap_requests().length, 0); });
 t('swap email: undo link to the page, and how the turns count', () => { var saved = send_mail; var got = []; send_mail = function(to, subject, blocks){ got.push(blocks); }; try { __props = {}; var c = swap_ctx(); apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); var code = swap_undos()[0].code; var text = JSON.stringify(got[0]); assert.ok(text.indexOf('https://page?undo=' + code) >= 0, text); assert.ok(/Lena is not on this rota, so it counts as nobody's turn. Nikolai keeps their turn/.test(text), text); __props = {}; var p2 = Object.assign({}, people); p2.a = Object.assign({}, people.a, {tnjc: true}); c = swap_ctx(); c.people = p2; got = []; apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); assert.ok(/It counts as Lena's turn on the rota. Nikolai keeps their turn/.test(JSON.stringify(got[0]))); } finally { send_mail = saved; } });
-t('undo: the slot goes back, both emailed, the link works once', () => { __props = {}; var c = swap_ctx(); apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); var code = swap_undos()[0].code; var saved = [to_row, notion_get_page]; notion_get_page = () => ({}); to_row = () => row({start: soon, presenter_ids: ['a']}); try { c = swap_ctx(); var info = swap_undo_info(code, c); assert.deepStrictEqual([info.from, info.to], ['Nikolai Petrov', 'Lena Weber']); var res = undo_swap(code, c); assert.strictEqual(patched[0].Presenter.relation[0].id.replace(/-/g, ''), 'b'); assert.ok(/^nikolai@x,lena@x \| Swap undone/.test(mailed[0]), mailed[0]); assert.ok(/back with Nikolai Petrov/.test(res)); assert.strictEqual(swap_undos().length, 0); assert.throws(() => undo_swap(code, c), /already been undone/); } finally { to_row = saved[0]; notion_get_page = saved[1]; } });
+t('undo: the slot goes back, both emailed, the link works once', () => { __props = {}; var c = swap_ctx(); apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); var code = swap_undos()[0].code; var saved = [to_row, notion_get_page]; notion_get_page = () => ({}); to_row = () => row({start: soon, presenter_ids: ['a']}); try { c = swap_ctx(); var info = swap_undo_info(code, c); assert.deepStrictEqual([info.from, info.to], ['Nikolai Petrov', 'Lena Weber']); var res = undo_swap(code, c); assert.strictEqual(patched[0].Presenter.relation[0].id.replace(/-/g, ''), 'b'); assert.ok(/^nikolai@x,lena@x \| Swap undone/.test(mailed[0]), mailed[0]); assert.ok(/back with Nikolai/.test(res)); assert.strictEqual(swap_undos().length, 0); assert.throws(() => undo_swap(code, c), /already been undone/); } finally { to_row = saved[0]; notion_get_page = saved[1]; } });
 t('undo refused once the slot changed or is over', () => { var saved = [to_row, notion_get_page]; notion_get_page = () => ({}); try { __props = {}; var c = swap_ctx(); apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); var code = swap_undos()[0].code; to_row = () => row({start: soon, presenter_ids: ['e']}); c = swap_ctx(); assert.throws(() => undo_swap(code, c), /changed since/); assert.strictEqual(patched.length, 0); assert.strictEqual(swap_undos().length, 0); __props = {}; apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); code = swap_undos()[0].code; to_row = () => row({start: new Date(Date.now() - 3600e3), presenter_ids: ['a']}); assert.throws(() => undo_swap(code, c), /already been undone, or its slot is over/); } finally { to_row = saved[0]; notion_get_page = saved[1]; } });
 function take_ctx(me, p){ var c = swap_ctx(); c.people = p || people; c.me = c.people[me]; c.constants.notion_talk_db_id = 'db'; return c; }
-t('take over: a colleagues slot is mine at once, both emailed with an undo link that gives it back', () => { var saved = send_mail; var got = []; send_mail = function(to, subject, blocks){ got.push(to + ' | ' + subject + ' | ' + JSON.stringify(blocks)); }; try { __props = {}; var c = take_ctx('a'); var res = take_over(row({start: soon}), 'presenter', 'b', c); assert.ok(/is yours now/.test(res), res); assert.ok(/^nikolai@x,lena@x \\| 🧠 Swap done/.test(got[0]), got[0]); assert.ok(/Lena Weber has taken over this presenter from Nikolai Petrov on their tea page/.test(got[0]), got[0]); assert.ok(/Not agreed, or a mistake\\? Either of you can undo/.test(got[0]), got[0]); var u = swap_undos()[0]; assert.deepStrictEqual([u.from, u.to], ['b', 'a']); assert.ok(logged.some(l => /^taken over/.test(l)), logged); } finally { send_mail = saved; } });
+t('take over: a colleagues slot is mine at once, both emailed with an undo link that gives it back', () => { var saved = send_mail; var got = []; send_mail = function(to, subject, blocks){ got.push(to + ' | ' + subject + ' | ' + JSON.stringify(blocks)); }; try { __props = {}; var c = take_ctx('a'); var res = take_over(row({start: soon}), 'presenter', 'b', c); assert.ok(/is yours now/.test(res), res); assert.ok(/^nikolai@x,lena@x \\| 🧠 Swap done/.test(got[0]), got[0]); assert.ok(/Lena has taken over this presenter from Nikolai on their tea page/.test(got[0]), got[0]); assert.ok(/Not agreed, or a mistake\\? Either of you can undo/.test(got[0]), got[0]); var u = swap_undos()[0]; assert.deepStrictEqual([u.from, u.to], ['b', 'a']); assert.ok(logged.some(l => /^taken over/.test(l)), logged); } finally { send_mail = saved; } });
 t('take over refused when already on the slot, or for a tentative or cancelled slot', () => { __props = {}; var c = take_ctx('a'); assert.throws(() => take_over(row({start: soon, tea_ids: ['a']}), 'presenter', 'b', c), /already on this slot/); assert.throws(() => take_over(row({start: soon, title: '[TNJC Tentative]'}), 'presenter', 'b', c), /tentative/); assert.throws(() => take_over(row({start: soon, title: 'Cancelled'}), 'presenter', 'b', c), /cancelled/); assert.throws(() => take_over(row({start: soon}), 'presenter', 'e', c), /changed/); assert.strictEqual(patched.length, 0); });
 t('slots to take over: confirmed, upcoming, duties I could do, not my own', () => { var saved = [notion_query, to_row]; var p2 = Object.assign({}, people); p2.a = Object.assign({}, people.a, {tnjc: true, csnjc: false, mljc: false}); var rows = [row({id: 'ok', start: soon}), row({id: 'mine', start: soon, presenter_ids: ['a']}), row({id: 'tent', start: soon, title: '[TNJC Tentative]'}), row({id: 'canc', start: soon, title: 'Cancelled'}), row({id: 'cs', start: soon, csnjc: true}), row({id: 'ml', type: 'MLJC', start: soon}), row({id: 'past', start: new Date(Date.now() - 3600e3)})]; notion_query = () => rows; to_row = (r) => r; try { var c = take_ctx('a', p2); var out = takeable_slots(c); assert.deepStrictEqual(out.map(x => x.row_id + ':' + x.duty + ':' + x.from), ['ok:presenter:b']); assert.strictEqual(out[0].from_name, 'Nikolai Petrov'); } finally { notion_query = saved[0]; to_row = saved[1]; } });
 t('undo links of past slots lapse in the hourly run', () => { __props = {}; var saved = identity_rows; identity_rows = () => ({rows: []}); try { var c = swap_ctx(); apply_swap(row({start: soon}), 'presenter', 'b', 'a', c); __props['swapundo:old'] = JSON.stringify({code: 'old', start: Date.now() - 1000}); remind_swap_requests(c); assert.deepStrictEqual(swap_undos().length, 1); assert.ok(!__props['swapundo:old']); } finally { identity_rows = saved; } });
@@ -324,10 +324,10 @@ t('taken out by the tea tsar: like leaving, also when inactive already; nobody e
     c = ctx(false); c.me = people.d; c.me_identity = {email: 'old@x'};
     assert.strictEqual(leave_tea_system(c, 'tsar', 'Jan Bauer').length, 1);
     assert.strictEqual(m.length, 1); assert.strictEqual(m[0].to, 'tsar@x'); assert.strictEqual(m[0].o.cc, 'org@x');
-    assert.ok(/Jan Bauer took Sam Old out of the Gatsby tea system/.test(m[0].text) && /TNJC talk/.test(m[0].text), m[0].text);
+    assert.ok(/Jan Bauer took Sam O\\. out of the Gatsby tea system/.test(m[0].text) && /TNJC talk/.test(m[0].text), m[0].text);
   } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; }
 });
-t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai Petrov has left the tea system']); });
+t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai has left the tea system']); });
 t('rota overview: same rules as scheduling', () => { var saved = notion_query; notion_query = () => []; try { var c = ctx(false); c.me_identity = {email: 'tsar@x'}; c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false, email: 'p@x'}, q: {id: 'q', name: 'Old One', active: false}}; var r = rota_overview(c); assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false, mljc: true, research: false, teatalk: true, tea: true, coffee: false}); assert.strictEqual(r.inactive, 1); assert.strictEqual(r.people.length, 1); } finally { notion_query = saved; } });
 t('rota overview: an organiser sees only their own rota', () => {
   var saved = notion_query;
@@ -582,7 +582,7 @@ t('tsar cancels the talk, tea stays (just tea): named by title, reason given, te
   assert.ok(r.m[0].text.includes('The Tea Tsar has cancelled the talk. Tea still goes ahead: it is just tea this time.') && r.m[0].text.includes('Nikolai cannot make it') && r.m[0].text.includes('(still on)'), r.m[0].text);
   assert.deepStrictEqual([r.patch.Presenter.relation, r.patch.Tea], [[], undefined]);
   assert.strictEqual(r.e.title, 'TEA TALK: CANCELLED TEA: Lena Weber, Zoé Martin');
-  assert.ok(r.logged.some(l => l.indexOf('cancelled: The Tea Tsar: Nikolai cannot make it (was: Nikolai Petrov); emailed Nikolai Petrov, Lena Weber') === 0), r.logged.join('; '));
+  assert.ok(r.logged.some(l => l.indexOf('cancelled: The Tea Tsar: Nikolai cannot make it (was: Nikolai); emailed Nikolai Petrov, Lena Weber') === 0), r.logged.join('; '));
 });
 t('tsar cancels talk and tea: both come off (keeping their turn), calendar without tea, the email says so', () => {
   var r = tsar_cancel({keep_tea: false}, ['a']);
@@ -1345,8 +1345,8 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.deepStrictEqual(W.on('2026-12-21').presenter_ids, ['an']);
   assert.strictEqual(W.to('di@x')[0].subject, '🤖 Handed on: presenting at MLJC on Mon 21 Dec 2026');
   var take = W.to('an@x')[0];
-  assert.ok(take.text.indexOf('You take over from Di X') >= 0 && take.text.indexOf('your tea page by Mon 7 Dec 2026') >= 0, take.text);
-  assert.ok(W.mails.some(m => m.to === 'org@x' && m.subject === 'MLJC: slots handed on because of away dates' && m.text.indexOf('Di X → An X') >= 0));
+  assert.ok(take.text.indexOf('You take over from Di,') >= 0 && take.text.indexOf('your tea page by Mon 7 Dec 2026') >= 0, take.text);
+  assert.ok(W.mails.some(m => m.to === 'org@x' && m.subject === 'MLJC: slots handed on because of away dates' && m.text.indexOf('Di → An') >= 0));
   assert.deepStrictEqual(W.fin, ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21']);
   assert.strictEqual(W.to('an@x').length, 1, 'nobody is told twice');
   assert.deepStrictEqual(W.on('2027-01-04').presenter_ids, ['di']);
@@ -1378,7 +1378,7 @@ ap_t('autopilot away check: skips people who are away too; hands on again when t
   auto_recheck('MLJC', w.c, '2026-11-24', st);
   assert.deepStrictEqual(W.on('2027-01-04').presenter_ids, ['di']);
   assert.strictEqual(W.to('cy@x')[0].subject, '🤖 Handed on: presenting at MLJC on Mon 4 Jan 2027');
-  assert.ok(W.to('di@x')[0].text.indexOf('You take over from Cy X') >= 0);
+  assert.ok(W.to('di@x')[0].text.indexOf('You take over from Cy,') >= 0);
   W.day('2026-11-25');
   assert.deepStrictEqual(auto_recheck('MLJC', w.c, '2026-11-25', st), []);
   assert.deepStrictEqual(W.mails, []);
@@ -1390,7 +1390,7 @@ ap_t('autopilot away check: nobody free leaves the slot as it is and tells the o
   auto_recheck('MLJC', w.c, '2026-11-23', st);
   assert.deepStrictEqual(W.on('2027-01-04').presenter_ids, ['an']);
   assert.deepStrictEqual(W.mails.map(m => m.to + ' ' + m.subject), ['org@x MLJC: nobody free for a slot']);
-  assert.ok(W.mails[0].text.indexOf('Mon 4 Jan 2027 · MLJC: An X') >= 0);
+  assert.ok(W.mails[0].text.indexOf('Mon 4 Jan 2027 · MLJC: An') >= 0);
   W.day('2026-11-24');
   auto_recheck('MLJC', w.c, '2026-11-24', st);
   assert.deepStrictEqual(W.mails, []);
@@ -1455,9 +1455,9 @@ ap_t('can\\'t make it: the next person in line takes over, passes on down the qu
   var find = id => W.rows.filter(r => r.id === id)[0];
   var res = hand_on(find('s'), 'presenter', 'cy', c);
   assert.deepStrictEqual(find('s').presenter_ids, ['an'], 'an presented longest ago');
-  assert.ok(/An X is next in line/.test(res), res);
+  assert.ok(/An is next in line/.test(res), res);
   assert.strictEqual(W.to('an@x')[0].subject, '🤖 You are presenting at MLJC on Mon 11 Jan 2027');
-  assert.ok(W.to('an@x')[0].text.indexOf('You take over from Cy X') >= 0);
+  assert.ok(W.to('an@x')[0].text.indexOf('You take over from Cy,') >= 0);
   var cy = W.to('cy@x')[0];
   assert.ok(cy.subject === '🤖 Handed on: presenting at MLJC on Mon 11 Jan 2027' && /keep your turn/.test(cy.text) && /https:\\/\\/page\\?undo=[0-9a-f]{32}/.test(cy.text), cy.text);
   assert.deepStrictEqual(W.to('org@x'), [], 'the organiser only hears when nobody is free');
@@ -1504,19 +1504,21 @@ t('cancellation announced: to the group, with the reason, what they could have d
   var c = ann_ctx(), r = row({type: 'Research Talk', presenter_ids: ['b'], tea_ids: ['a'], start: new Date(Date.now() + 5 * 864e5)});
   var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'reason', 'my experiment ran over');
   assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['nikolai@x', 'lena@x', 'tsar@x']]);
-  assert.ok(a.subject.startsWith('🧪 Research talk on ') && a.subject.endsWith(' cancelled by Nikolai Petrov'), a.subject);
+  assert.ok(a.subject.startsWith('🧪 Research talk on ') && a.subject.endsWith(' cancelled by Nikolai'), a.subject);
   var text = blocks_to_text(a.blocks);
-  ['Nikolai Petrov has cancelled the research talk', 'Their reason: "my experiment ran over"', 'Tea still happens', 'what Nikolai could have done instead',
+  ['Nikolai has cancelled the research talk', 'Their reason: "my experiment ran over"', 'Tea still happens', 'what Nikolai could have done instead',
    'by ' + fmt_day(parse_iso_date(handon_deadline(r, 'presenter'))) + ': the bot would have handed it', 'hand it over with Swap',
-   'when they were pencilled in', 'On the shared calendar since Wed 21 Oct 2026', 'Reminder emails to whoever is on duty, two weeks and one week before', 'just a little disappointed']
+   'when they were pencilled in', 'On the shared calendar since Wed 21 Oct 2026', 'Reminder emails to whoever is on duty, two weeks and one week before']
     .forEach(x => assert.ok(text.replace(/\\*\\*/g, '').replace(/\\s+/g, ' ').indexOf(x) >= 0, x + ' in: ' + text));
-  assert.ok(!/death|silence|RIP/i.test(text));
+  assert.ok(!/death|silence|RIP|disappointed/i.test(text));
+  var signed = blocks_to_text(cancel_announcement(r, 'presenter', c, {id: 'b', signed: 'Tea Tsar'}, 'reason', 'x').blocks);
+  assert.ok(signed.trim().endsWith('Signed off by the Tea Tsar.'), signed);
 });
 t('cancellation announced, neutral: no reason, no record, the name stays; the organiser gets the reason alone', () => {
   var c = ann_ctx(), r = row({type: 'Tea Talk', presenter_ids: ['b'], tea_ids: [], start: new Date(Date.now() + 20 * 864e5)});
   var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter');
   var text = blocks_to_text(a.blocks);
-  assert.ok(text.indexOf('is cancelled (Nikolai Petrov)') >= 0 && text.indexOf('family matter') < 0 && text.indexOf('could have') < 0, text);
+  assert.ok(text.indexOf('is cancelled (Nikolai)') >= 0 && text.indexOf('family matter') < 0 && text.indexOf('could have') < 0, text);
   var got = [], saved = send_mail; send_mail = function(to, subject, blocks, k, o){ got.push([to, subject, (o || {}).cc, blocks_to_text(blocks)]); };
   try { send_cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter'); } finally { send_mail = saved; }
   assert.strictEqual(got.length, 2);
@@ -1540,6 +1542,64 @@ t('cancelling a tentative slot is not announced: the old email to the people on 
   __props = {}; var e = cev('[TNJC Tentative]'); var c = cctx(e); c.constants.tnjc_email = 'tnjclist@x';
   var told = cancel_slot(row({title: '[TNJC Tentative]', start: soon}), c, {source: 'page', by: 'Nikolai Petrov', reason: 'away after all', announce: {mode: 'reason', by: {id: 'b'}}});
   assert.ok(!told.announced && mailed.every(m => m.indexOf('tnjclist@x') < 0), mailed.join('; '));
+});
+t('emails name people by first name, with the surname initial when another active member shares it', () => {
+  assert.strictEqual(mail_name('a', people), 'Lena', 'Lena Novak is inactive');
+  assert.strictEqual(mail_name('e', people), 'Sam', 'the other Sam Old is inactive');
+  var two = Object.assign({}, people, {f: Object.assign({}, people.f, {active: true})});
+  assert.deepStrictEqual(mail_names(['a', 'f', 'b'], two), ['Lena W.', 'Lena N.', 'Nikolai']);
+  assert.strictEqual(mail_name('zz', people), '(unknown)');
+});
+t('cancelling your own duty is tentative until the rota\\'s tsar signs it off; turned down: it goes ahead; the tsar\\'s own: at once', () => {
+  __props = {}; var e = cev('TNJC: Nikolai Petrov'); var c = cctx(e); c.constants.tnjc_email = 'tnjclist@x'; c.me_identity = {email: 'nikolai@x'};
+  var saved = [identity_rows, to_row, notion_get_page, send_mail], got = [];
+  identity_rows = () => ({rows: []}); send_mail = function(to, subject, blocks, k, o){ got.push({to: to, subject: subject, cc: (o || {}).cc, text: blocks_to_text(blocks)}); };
+  var slot = row({start: soon}); notion_get_page = () => ({}); to_row = () => slot;
+  try {
+    var msg = request_cancellation(slot, 'presenter', 'b', 'my experiment ran over', 'reason', c);
+    assert.ok(/^Tentative: the TNJC Tsar has to sign it off/.test(msg), msg);
+    assert.deepStrictEqual(patched, [], 'nothing changes yet');
+    assert.deepStrictEqual(got.map(m => m.to), ['org@x', 'nikolai@x']);
+    assert.ok(/To sign off: Nikolai wants to cancel the TNJC/.test(got[0].subject) && /\\?cancel=[0-9a-f]{32}/.test(got[0].text) && got[0].text.indexOf('Signed off by the TNJC Tsar.') >= 0, got[0].text);
+    assert.ok(/Tentative: your cancellation/.test(got[1].subject) && /tentative/.test(got[1].text), got[1].text);
+    var code = cancel_requests()[0].code; got = [];
+    assert.strictEqual(cancel_request_info(code, c).who, 'Nikolai');
+    var done = answer_cancellation(code, true, c);
+    assert.ok(/^Signed off/.test(done), done);
+    assert.strictEqual(slot.title, 'Cancelled');
+    assert.ok(got.some(m => m.to === 'tnjclist@x' && /cancelled by Nikolai/.test(m.subject) && m.text.trim().endsWith('Signed off by the TNJC Tsar.')), JSON.stringify(got));
+    assert.strictEqual(JSON.parse(__props.cancelcount).counts.b, 1);
+    assert.throws(() => answer_cancellation(code, true, c), /already been signed off/);
+    // turned down
+    slot = row({start: soon}); to_row = () => slot; got = [];
+    request_cancellation(slot, 'presenter', 'b', 'my experiment ran over', 'reason', c);
+    got = []; answer_cancellation(cancel_requests()[0].code, false, c);
+    assert.ok(got.length === 1 && got[0].to === 'nikolai@x' && /^🧠 Not cancelled/.test(got[0].subject) && slot.title === '', JSON.stringify(got));
+    // the TNJC tsar cancelling their own TNJC talk: no signature needed
+    slot = row({start: soon}); to_row = () => slot; c.me_identity = {email: 'org@x'}; got = [];
+    assert.ok(/needed no other signature/.test(request_cancellation(slot, 'presenter', 'b', 'my experiment ran over', 'reason', c)));
+    assert.strictEqual(slot.title, 'Cancelled');
+    // requests lapse when the slot starts
+    __props['cancelreq:old'] = JSON.stringify({code: 'old', start: Date.now() - 1000}); prune_cancel_requests(Date.now());
+    assert.ok(!__props['cancelreq:old']);
+  } finally { identity_rows = saved[0]; to_row = saved[1]; notion_get_page = saved[2]; send_mail = saved[3]; }
+});
+t('cancellation league: only with enough data; noisy rank rounded to 10%', () => {
+  var c = ctx(false); c.people = {};
+  for (var i = 0; i < 20; i++) c.people['p' + i] = {id: 'p' + i, name: 'Person' + i + ' X', active: true};
+  var day = 864e5, today = fmt_iso_date(start_of_today());
+  __props = {cancelcount: JSON.stringify({since: today, counts: {p0: 5, p1: 2}, total: 12})};
+  assert.strictEqual(cancel_rank('p0', c, () => 0.5), 0, 'counting for less than 90 days');
+  var since = fmt_iso_date(new Date(start_of_today().getTime() - 100 * day));
+  __props = {cancelcount: JSON.stringify({since: since, counts: {p0: 5, p1: 2}, total: 4})};
+  assert.strictEqual(cancel_rank('p0', c, () => 0.5), 0, 'fewer than 10 cancellations counted');
+  __props = {cancelcount: JSON.stringify({since: since, counts: {p0: 5, p1: 2, p2: 1, p3: 1, p4: 1}, total: 10})};
+  assert.strictEqual(cancel_rank('p0', c, () => 0.5), 10, 'no noise: the most cancellations is the top 10%');
+  assert.strictEqual(cancel_rank('p1', c, () => 0.5), 10);
+  assert.strictEqual(cancel_rank('p2', c, () => 0.5), 20);
+  assert.ok(/top 10%\\*\\* of the Unit's cancellers/.test(cancel_rank_line('p0', c, false, () => 0.5)));
+  var ranks = {}; for (var k = 0; k < 200; k++) ranks[cancel_rank('p9', c)] = true;
+  assert.ok(Object.keys(ranks).length > 1 && Object.keys(ranks).every(r => r % 10 === 0), 'noisy, in 10% steps');
 });
 t('duty labels say what you do, not the slot type and the duty side by side', () => {
   assert.strictEqual(duty_label(row({type: 'Research Talk'}), 'tea'), 'Tea duty at the research talk');

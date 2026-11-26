@@ -6,7 +6,7 @@
 // project must contain only doGet, doPost and these thin wrappers. All logic lives in "Gatsby Tea Automation", used
 // as the library TeaBot; each api_* function there checks the visitor's personal code or the unit key.
 
-const PAGE_PARAMS = {t: /^[0-9a-f]{40}$/, confirm: /^[0-9a-f]{32}$/, swap: /^[0-9a-f]{32}$/, undo: /^[0-9a-f]{32}$/, leave: /^1$/, k: /^[\w-]{6,64}$/};
+const PAGE_PARAMS = {t: /^[0-9a-f]{40}$/, confirm: /^[0-9a-f]{32}$/, swap: /^[0-9a-f]{32}$/, undo: /^[0-9a-f]{32}$/, cancel: /^[0-9a-f]{32}$/, leave: /^1$/, k: /^[\w-]{6,64}$/};
 
 function doGet(e){
   var p = (e && e.parameter) || {};
@@ -48,6 +48,9 @@ function api_undo_swap(code){ return TeaBot.api_undo_swap(code); }
 function api_title(token, row_id, title, description){ return TeaBot.api_title(token, row_id, title, description); }
 function api_cancel(token, row_id, reason, duty, announce){ return TeaBot.api_cancel(token, row_id, reason, duty, announce); }
 function api_cancel_preview(token, row_id, duty){ return TeaBot.api_cancel_preview(token, row_id, duty); }
+function api_withdraw_cancellation(token, code){ return TeaBot.api_withdraw_cancellation(token, code); }
+function api_cancel_request(code){ return TeaBot.api_cancel_request(code); }
+function api_answer_cancellation(code, approve){ return TeaBot.api_answer_cancellation(code, approve); }
 function api_cant_make_it(token, row_id, duty){ return TeaBot.api_cant_make_it(token, row_id, duty); }
 function api_add_away(token, from, to, reason){ return TeaBot.api_add_away(token, from, to, reason); }
 function api_remove_away(token, row_number){ return TeaBot.api_remove_away(token, row_number); }

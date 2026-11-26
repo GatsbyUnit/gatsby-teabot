@@ -232,7 +232,7 @@ function duty_mail(row, role, id, ctx, today, opts){
   if (!p || !p.email) return false;
   var m = duty_message(row, role);
   var blocks = [m.text];
-  if (opts.from) blocks.push('You take over from ' + names_of([opts.from], ctx.people)[0] + ', who can\'t make it.');
+  if (opts.from) blocks.push('You take over from ' + mail_name(opts.from, ctx.people) + ', who can\'t make it.');
   blocks = blocks.concat(m.more);
   var deadline = handon_deadline(row, role);
   blocks.push(deadline >= today
@@ -255,9 +255,9 @@ function released_mail(row, role, from, to, ctx){
   if (!p || !p.email) return;
   var organiser = auto_organiser(rota_of_type(row.type), ctx).split(',')[0].trim();
   send_mail(p.email, with_emoji(row, role, 'Handed on: ' + duty_name(row, role)), [
-    'Your away dates cover this, so the bot has handed it to **' + names_of([to], ctx.people)[0] + '**:',
-    {table: [['Slot', fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type], ['Now', names_of([to], ctx.people)[0]]]},
-    'You keep your place in the queue, so you will be scheduled again soon. If the away dates were a mistake, ask ' + names_of([to], ctx.people)[0] + ' to swap back on your tea page.',
+    'Your away dates cover this, so the bot has handed it to **' + mail_name(to, ctx.people) + '**:',
+    {table: [['Slot', fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type], ['Now', mail_name(to, ctx.people)]]},
+    'You keep your place in the queue, so you will be scheduled again soon. If the away dates were a mistake, ask ' + mail_name(to, ctx.people) + ' to swap back on your tea page.',
     {link: 'Open my tea page', url: tea_page_link_for(from, ctx)}
   ], ctx.constants, organiser ? {reply_to: organiser} : {});
 }
@@ -270,11 +270,11 @@ function handover_mail(rota, handed, stuck, ctx){
   var blocks = [];
   if (handed.length){
     blocks.push('These people added away dates covering their slot, so the autopilot handed it to the next free person (both were told):');
-    blocks.push({items: handed.map(function(h){ return line(h.row, h.role) + ': ' + names_of([h.from], ctx.people)[0] + ' → ' + names_of([h.to], ctx.people)[0]; })});
+    blocks.push({items: handed.map(function(h){ return line(h.row, h.role) + ': ' + mail_name(h.from, ctx.people) + ' → ' + mail_name(h.to, ctx.people); })});
   }
   if (stuck.length){
     blocks.push('These people are away during their slot, but nobody else is free then, so nothing was changed. Please sort it out on the Gatsby Rotas site (another person, a guest, or remove the slot):');
-    blocks.push({items: stuck.map(function(c){ return line(c.row, c.role) + ': ' + names_of([c.id], ctx.people)[0]; })});
+    blocks.push({items: stuck.map(function(c){ return line(c.row, c.role) + ': ' + mail_name(c.id, ctx.people); })});
   }
   blocks.push({link: 'Gatsby Rotas site', url: site_url(ctx.settings)});
   send_mail(to, label + ': ' + (handed.length ? 'slots handed on because of away dates' : 'nobody free for a slot'), blocks, ctx.constants, {as: rota});
