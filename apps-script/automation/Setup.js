@@ -57,7 +57,7 @@ function pause(){
 function show_status(){
   var s = get_settings();
   Logger.log('Mode: ' + (s.dry_run ? 'DRY RUN (watching only)' : 'LIVE'));
-  Logger.log('Watched: ' + s.SYNC_TYPES + ' | live: ' + s.LIVE_TYPES + ' | organiser reminders: ' + s.REMINDER_TYPES);
+  Logger.log('Watched: ' + s.SYNC_TYPES + ' | live: ' + s.LIVE_TYPES + ' | autopilot: ' + s.AUTO_TYPES);
   Logger.log('Settings: ' + SpreadsheetApp.openById(CONST_SHEET_ID).getUrl() + ' (tabs "' + SETTINGS_TAB + '" and "' + REMINDERS_TAB + '")');
   if (s.LOG_SHEET_ID) Logger.log('Log: ' + SpreadsheetApp.openById(s.LOG_SHEET_ID).getUrl());
   if (s.LAST_BACKUP_ID) Logger.log('Last backup: ' + SpreadsheetApp.openById(s.LAST_BACKUP_ID).getUrl());

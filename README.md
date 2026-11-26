@@ -81,7 +81,7 @@ Useful from the Apps Script editor:
 and the Rotas site. Everyone: read the schedule, people, rota rules and pages; see their own duties and who usually
 does them; "can't make it" (the bot hands a duty to the next person in line); swap or take over a slot; set talk titles; cancel a duty; add and remove away dates; change
 their photo (from a picture file; needs macOS or ImageMagick) and email; leave the tea system. Tsars and organisers
-also: add, change, cancel (with an email to the people on duty) and remove slots; change people and rota rules; edit pages; plan, fill and finalise a rota. It
+also: add, change, cancel (with an email to the people on duty) and remove slots; change people and rota rules; edit pages; sign off cancellations. It
 acts as the person whose personal tea-page code it is given and may do exactly what they may do; the bot logs every
 change under their name. Nothing to install (Node 18 or later), nothing to host:
 

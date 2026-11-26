@@ -17,7 +17,7 @@ their code themselves. Once it is connected, you can do for them what they can d
 - closer to the date: swap a duty with a colleague they have agreed it with, or take over a colleague's slot;
 - set talk titles and abstracts; add or remove away dates; change their photo or email;
 - as a last resort, cancel (confirm with the user first);
-- organisers and tsars also: plan, fill and finalise rotas, edit slots, people, rota rules and the site's pages.
+- organisers and tsars also: sign off cancellations, edit slots, people, rota rules and the site's pages (the bot plans the rotas itself).
 
 Every change is made as them and logged under their name; the people concerned get the bot's usual emails.
 

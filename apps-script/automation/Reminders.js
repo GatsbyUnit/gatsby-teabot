@@ -1,7 +1,5 @@
 // Daily: reminders for organisers, then the autopilot (Autopilot.js). (Reminders for presenters and tea people
 // stay in the old Cron Jobs.)
-//  - Mondays: if a type's schedule ends within SCHEDULE_WARNING_DAYS, nudge its organiser to run scheduling
-//    (not for rotas on autopilot)
 //  - fixed dates from the "Automation reminders" tab of the constants sheet (seeded with DEFAULT_DATE_REMINDERS)
 
 const DEFAULT_DATE_REMINDERS = [
@@ -34,20 +32,6 @@ function daily_reminders(constants, settings){
   var today = start_of_today();
   var handbook = settings.HANDBOOK_URL ? [{link: 'Organiser handbook', url: settings.HANDBOOK_URL}] : [];
 
-  if (today.getDay() === 1){
-    settings.reminder_types.forEach(function(type){
-      if ((settings.auto_rotas || []).indexOf(rota_of_type(type)) >= 0) return;
-      var last = last_scheduled_date(type, constants);
-      var days = last ? Math.round((last - today) / (24 * 3600 * 1000)) : -1;
-      if (last && days > settings.schedule_warning_days) return;
-      var when = last ? 'The ' + type + ' schedule currently runs until ' + fmt_day(last) + ' (' + days + ' days from now).' : 'There are no upcoming ' + type + ' slots.';
-      send_mail(admin_email_for_type(type, constants), 'Time to schedule more ' + type + ' slots', [
-        when,
-        'Plan the next slots in the Organiser section of your tea page: create them, delete the ones you do not need on the site (bank holidays, UCL closures, retreat, conference deadlines), fill them with people, check, and finalise.'
-      ].concat(handbook), constants, {as: type});
-    });
-  }
-
   settings.date_reminders.forEach(function(r){
     if (today.getMonth() + 1 === r.month && today.getDate() === r.day){
       send_mail(admin_email_for_type(r.type, constants), r.subject, [r.body].concat(handbook), constants, {as: r.type});
@@ -55,13 +39,3 @@ function daily_reminders(constants, settings){
   });
 }
 
-function last_scheduled_date(type, constants){
-  var res = notion_request('post', 'databases/' + constants['notion_talk_db_id'] + '/query', {
-    filter: {property: 'Type', select: {equals: type}},
-    sorts: [{property: 'Date', direction: 'descending'}],
-    page_size: 1
-  }, constants);
-  if (res.results.length === 0) return null;
-  var row = to_row(res.results[0]);
-  return row.start;
-}

@@ -5,7 +5,7 @@
 //     organiser gets a summary. If nobody is free, nothing changes and the organiser is told once.
 //  2. Slots it planned AUTO_REVIEW_DAYS ago go on the calendar.
 //  3. Mondays (and on its first run for a rota): it creates the rota's missing slots from AUTO_FIRST_DAYS ahead to
-//     the end of the week AUTO_WEEKS ahead, fills them as "Plan these dates" does, tells everyone it pencilled in
+//     the end of the week AUTO_WEEKS ahead, fills them fairly (fill_slots), tells everyone it pencilled in
 //     and emails the organiser the list.
 // So the person on duty hears once, when pencilled in; until three weeks before, adding away dates is all it takes
 // to hand a slot on. Whoever gets a slot without that email (a replacement, someone the organiser put on by hand)

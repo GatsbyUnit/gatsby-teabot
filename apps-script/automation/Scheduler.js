@@ -398,20 +398,6 @@ function read_away_all(person){
   return out;
 }
 
-// suggested next range for the organiser form: from the day after the last slot of the rota
-function next_range(rota, ctx){
-  var types = SLOT_PLANS[rota].map(function(p){ return p.type; });
-  var last = null;
-  types.concat(rota === 'talks' ? ['Just Tea'] : []).forEach(function(type){
-    var d = last_scheduled_date(type, ctx.constants);
-    if (d && (!last || d > last)) last = d;
-  });
-  var from = last ? add_days(last, 1) : start_of_today();
-  if (from < start_of_today()) from = start_of_today();
-  var weeks = rota === 'Coffee Cleaning' ? 4 : 8;
-  return {from: fmt_iso_date(from), to: fmt_iso_date(add_days(from, weeks * 7 - 1))};
-}
-
 function iso_weekday(d){
   var p = d.split('-').map(Number);
   return new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();

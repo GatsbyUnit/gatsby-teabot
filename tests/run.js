@@ -1315,15 +1315,6 @@ ap_t('fill_slots: only the open duties of tentative slots; people on them stay; 
   assert.ok(/Prof Guest, tea: Bo X/.test(res.filled.join(' | ')), res.filled.join(' | '));
   assert.deepStrictEqual(fill_slots('talks', w.c).warnings, ['No tentative slot is missing a presenter or tea person.'], 'a second run finds nothing to do');
 });
-t('organiser_rota: rota names in any case, talk aliases, unknown names are their own error', () => {
-  var c = {me_identity: {email: 'Tsar@x'}, constants: {admin_email: 'tsar@x', mljc_admin_email: 'org@x'}};
-  assert.strictEqual(organiser_rota(c, 'Research Talk'), 'talks');
-  assert.strictEqual(organiser_rota(c, 'tea talks'), 'talks');
-  assert.strictEqual(organiser_rota(c, 'coffee cleaning'), 'Coffee Cleaning');
-  assert.throws(() => organiser_rota(c, 'Lunch'), /no rota called "Lunch"/);
-  assert.throws(() => organiser_rota({me_identity: {email: 'org@x'}, constants: c.constants}, 'TNJC'), /Only the organiser/);
-  assert.strictEqual(organiser_rota({me_identity: {email: 'org@x'}, constants: c.constants}, 'mljc'), 'MLJC');
-});
 ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot on, Monday it goes live and plans on, an organiser edit is told', () => {
   var w = ap_world({rows: [ap_row('g', 'MLJC', '2026-11-23T13:30:00Z', [], [], {guest: 'Prof Guest'})]}), W = w.W;
   W.run('2026-11-20');   // Friday, first run: plans 30 Nov - 3 Jan (28 Dec closed)
@@ -1628,14 +1619,6 @@ t('autopilot: coffee duty email says confirmed and daily emails, not calendar', 
     assert.ok(/It is confirmed on Fri 27 Nov 2026\\./.test(got[1]), got[1]);
     assert.ok(/It is on the calendar\\. You will get the usual reminders before\\./.test(got[2]), got[2]);
     assert.ok(!/calendar/.test(got[0] + got[1]));
-  } finally { Object.keys(saved).forEach(k => { this[k] = saved[k]; }); }
-});
-t('autopilot: Monday nudges skip rotas on autopilot', () => {
-  var saved = {send_mail: send_mail, last_scheduled_date: last_scheduled_date, start_of_today: start_of_today};
-  try {
-    var m = []; send_mail = (to, subj) => m.push(subj); last_scheduled_date = () => null; start_of_today = () => new Date(2026, 10, 23);
-    daily_reminders({tnjc_admin_email: 'a', mljc_admin_email: 'b'}, {reminder_types: ['TNJC', 'MLJC'], auto_rotas: ['MLJC'], schedule_warning_days: 21, date_reminders: []});
-    assert.deepStrictEqual(m, ['Time to schedule more TNJC slots']);
   } finally { Object.keys(saved).forEach(k => { this[k] = saved[k]; }); }
 });
 results.join('\\n');

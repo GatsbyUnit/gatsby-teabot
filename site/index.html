@@ -850,7 +850,7 @@
   }
 
   // The organiser's card per rota: the bot plans every rota itself (autopilot), the same for every organiser; there
-  // are no planning tools here (for something unusual: an AI agent with the MCP tools plan_slots / fill_slots / finalise).
+  // are no planning tools (the fallback: tsars add slots and people by hand on the Gatsby Rotas site).
   function organiserCard(o){
     return el('div', {class: 'card'}, [
       el('div', {class: 'when', text: o.label}),

@@ -72,19 +72,6 @@ function tentative_rows(rota, ctx){
   return pages.map(to_row).filter(function(r){ return r.start !== null; });
 }
 
-// What the old "<rota> Finalizing Script" did: create the events, clear "[... Tentative]", store the
-// event IDs, and optionally email the group once.
-function finalise_rota(rota, email_group, ctx){
-  var rows = tentative_rows(rota, ctx);
-  finalise_rows(rows, ctx);
-  log_row(ctx, 'finalise', rota, null, 'finalised', rows.length + ' slots' + (email_group ? ', group emailed' : ''));
-  if (email_group && rows.length > 0){
-    var r = ROTAS[rota];
-    send_mail(ctx.constants[r.list], r.subject, ['Hi friends,', r.text], ctx.constants, {reply_to: ctx.constants[r.admin]});
-  }
-  return rows.length;
-}
-
 function finalise_rows(rows, ctx){
   rows.forEach(function(row){
     row.title = '';

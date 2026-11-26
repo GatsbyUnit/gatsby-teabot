@@ -107,17 +107,14 @@ Reader entry in Site access.
 Every edit is a line in the automation log sheet (job "site edit", with who did it).
 
 ## Scheduling
-When: as promised to members in the guides on the site (Gatsby Tea System, TNJC Guide, MLJC Guide). The bot also
-reminds you on Mondays when a rota's schedule is about to run out (not for rotas on autopilot). By hand (AI agent, MCP tools):
-1. **Plan these dates:** creates the slots (same days, times, CSNJC rule and coffee water-filter weeks as the old notebooks; England and Wales bank holidays and CLOSED_DATES are skipped; existing slots are kept) and fills them with Kevin's fairness algorithm and everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
-2. **Check on the site:** remove slots that are not needed (UCL closures, retreat, conference deadlines such as COSYNE) and change anyone you like. "Fill … empty slots again" refills any slot you cleared.
-3. **Finalise:** puts them on the calendar; optionally emails the group the usual "schedule updated" email.
+The bot plans every rota itself (autopilot, below); there are no planning tools by hand any more. If the autopilot
+ever fails, add slots and put people on them by hand on the Gatsby Rotas site.
 
 **Autopilot (rotas in AUTO_TYPES, Automation tab; all four rotas since Nov 2026).** The bot schedules the rotas by
-itself, every morning at 8:00. The tea page has no planning tools for any organiser (only what the autopilot does);
-for something unusual, plan by hand through an AI agent (MCP `plan_slots`, `fill_slots`, `finalise`):
+itself, every morning at 8:00:
 - **Every Monday** (and on the first morning after a rota is switched on) it creates the rota's missing slots from
-  10 days ahead to the end of the week AUTO_WEEKS (default 6) ahead and fills them as "Plan these dates" does.
+  10 days ahead to the end of the week AUTO_WEEKS (default 6) ahead and fills them with Kevin's fairness algorithm and
+  everyone's away dates (port checked against the original by `tests/crosscheck_scheduler.py`).
   "Missing" = the date never had a slot while the autopilot was looking: it remembers every slot it has seen, so
   dates nobody planned yet are filled (also before a slot added far ahead), and removed ones are not. Everyone it
   pencilled in gets one email (their duty, the tea-page link, and the away-date deadline below); the organiser gets
@@ -183,7 +180,7 @@ new person can see their tools. Work through it together with the person you tak
   tab (dated reminders; change the rota column if duties move between organisers).
 - Skim the "Gatsby Tea Automation log" sheet now and then; its Mismatches tab lists open calendar / site
   differences.
-- Your first scheduling round: Plan these dates, check on the site, Finalise (see Scheduling).
+- Scheduling: nothing to do; the bot plans your rota and emails you the list every Monday (see Scheduling).
 
 **4. Before the outgoing person leaves**
 - Hand over open items: tentative slots not yet finalised, anything on the Mismatches tab, unanswered emails.

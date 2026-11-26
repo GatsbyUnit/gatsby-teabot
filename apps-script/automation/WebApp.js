@@ -173,14 +173,9 @@ function tea_state(ctx, censored){
     .filter(function(p){ return p.active && p.name && p.id !== me.id; })
     .sort(function(a, b){ return a.name.localeCompare(b.name); })
     .map(function(p){ return {id: p.id, name: p.name}; });
+  // the rotas they organise (the bot plans them all: the page only says so)
   var organiser = Object.keys(ROTAS).filter(function(rota){ return is_organiser(ctx, rota); }).map(function(rota){
-    var tentative = tentative_rows(rota, ctx).filter(function(r){ return r.start >= start_of_today(); });
-    var range = next_range(rota, ctx);
-    return {rota: rota, label: ROTAS[rota].label, tentative: tentative.length,
-            auto: (ctx.settings.auto_rotas || []).indexOf(rota) >= 0 ? ctx.settings.auto_weeks : 0,
-            empty: tentative.filter(function(r){ return !r.presenter_ids.length && !r.tea_ids.length; }).length,
-            from: range.from, to: range.to,
-            tea_from: rota === 'talks' ? range.from : '', tea_to: rota === 'talks' ? fmt_iso_date(add_days(parse_iso_date(range.from), 27)) : ''};
+    return {rota: rota, label: ROTAS[rota].label, auto: (ctx.settings.auto_rotas || []).indexOf(rota) >= 0 ? ctx.settings.auto_weeks : 0};
   });
   var out = {
     name: me.name, email: ctx.me_identity.email, duties: duties, people: people, incoming: incoming, to_sign: to_sign,
@@ -521,61 +516,6 @@ function mask_email(email){
   var shown = local.length <= 2 ? local.charAt(0) + '•••' : local.slice(0, 2) + '•••' + (local.length > 4 ? local.slice(-1) : '');
   var dot = domain.indexOf('.');
   return shown + '@' + domain.charAt(0) + '•••' + (dot > 0 ? domain.slice(dot) : '');
-}
-
-// The rota a plan/fill/finalise call means: TNJC, MLJC, Coffee Cleaning or talks, in any case; "Research Talk(s)"
-// and "Tea Talk(s)" are talks too. An unknown name is an error of its own, not a permission refusal.
-function organiser_rota(ctx, rota){
-  var name = String(rota || '').trim();
-  var key = Object.keys(SLOT_PLANS).filter(function(k){ return k.toLowerCase() === name.toLowerCase(); })[0];
-  if (!key && /^(research|tea)( talks?)?$/i.test(name)) key = 'talks';
-  if (!key) throw new Error('There is no rota called "' + name + '": use TNJC, MLJC, Coffee Cleaning or talks (research and tea talks).');
-  if (!is_organiser(ctx, key)) throw new Error('Only the organiser of this rota can do that.');
-  return key;
-}
-
-function api_finalise(token, rota, email_group){
-  var ctx = page_context(token);
-  rota = organiser_rota(ctx, rota);
-  var lock = LockService.getScriptLock();
-  lock.waitLock(60 * 1000);
-  try {
-    var n = finalise_rota(rota, !!email_group, ctx);
-    return n === 0 ? 'There were no tentative slots to finalise.' : 'Finalised ' + n + ' slots: they are on the calendar now' + (email_group ? ' and the group has been emailed.' : '.');
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// One step for organisers: create the slots for the dates (bank holidays and closed dates skipped, existing slots kept) and
-// fill every empty one fairly. They stay tentative until the organiser has checked them and finalises.
-function api_plan_slots(token, rota, ranges){
-  var ctx = page_context(token);
-  rota = organiser_rota(ctx, rota);
-  var lock = LockService.getScriptLock();
-  lock.waitLock(60 * 1000);
-  try {
-    var made = create_slots(rota, ranges || {}, ctx);
-    var res = fill_slots(rota, ctx);
-    res.created = made.created.length;
-    res.existing = made.skipped.length;
-    res.holidays = made.holidays || [];
-    return res;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function api_fill_slots(token, rota){
-  var ctx = page_context(token);
-  rota = organiser_rota(ctx, rota);
-  var lock = LockService.getScriptLock();
-  lock.waitLock(60 * 1000);
-  try {
-    return fill_slots(rota, ctx);
-  } finally {
-    lock.releaseLock();
-  }
 }
 
 // ---- helpers ----

@@ -21,8 +21,6 @@ const SETTINGS = [
   ['DRY_RUN', 'TRUE', 'TRUE = the bot only watches and emails what it would do. FALSE = it updates the rota data and the calendar. Set back to TRUE to pause it at any time.'],
   ['SYNC_TYPES', 'TNJC', 'Rotas the bot watches: it compares the calendar with the site and emails the rota organiser about differences (comma-separated slot types, e.g. TNJC, MLJC, Coffee Cleaning).'],
   ['LIVE_TYPES', 'TNJC', 'Of the watched rotas, the ones the bot may actually change (fix titles, record hand edits, add links). The others are only reported. Ignored while DRY_RUN is TRUE.'],
-  ['REMINDER_TYPES', 'TNJC', 'Rotas whose organiser gets a Monday reminder when the schedule is running out.'],
-  ['SCHEDULE_WARNING_DAYS', '21', 'Send that reminder when the schedule ends within this many days.'],
   ['LOOKBACK_DAYS', '60', 'How far back hand edits of past calendar events are copied into the site (keeps the rota fair).'],
   ['SWAP_HORIZON_DAYS', '120', 'How far ahead the swap form lists slots.'],
   ['INVITE_TYPES', '', 'Rotas whose people on duty get a calendar invitation for their slot (comma-separated, e.g. TNJC, MLJC; live rotas only). Declining does not take anyone off the rota: the bot emails them how to swap instead.'],
@@ -89,11 +87,9 @@ function get_settings(){
   s.dry_run = s.DRY_RUN.toLowerCase() !== 'false';
   s.sync_types = split_list(s.SYNC_TYPES);
   s.live_types = split_list(s.LIVE_TYPES);
-  s.reminder_types = split_list(s.REMINDER_TYPES);
   s.invite_types = split_list(s.INVITE_TYPES);
   s.lookback_days = parseInt(s.LOOKBACK_DAYS, 10);
   s.swap_horizon_days = parseInt(s.SWAP_HORIZON_DAYS, 10);
-  s.schedule_warning_days = parseInt(s.SCHEDULE_WARNING_DAYS, 10);
   s.links_in_events = s.LINKS_IN_EVENTS.toLowerCase() === 'true';
   s.auto_rotas = auto_rotas_of(s.AUTO_TYPES);
   s.auto_weeks = parseInt(s.AUTO_WEEKS, 10) || 6;

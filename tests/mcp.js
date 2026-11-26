@@ -70,7 +70,7 @@ fake.listen(0, '127.0.0.1', async () => {
     assert.strictEqual(init.result.serverInfo.name, 'gatsby-teabot');
     const list = await s.rpc('tools/list', {});
     const names = list.result.tools.map((x) => x.name);
-    for (const n of ['whoami', 'schedule', 'people', 'save_slot', 'save_person', 'edit_page', 'ask_swap', 'plan_slots', 'finalise', 'put_on_rota', 'site_access', 'save_site_access', 'remove_site_access']) assert.ok(names.includes(n), n);
+    for (const n of ['whoami', 'schedule', 'people', 'save_slot', 'save_person', 'edit_page', 'ask_swap', 'put_on_rota', 'site_access', 'save_site_access', 'remove_site_access']) assert.ok(names.includes(n), n);
     assert.ok(list.result.tools.every((x) => x.inputSchema && x.inputSchema.type === 'object'));
   });
   await t('mcp: schedule by person name, with names instead of ids', async () => {
