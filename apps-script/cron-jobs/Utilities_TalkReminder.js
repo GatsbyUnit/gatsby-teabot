@@ -213,7 +213,7 @@ function talkreminder(admin_email, talk_date, email_option, talk_date_name, cons
           "Type: " + talk_type + "\n" +
           "Time: " + talk_start_time + " - " + talk_end_time + "\n" +
           "Presenter: " + presenter_names.join(", ") + "\n" +
-          "Tea: " + tea_people_names.join(", ") + "\n" +
+          "Tea: " + (talk_type == 'Leaving Tea' && tea_people_names.length == 0 ? "everyone brings something" : tea_people_names.join(", ")) + "\n" +
           "Zoom Link: " + gatsby_zoom_link + "\n\n" +
           "Description: " + talk_description + "\n=============\n\n" , constants, admin_email);
       } else if (talk_type == 'MLJC' ) {

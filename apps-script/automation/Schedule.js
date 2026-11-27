@@ -4,7 +4,8 @@ const TZ = 'Europe/London';
 const GUEST_PROP = 'Guest speaker';
 const ALL_TYPES = ['TNJC', 'MLJC', 'Coffee Cleaning', 'Research Talk', 'Tea Talk', 'Just Tea', 'Leaving Tea', 'External Seminar'];
 const PRESENTER_TYPES = ['Research Talk', 'Tea Talk', 'MLJC', 'TNJC'];
-const TEA_TYPES = ['Research Talk', 'Tea Talk', 'Just Tea', 'External Seminar', 'Leaving Tea', 'Coffee Cleaning'];
+// slots with someone on tea duty; not a leaving tea: everyone brings something
+const TEA_TYPES = ['Research Talk', 'Tea Talk', 'Just Tea', 'External Seminar', 'Coffee Cleaning'];
 const GUEST_TYPES = ['TNJC', 'MLJC'];
 // rotas that are not on the gatsby.tea calendar (coffee: the people on duty get an email every day of their week
 // instead, and the site shows who is on); the bot removes the calendar events of their upcoming slots
@@ -15,7 +16,7 @@ const CALENDAR_CANCEL_TYPES = PRESENTER_TYPES.concat(['Just Tea']);
 
 // which relations (people) a slot's calendar title shows
 function roles_for_type(type){
-  if (type === 'TNJC' || type === 'MLJC') return ['Presenter'];
+  if (type === 'TNJC' || type === 'MLJC' || type === 'Leaving Tea') return ['Presenter'];
   if (type === 'Coffee Cleaning' || type === 'Just Tea') return ['Tea'];
   return ['Presenter', 'Tea'];
 }
@@ -67,6 +68,7 @@ function format_title(row, people){
   if (type === 'MLJC') return 'MLJC: ' + presenters.join(', ');
   if (type === 'Coffee Cleaning') return 'Coffee Duty This Week: ' + tea.join(', ');
   if (type === 'Just Tea') return 'JUST TEA: ' + tea.join(', ');
+  if (type === 'Leaving Tea') return 'LEAVING TEA: ' + presenters.join(', ');   // nobody on tea: everyone brings something
   if (ALL_TYPES.indexOf(type) >= 0) return type.toUpperCase() + ': ' + presenters.join(', ') + ' TEA: ' + tea.join(', ');
   return null;
 }
@@ -90,8 +92,9 @@ function parse_title(title, type){
     return m ? {csnjc: false, roles: {Tea: split_names(m[1], false)}} : null;
   }
   if (type === 'Leaving Tea'){
-    var leaving = parse_leaving_title(t);
-    if (leaving) return leaving;
+    var leaving = parse_leaving_title(t) || parse_title(t, 'Tea Talk');   // any label, like a talk's
+    if (leaving) delete leaving.roles.Tea;   // nobody is on tea duty for a leaving tea
+    return leaving;
   } else if (is_leaving_title(t) || is_just_tea_title(t)){
     return null;  // a talk turned into a leaving tea or a just tea by hand: not a swap (see sync_row)
   }
@@ -124,25 +127,22 @@ function is_just_tea_title(title){
   return /^\s*just\s+tea\b/i.test(String(title));
 }
 
-// Names in a leaving tea's title: {csnjc, roles: {Presenter: [who is leaving], Tea: [...] when the title names
-// tea people}}; null if it is not written in one of the usual ways.
+// Names in a leaving tea's title: {csnjc, roles: {Presenter: [who is leaving]}}; null if it is not written in one of
+// the usual ways. Tea people the title names ("… TEA: Name", the old format) are ignored: nobody is on tea duty for a
+// leaving tea, everyone brings something.
 function parse_leaving_title(title){
   var t = String(title).trim();
-  var who, rest;
+  var who;
   var m = t.match(new RegExp('^' + LEAVING_WORDS + '\\s*(?:[:.(\\-–—]|\\bfor\\b)?\\s*(.*)$', 'i'));
   if (m){
     var tea = m[1].match(/^(.*?)\s*\bTEA\s*:\s*(.*)$/i);
     who = tea ? tea[1] : m[1];
-    rest = tea ? tea[2] : null;
   } else {
     m = t.match(new RegExp('^(.+?)[\'’]s?\\s+' + LEAVING_WORDS + '\\s*(?:[:.\\-–—]?\\s*TEA\\s*:\\s*(.*))?$', 'i'));
     if (!m) return null;
     who = m[1];
-    rest = m[2] === undefined ? null : m[2];
   }
-  var roles = {Presenter: split_names(String(who).replace(/[\s)\-–—:.]+$/, ''), true)};
-  if (rest !== null) roles.Tea = split_names(rest.replace(/[\s)]+$/, ''), false);
-  return {csnjc: false, roles: roles};
+  return {csnjc: false, roles: {Presenter: split_names(String(who).replace(/[\s)\-–—:.]+$/, ''), true)}};
 }
 
 // events marked as cancelled by hand are left alone (no change, no email)

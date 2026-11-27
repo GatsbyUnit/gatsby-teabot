@@ -242,11 +242,11 @@ function coffee_templates(first_monday, ctx){
 }
 
 // The duties of a slot nobody has yet: 'presenter' (talks and journal clubs, unless a guest speaks) and 'tea'
-// (talks, teas and coffee cleaning).
+// (talks, just teas, seminars and coffee cleaning; not a leaving tea: everyone brings something).
 function open_duties(row){
   var out = [];
   if (PRESENTER_TYPES.indexOf(row.type) >= 0 && !row.presenter_ids.length && !row.guest) out.push('presenter');
-  if (SLOT_TO_TALK_TYPES['Tea'].concat(['Coffee Cleaning']).indexOf(row.type) >= 0 && !row.tea_ids.length) out.push('tea');
+  if (TEA_TYPES.indexOf(row.type) >= 0 && !row.tea_ids.length) out.push('tea');
   return out;
 }
 

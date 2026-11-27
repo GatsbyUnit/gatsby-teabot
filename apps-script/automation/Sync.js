@@ -388,10 +388,11 @@ function sync_cancelled_row(row, ctx, today){
 
 // A talk or just tea (cancelled or not) whose calendar event someone renamed to a leaving tea ("Leaving Tea - Ada
 // Lovelace", see is_leaving_title) becomes a Leaving Tea for the person the title names; a name that is not on the
-// People list is kept as typed (Guest speaker field). The tea people stay unless the title names others, the times
-// follow the event, and the talk's title and description on the site are cleared (they were the talk's); text typed
-// into the event stays. The presenter keeps their turn. One email to the presenter and the tea people with the
-// organiser in cc, not to the person leaving (it may be a surprise). Names the bot can't place go to the tea tsar.
+// People list is kept as typed (Guest speaker field). Nobody is on tea duty for a leaving tea (everyone brings
+// something), so the tea people come off too. The times follow the event, and the talk's title and description on
+// the site are cleared (they were the talk's); text typed into the event stays. The presenter and the tea people keep
+// their turn and get one email with the organiser in cc; the person leaving does not (it may be a surprise). Names
+// the bot can't place go to the tea tsar.
 function sync_to_leaving_tea(row, event, actual, ctx){
   var out = {};
   var where = 'The calendar event of this ' + row.type + ' has been renamed to "' + actual + '"';
@@ -412,10 +413,9 @@ function sync_to_leaving_tea(row, event, actual, ctx){
 
   var was = {type: row.type, presenter_ids: row.presenter_ids.slice(), tea_ids: row.tea_ids.slice(), guest: row.guest, title: is_cancelled_title(row.title) ? '' : row.title};
   var leaving = names.plan.Presenter || [];
-  var tea = names.plan.Tea || row.tea_ids;
   var rel = function(ids){ return {relation: ids.map(function(id){ return {id: hyphenate_id(id)}; })}; };
   var props = {'Type': {select: {name: 'Leaving Tea'}}, 'Title': {title: []}, 'Presenter': rel(leaving)};
-  if (names.plan.Tea) props['Tea'] = rel(tea);
+  if (row.tea_ids.length) props['Tea'] = rel([]);
   if (row.description) props['Description'] = {rich_text: []};
   if (ctx.has_guest_prop) props[GUEST_PROP] = {rich_text: names.guest ? [{text: {content: names.guest}}] : []};
   var start = event.getStartTime(), end = event.getEndTime();
@@ -433,10 +433,10 @@ function sync_to_leaving_tea(row, event, actual, ctx){
   row.description = '';
   row.presenter_ids = leaving;
   row.guest = names.guest || '';
-  row.tea_ids = tea;
+  row.tea_ids = [];
   if (props['Date']){ row.start = start; row.end = end; }
   save_state(row.gcal_id, {t: actual, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
-  var bumped = was.presenter_ids.concat(was.tea_ids.filter(function(id){ return tea.indexOf(id) < 0; }));
+  var bumped = was.presenter_ids.concat(was.tea_ids);
   try { uninvite(Object.assign({}, row, {type: was.type}), bumped, ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
   notify_leaving_tea(row, was, actual, names.notes, ctx);
   return out;
@@ -445,22 +445,18 @@ function sync_to_leaving_tea(row, event, actual, ctx){
 function notify_leaving_tea(row, was, actual, notes, ctx){
   var admin = admin_email_for_type(was.type, ctx.constants);
   var leaving_ids = row.presenter_ids;
-  var ids = was.presenter_ids.concat(was.tea_ids, row.tea_ids)
+  var ids = was.presenter_ids.concat(was.tea_ids)
     .filter(function(id, i, a){ return a.indexOf(id) === i && leaving_ids.indexOf(id) < 0; });
   var to = emails_of(ids, ctx.people);
   var talk = was.type === 'Just Tea' ? 'just tea' : was.type.toLowerCase();
   var speaker = was.guest || mail_names(was.presenter_ids, ctx.people).join(', ');
-  var same_tea = was.tea_ids.slice().sort().join() === row.tea_ids.slice().sort().join();
   var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + (row.end ? '–' + fmt_time(row.end) : '') + ', Leaving Tea'],
                ['Leaving', row.guest || names_of(leaving_ids, ctx.people).join(', ') || '–']];
   if (speaker) table.push(['Talk', speaker + ' (makes way for the leaving tea)']);
-  if (same_tea) table.push(['Tea', (mail_names(row.tea_ids, ctx.people).join(', ') || '–') + (row.tea_ids.length ? ' (still on)' : '')]);
-  else table.push(['Tea, before', mail_names(was.tea_ids, ctx.people).join(', ') || 'nobody'], ['Tea, now', mail_names(row.tea_ids, ctx.people).join(', ') || 'nobody']);
+  table.push(['Tea', 'Everyone brings something' + (was.tea_ids.length ? ' (' + mail_names(was.tea_ids, ctx.people).join(', ') + ' no longer on tea duty)' : '')]);
   var blocks = ['The calendar event for this ' + talk + ' was renamed to "' + actual + '", so the bot has made the slot a leaving tea on the site.', {table: table}];
-  if (was.presenter_ids.length){
-    var first = mail_names(was.presenter_ids, ctx.people);
-    blocks.push(first.join(' and ') + (first.length === 1 ? ' keeps their turn' : ' keep their turns') + ' and will be scheduled again soon.');
-  }
+  var first = mail_names(was.presenter_ids.concat(was.tea_ids), ctx.people);
+  if (first.length) blocks.push(first.join(' and ') + (first.length === 1 ? ' keeps their turn' : ' keep their turns') + ' and will be scheduled again soon.');
   if (was.title) blocks.push('The talk\'s title, "' + was.title + '", is no longer on the site; please add it again once the talk has a new date.');
   if (notes.length) blocks.push(notes.join(' '));
   blocks.push('If this is wrong, just reply to this email.');

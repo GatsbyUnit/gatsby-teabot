@@ -529,6 +529,7 @@ function slotPeople(s, d) {
   if (s.guest) parts.push(`<span class="role">${leaving ? 'Leaving' : 'Guest'}</span> ${esc(s.guest)}`);
   if (s.presenter.length) parts.push(`<span class="role">${leaving ? 'Leaving' : s.type === 'MLJC' || s.type === 'TNJC' ? 'Presenter' : 'Speaker'}</span> ${personLinks(s.presenter, d, true)}`);
   if (s.tea.length) parts.push(`<span class="role">${TYPE_EMOJI.Tea} Tea</span> ${personLinks(s.tea, d, true)}`);
+  else if (leaving) parts.push(`<span class="role">${TYPE_EMOJI.Tea} Tea</span> everyone brings something`);
   return parts.map((p) => `<span class="who">${p}</span>`).join('');
 }
 
