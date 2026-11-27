@@ -89,6 +89,12 @@ function parse_title(title, type){
     m = t.match(/^JUST\s+TEA\s*[:.]\s*(?:TEA\s*:\s*)?(.*)$/i);
     return m ? {csnjc: false, roles: {Tea: split_names(m[1], false)}} : null;
   }
+  if (type === 'Leaving Tea'){
+    var leaving = parse_leaving_title(t);
+    if (leaving) return leaving;
+  } else if (is_leaving_title(t) || is_just_tea_title(t)){
+    return null;  // a talk turned into a leaving tea or a just tea by hand: not a swap (see sync_row)
+  }
   if (ALL_TYPES.indexOf(type) >= 0){
     // organisers relabel talks by hand ("UPGRADE TALK", "ROTATION TALK", ...): any label is fine
     m = t.match(/^TEA\s*:\s*(.*)$/i);
@@ -99,6 +105,44 @@ function parse_title(title, type){
     return m ? {csnjc: false, roles: {Presenter: split_names(m[2], true)}} : null;
   }
   return null;
+}
+
+// Slots that organisers turn into something else by renaming the calendar event: a talk or just tea into a leaving
+// tea ("Leaving Tea - Ada Lovelace", "Leaving tea for Ada", "Ada's leaving tea", "Farewell tea: Ada"; not "No leaving
+// tea"), a talk into a just tea ("JUST TEA: Lena Weber"). See sync_row.
+const LEAVING_FROM_TYPES = ['Research Talk', 'Tea Talk', 'Just Tea', 'External Seminar'];
+const JUST_TEA_FROM_TYPES = ['Research Talk', 'Tea Talk'];
+const LEAVING_WORDS = '(?:leaving|farewell|goodbye|good-bye)\\s+(?:tea|party|drinks|cake)\\b';
+const LEAVING_TITLE_RE = new RegExp('\\b' + LEAVING_WORDS, 'i');
+
+function is_leaving_title(title){
+  var t = String(title);
+  return LEAVING_TITLE_RE.test(t) && !/\bno\s+(?:leaving|farewell|goodbye|good-bye)\b/i.test(t);
+}
+
+function is_just_tea_title(title){
+  return /^\s*just\s+tea\b/i.test(String(title));
+}
+
+// Names in a leaving tea's title: {csnjc, roles: {Presenter: [who is leaving], Tea: [...] when the title names
+// tea people}}; null if it is not written in one of the usual ways.
+function parse_leaving_title(title){
+  var t = String(title).trim();
+  var who, rest;
+  var m = t.match(new RegExp('^' + LEAVING_WORDS + '\\s*(?:[:.(\\-–—]|\\bfor\\b)?\\s*(.*)$', 'i'));
+  if (m){
+    var tea = m[1].match(/^(.*?)\s*\bTEA\s*:\s*(.*)$/i);
+    who = tea ? tea[1] : m[1];
+    rest = tea ? tea[2] : null;
+  } else {
+    m = t.match(new RegExp('^(.+?)[\'’]s?\\s+' + LEAVING_WORDS + '\\s*(?:[:.\\-–—]?\\s*TEA\\s*:\\s*(.*))?$', 'i'));
+    if (!m) return null;
+    who = m[1];
+    rest = m[2] === undefined ? null : m[2];
+  }
+  var roles = {Presenter: split_names(String(who).replace(/[\s)\-–—:.]+$/, ''), true)};
+  if (rest !== null) roles.Tea = split_names(rest.replace(/[\s)]+$/, ''), false);
+  return {csnjc: false, roles: roles};
 }
 
 // events marked as cancelled by hand are left alone (no change, no email)

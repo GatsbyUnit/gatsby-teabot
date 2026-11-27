@@ -525,8 +525,9 @@ function slotPeople(s, d) {
     if (s.water_filter) parts.push('<span class="chip chip-water">Water filter week</span>');
     return parts.map((p) => `<span class="who">${p}</span>`).join('');
   }
-  if (s.guest) parts.push(`<span class="role">Guest</span> ${esc(s.guest)}`);
-  if (s.presenter.length) parts.push(`<span class="role">${s.type === 'MLJC' || s.type === 'TNJC' ? 'Presenter' : 'Speaker'}</span> ${personLinks(s.presenter, d, true)}`);
+  const leaving = s.type === 'Leaving Tea';   // a leaving tea's "presenter" / guest is the person leaving
+  if (s.guest) parts.push(`<span class="role">${leaving ? 'Leaving' : 'Guest'}</span> ${esc(s.guest)}`);
+  if (s.presenter.length) parts.push(`<span class="role">${leaving ? 'Leaving' : s.type === 'MLJC' || s.type === 'TNJC' ? 'Presenter' : 'Speaker'}</span> ${personLinks(s.presenter, d, true)}`);
   if (s.tea.length) parts.push(`<span class="role">${TYPE_EMOJI.Tea} Tea</span> ${personLinks(s.tea, d, true)}`);
   return parts.map((p) => `<span class="who">${p}</span>`).join('');
 }

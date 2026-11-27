@@ -7,8 +7,9 @@
 //                                   are recorded in the slot; an unknown presenter in a journal club is a
 //                                   guest speaker; anything unclear goes to the tea tsar
 //   - both changed and disagree  -> ask the organiser
-// A talk or just tea whose event is deleted, or renamed to "… CANCELLED", by hand is recorded as cancelled
-// (see cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup can't cancel it.
+// A talk or just tea whose event is deleted, or renamed to "… CANCELLED" (a talk: or to "JUST TEA: …"), by hand is
+// recorded as cancelled (see cancel_slot); a deleted event must still be gone an hour later, so a calendar hiccup
+// can't cancel it. One renamed to a leaving tea ("Leaving Tea - Ada Lovelace") becomes one (see sync_to_leaving_tea).
 // Slots titled "Cancelled" are otherwise left alone, except that a cancelled talk or just tea whose event is
 // renamed back to a normal title is put back on (see sync_cancelled_row).
 // A talk title or description edited on the site rewrites the event description (future slots, and only
@@ -156,7 +157,12 @@ function sync_row(row, ctx, today){
   var prev = load_state(row.gcal_id);
   var parsed = parse_title(actual, row.type);
 
-  if (is_cancelled_title(actual) && future && prev && prev.t !== actual && !ctx.baseline &&
+  if (future && prev && !ctx.baseline && LEAVING_FROM_TYPES.indexOf(row.type) >= 0 && is_leaving_title(actual)){
+    return sync_to_leaving_tea(row, event, actual, ctx);
+  }
+
+  var just_tea_now = JUST_TEA_FROM_TYPES.indexOf(row.type) >= 0 && is_just_tea_title(actual);
+  if ((is_cancelled_title(actual) || just_tea_now) && future && prev && prev.t !== actual && !ctx.baseline &&
       CALENDAR_CANCEL_TYPES.indexOf(row.type) >= 0 && (row.type === 'Just Tea' ? row.tea_ids.length : row.presenter_ids.length || row.guest)){
     if (!act(ctx, row, 'cancel_from_calendar', actual, function(){ cancel_slot(row, ctx, {source: 'renamed'}); })){
       out.finding = finding(row, 'renamed_cancelled', 'The event was renamed to "' + actual + '", so the bot would record this slot as cancelled.', false);
@@ -336,7 +342,9 @@ function sync_cancelled_row(row, ctx, today){
   if (!event || (ctx.deleted_events || {})[event_key(row.gcal_id)]) return out;
   var actual = event.getTitle();
   var prev = load_state(row.gcal_id);
-  if (!prev || prev.t === actual || is_cancelled_title(actual)) return out;
+  if (!prev || prev.t === actual) return out;
+  if (LEAVING_FROM_TYPES.indexOf(row.type) >= 0 && is_leaving_title(actual)) return sync_to_leaving_tea(row, event, actual, ctx);
+  if (is_cancelled_title(actual) || (JUST_TEA_FROM_TYPES.indexOf(row.type) >= 0 && is_just_tea_title(actual))) return out;  // still off
   var where = 'This ' + row.type + ' is cancelled on the site, but its calendar event has been renamed to "' + actual + '".';
   var parsed = parse_title(actual, row.type);
   if (!parsed){
@@ -376,6 +384,88 @@ function sync_cancelled_row(row, ctx, today){
   save_state(row.gcal_id, {t: actual, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
   notify_reinstated(row, actual, names.notes, ctx);
   return out;
+}
+
+// A talk or just tea (cancelled or not) whose calendar event someone renamed to a leaving tea ("Leaving Tea - Ada
+// Lovelace", see is_leaving_title) becomes a Leaving Tea for the person the title names; a name that is not on the
+// People list is kept as typed (Guest speaker field). The tea people stay unless the title names others, the times
+// follow the event, and the talk's title and description on the site are cleared (they were the talk's); text typed
+// into the event stays. The presenter keeps their turn. One email to the presenter and the tea people with the
+// organiser in cc, not to the person leaving (it may be a surprise). Names the bot can't place go to the tea tsar.
+function sync_to_leaving_tea(row, event, actual, ctx){
+  var out = {};
+  var where = 'The calendar event of this ' + row.type + ' has been renamed to "' + actual + '"';
+  var parsed = parse_leaving_title(actual);
+  if (!parsed){
+    out.finding = finding(row, 'unrecognised', where + ', which looks like a leaving tea, but the bot could not tell who is leaving, so it left the slot alone. If it is a leaving tea now, please change the slot on the site.', false);
+    return out;
+  }
+  var names = read_title_names(parsed, Object.assign({}, row, {type: 'Leaving Tea', presenter_ids: [], guest: ''}), ctx, ['Leaving Tea']);
+  if (names.unsure.length || names.unknown.length){
+    out.finding = finding(row, names.unsure.length ? 'uncertain_match' : 'unknown_person', where + ', so it looks like a leaving tea now. ' +
+      (names.unsure.length ? 'I could not tell for sure who is meant: ' + names.unsure.join('; ') : names.unknown.join(', ') + (names.unknown.length === 1 ? ' is' : ' are') + ' not on the People list') +
+      ', so nothing was changed. Please make it a leaving tea on the site with the right people.', false);
+    out.finding.alert_tsar = true;
+    return out;
+  }
+  if (names.guest && !ctx.has_guest_prop) return out;
+
+  var was = {type: row.type, presenter_ids: row.presenter_ids.slice(), tea_ids: row.tea_ids.slice(), guest: row.guest, title: is_cancelled_title(row.title) ? '' : row.title};
+  var leaving = names.plan.Presenter || [];
+  var tea = names.plan.Tea || row.tea_ids;
+  var rel = function(ids){ return {relation: ids.map(function(id){ return {id: hyphenate_id(id)}; })}; };
+  var props = {'Type': {select: {name: 'Leaving Tea'}}, 'Title': {title: []}, 'Presenter': rel(leaving)};
+  if (names.plan.Tea) props['Tea'] = rel(tea);
+  if (row.description) props['Description'] = {rich_text: []};
+  if (ctx.has_guest_prop) props[GUEST_PROP] = {rich_text: names.guest ? [{text: {content: names.guest}}] : []};
+  var start = event.getStartTime(), end = event.getEndTime();
+  var same_day = fmt_iso_date(start) === fmt_iso_date(row.start);
+  if (same_day && (start.getTime() !== row.start.getTime() || !row.end || end.getTime() !== row.end.getTime())){
+    var iso = function(d){ return Utilities.formatDate(d, TZ, "yyyy-MM-dd'T'HH:mm:ssXXX"); };
+    props['Date'] = {date: {start: iso(start), end: iso(end)}};
+  }
+  if (!act(ctx, row, 'leaving_tea_from_calendar', row.type + ' -> ' + actual, function(){ notion_patch_page(row.id, props, ctx.constants); })){
+    out.finding = finding(row, 'leaving_tea_from_calendar', where + ', so the bot would record the slot as a leaving tea.', false);
+    return out;
+  }
+  row.type = 'Leaving Tea';
+  row.title = '';
+  row.description = '';
+  row.presenter_ids = leaving;
+  row.guest = names.guest || '';
+  row.tea_ids = tea;
+  if (props['Date']){ row.start = start; row.end = end; }
+  save_state(row.gcal_id, {t: actual, n: notion_fingerprint(row), d: row.start.getTime(), x: notion_text_fingerprint(row)});
+  var bumped = was.presenter_ids.concat(was.tea_ids.filter(function(id){ return tea.indexOf(id) < 0; }));
+  try { uninvite(Object.assign({}, row, {type: was.type}), bumped, ctx); } catch (err) { Logger.log('Could not update the guests: ' + err); }
+  notify_leaving_tea(row, was, actual, names.notes, ctx);
+  return out;
+}
+
+function notify_leaving_tea(row, was, actual, notes, ctx){
+  var admin = admin_email_for_type(was.type, ctx.constants);
+  var leaving_ids = row.presenter_ids;
+  var ids = was.presenter_ids.concat(was.tea_ids, row.tea_ids)
+    .filter(function(id, i, a){ return a.indexOf(id) === i && leaving_ids.indexOf(id) < 0; });
+  var to = emails_of(ids, ctx.people);
+  var talk = was.type === 'Just Tea' ? 'just tea' : was.type.toLowerCase();
+  var speaker = was.guest || mail_names(was.presenter_ids, ctx.people).join(', ');
+  var same_tea = was.tea_ids.slice().sort().join() === row.tea_ids.slice().sort().join();
+  var table = [['Slot', fmt_day(row.start) + ', ' + fmt_time(row.start) + (row.end ? '–' + fmt_time(row.end) : '') + ', Leaving Tea'],
+               ['Leaving', row.guest || names_of(leaving_ids, ctx.people).join(', ') || '–']];
+  if (speaker) table.push(['Talk', speaker + ' (makes way for the leaving tea)']);
+  if (same_tea) table.push(['Tea', (mail_names(row.tea_ids, ctx.people).join(', ') || '–') + (row.tea_ids.length ? ' (still on)' : '')]);
+  else table.push(['Tea, before', mail_names(was.tea_ids, ctx.people).join(', ') || 'nobody'], ['Tea, now', mail_names(row.tea_ids, ctx.people).join(', ') || 'nobody']);
+  var blocks = ['The calendar event for this ' + talk + ' was renamed to "' + actual + '", so the bot has made the slot a leaving tea on the site.', {table: table}];
+  if (was.presenter_ids.length){
+    var first = mail_names(was.presenter_ids, ctx.people);
+    blocks.push(first.join(' and ') + (first.length === 1 ? ' keeps their turn' : ' keep their turns') + ' and will be scheduled again soon.');
+  }
+  if (was.title) blocks.push('The talk\'s title, "' + was.title + '", is no longer on the site; please add it again once the talk has a new date.');
+  if (notes.length) blocks.push(notes.join(' '));
+  blocks.push('If this is wrong, just reply to this email.');
+  var subject = with_emoji(row, 'presenter', 'The ' + talk + ' on ' + fmt_day(row.start) + ' is a leaving tea now');
+  send_mail(to.length ? to.join(',') : admin, subject, blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : was.type});
 }
 
 // What people typed into an event's description besides the bot's own lines (Title / Zoom Link / Description
