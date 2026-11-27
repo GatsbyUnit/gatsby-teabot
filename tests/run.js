@@ -186,7 +186,7 @@ t('strip links keeps text typed below the links', () => { assert.strictEqual(str
 t('links footer moves below text typed after it, then stays put', () => { var e = cev('x'); e.desc = 'Title: x\\n\\n🫖 old: u\\n\\nAbstract'; var c = cctx(e); c.settings.links_in_events = true; c.settings.PAGE_URL = 'https://page'; var r = row({start: soon}); ensure_links(e, r, c); assert.ok(/^Title: x\\n\\nAbstract\\n\\n🫖 /.test(e.desc), e.desc); var d = e.desc; assert.strictEqual(ensure_links(e, r, c), false); assert.strictEqual(e.desc, d); });
 var cancelled_tt = () => row({type: 'Tea Talk', title: 'Cancelled', presenter_ids: [], tea_ids: ['a'], start: soon});
 var hand_desc = 'Title: Cancelled\\nZoom Link: Z\\n\\n🫖 Swap your slot: u\\n\\nSpeaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.';
-t('cancelled talk renamed back by hand: guest recorded, typed text kept, organiser told', () => { __props = {}; var r = cancelled_tt(); save_state('ev1', {t: 'TEA TALK: CANCELLED TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = cev('TEA TALK: Rajesh Ranganath TEA: Lena Weber'); e.desc = hand_desc; var c = cctx(e); c.settings.live_types.push('Tea Talk'); var out = sync_row(r, c, start_of_today()); assert.strictEqual(out.finding, undefined); assert.deepStrictEqual(patched[0].Title.title, []); assert.strictEqual(patched[0]['Guest speaker'].rich_text[0].text.content, 'Rajesh Ranganath'); assert.strictEqual(patched[0].Description.rich_text[0].text.content, 'Speaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.'); assert.strictEqual(e.desc, 'Title: \\nZoom Link: Z\\nDescription: Speaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.'); assert.ok(/^tsar@x \| Tea Talk back on/.test(mailed[0]), mailed[0]); var st = JSON.parse(__props['state:ev1']); assert.strictEqual(st.t, 'TEA TALK: Rajesh Ranganath TEA: Lena Weber'); assert.strictEqual(st.x, notion_text_fingerprint(r)); patched = []; mailed = []; sync_row(r, c, start_of_today()); assert.strictEqual(patched.length, 0); assert.strictEqual(mailed.length, 0); assert.strictEqual(e.desc, 'Title: \\nZoom Link: Z\\nDescription: Speaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.'); });
+t('cancelled talk renamed back by hand: guest recorded, typed text kept, nobody emailed (whoever renamed it knows)', () => { __props = {}; var r = cancelled_tt(); save_state('ev1', {t: 'TEA TALK: CANCELLED TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = cev('TEA TALK: Rajesh Ranganath TEA: Lena Weber'); e.desc = hand_desc; var c = cctx(e); c.settings.live_types.push('Tea Talk'); var out = sync_row(r, c, start_of_today()); assert.strictEqual(out.finding, undefined); assert.deepStrictEqual(patched[0].Title.title, []); assert.strictEqual(patched[0]['Guest speaker'].rich_text[0].text.content, 'Rajesh Ranganath'); assert.strictEqual(patched[0].Description.rich_text[0].text.content, 'Speaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.'); assert.strictEqual(e.desc, 'Title: \\nZoom Link: Z\\nDescription: Speaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.'); assert.strictEqual(mailed.length, 0, mailed.join('; ')); var st = JSON.parse(__props['state:ev1']); assert.strictEqual(st.t, 'TEA TALK: Rajesh Ranganath TEA: Lena Weber'); assert.strictEqual(st.x, notion_text_fingerprint(r)); patched = []; mailed = []; sync_row(r, c, start_of_today()); assert.strictEqual(patched.length, 0); assert.strictEqual(mailed.length, 0); assert.strictEqual(e.desc, 'Title: \\nZoom Link: Z\\nDescription: Speaker:\\nRajesh Ranganath\\n\\nAbstract:\\nCausality.'); });
 t('cancelled talk renamed to a member: presenter back on, they are told', () => { __props = {}; var r = cancelled_tt(); save_state('ev1', {t: 'TEA TALK: CANCELLED TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = cev('TEA TALK: Nikolai Petrov TEA: Lena Weber'); e.desc = 'Title: Cancelled\\nZoom Link: Z'; var c = cctx(e); c.settings.live_types.push('Tea Talk'); sync_row(r, c, start_of_today()); assert.strictEqual(patched[0].Presenter.relation[0].id.replace(/-/g, ''), 'b'); assert.strictEqual(patched[0].Description, undefined); assert.ok(/^nikolai@x \| Tea Talk back on/.test(mailed[0]), mailed[0]); });
 t('cancelled talk: calendar as the bot left it, or still cancelled -> nothing', () => { __props = {}; var r = cancelled_tt(); save_state('ev1', {t: 'TEA TALK: CANCELLED TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); [cev('TEA TALK: CANCELLED TEA: Lena Weber'), cev('No tea talk today'), cev('TEA TALK:  TEA: Lena Weber')].forEach(function(e){ var c = cctx(e); c.settings.live_types.push('Tea Talk'); var out = sync_row(cancelled_tt(), c, start_of_today()); assert.strictEqual(out.finding, undefined, e.title); assert.strictEqual(patched.length, 0, e.title); assert.strictEqual(mailed.length, 0, e.title); }); });
 t('cancelled slot renamed back, no state or past: nothing', () => { __props = {}; var e = cev('TEA TALK: Nikolai Petrov TEA: Lena Weber'); var c = cctx(e); c.settings.live_types.push('Tea Talk'); sync_row(cancelled_tt(), c, start_of_today()); assert.strictEqual(patched.length, 0); save_state('ev1', {t: 'x', d: 0}); c = cctx(e); c.settings.live_types.push('Tea Talk'); sync_row(row({type: 'Tea Talk', title: 'Cancelled', presenter_ids: [], tea_ids: ['a'], start: new Date(Date.now() - 2 * 864e5)}), c, start_of_today()); assert.strictEqual(patched.length, 0); });
@@ -199,7 +199,7 @@ function lev(title, hours){ var e = cev(title); e.desc = 'Title: Spikes'; e.getS
 var talk_tt = () => row({type: 'Tea Talk', title: 'Spikes', description: 'Abstract', presenter_ids: ['b'], tea_ids: ['a'], start: soon, end: new Date(soon.getTime() + 1800e3)});
 function with_leaver(fn){ people.k = {id: 'k', name: 'Dimitri Meunier', active: false, email: 'dimitri@x'}; try { fn(); } finally { delete people.k; } }
 t('talk renamed to a leaving tea: slot becomes one, presenter and tea person come off (keep their turn), leaver not emailed', () => with_leaver(() => { __props = {}; var r = talk_tt(); save_state('ev1', {t: 'TEA TALK: Nikolai Petrov TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var e = lev('Leaving Tea - Dimitri Meunier'); var c = cctx(e); c.settings.live_types.push('Tea Talk'); var out = sync_row(r, c, start_of_today()); assert.strictEqual(out.finding, undefined); assert.strictEqual(patched.length, 1); var p = patched[0]; assert.strictEqual(p.Type.select.name, 'Leaving Tea'); assert.deepStrictEqual(p.Presenter.relation.map(x => x.id.replace(/-/g, '')), ['k']); assert.deepStrictEqual(p.Tea.relation, []); assert.deepStrictEqual(r.tea_ids, []); assert.deepStrictEqual(p.Title.title, []); assert.deepStrictEqual(p.Description.rich_text, []); assert.deepStrictEqual(p['Guest speaker'].rich_text, []); assert.strictEqual(new Date(p.Date.date.end).getTime(), Math.floor(soon.getTime() / 1000) * 1000 + 3600e3); assert.strictEqual(mailed.length, 1); assert.ok(mailed[0].startsWith('nikolai@x,lena@x | 👋 The tea talk on '), mailed[0]); assert.ok(mailed[0].endsWith(' is a leaving tea now'), mailed[0]); assert.ok(mailed[0].indexOf('dimitri') < 0); assert.strictEqual(e.title, 'Leaving Tea - Dimitri Meunier'); assert.strictEqual(e.desc, 'Title: Spikes'); assert.ok(logged.some(l => l.startsWith('leaving_tea_from_calendar')), logged); assert.strictEqual(r.type, 'Leaving Tea'); patched = []; mailed = []; out = sync_row(r, c, start_of_today()); assert.strictEqual(out.finding, undefined); assert.strictEqual(out.mismatch, undefined); assert.strictEqual(patched.length, 0); assert.strictEqual(mailed.length, 0); assert.strictEqual(e.desc, 'Title: Spikes'); }));
-t('leaving tea email: who makes way, who keeps their turn, the old talk title', () => with_leaver(() => { var saved = send_mail; var got = []; send_mail = function(to, subject, blocks, constants, o){ got.push({to: to, blocks: JSON.stringify(blocks), o: o}); }; try { __props = {}; var r = talk_tt(); save_state('ev1', {t: 'x', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var c = cctx(lev('Leaving Tea - Dimitri Meunier')); c.settings.live_types.push('Tea Talk'); sync_row(r, c, start_of_today()); var b = got[0].blocks; assert.ok(b.indexOf('Nikolai (makes way for the leaving tea)') >= 0, b); assert.ok(b.indexOf('Nikolai and Lena keep their turns') >= 0, b); assert.ok(b.indexOf('Everyone brings something (Lena no longer on tea duty)') >= 0, b); assert.ok(b.indexOf('Dimitri Meunier') >= 0, b); assert.ok(b.indexOf('Spikes') >= 0, b); assert.strictEqual(got[0].o.cc, 'tsar@x'); } finally { send_mail = saved; } }));
+t('leaving tea email: who makes way, who keeps their turn, the old talk title', () => with_leaver(() => { var saved = send_mail; var got = []; send_mail = function(to, subject, blocks, constants, o){ got.push({to: to, blocks: JSON.stringify(blocks), o: o}); }; try { __props = {}; var r = talk_tt(); save_state('ev1', {t: 'x', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var c = cctx(lev('Leaving Tea - Dimitri Meunier')); c.settings.live_types.push('Tea Talk'); sync_row(r, c, start_of_today()); var b = got[0].blocks; assert.ok(b.indexOf('Nikolai (makes way for the leaving tea)') >= 0, b); assert.ok(b.indexOf('Nikolai and Lena keep their turns') >= 0, b); assert.ok(b.indexOf('Everyone brings something (Lena no longer on tea duty)') >= 0, b); assert.ok(b.indexOf('Dimitri Meunier') >= 0, b); assert.ok(b.indexOf('Spikes') >= 0, b); assert.strictEqual(got[0].o.cc, undefined, 'the organiser is not in cc'); } finally { send_mail = saved; } }));
 t('cancelled talk renamed to a leaving tea becomes one; someone not on the People list is kept by name', () => { __props = {}; var r = cancelled_tt(); save_state('ev1', {t: 'TEA TALK: CANCELLED TEA: Lena Weber', n: notion_fingerprint(r), d: soon.getTime(), x: notion_text_fingerprint(r)}); var c = cctx(lev("Ada Byron's leaving tea")); c.settings.live_types.push('Tea Talk'); var out = sync_row(r, c, start_of_today()); assert.strictEqual(out.finding, undefined); assert.strictEqual(patched[0].Type.select.name, 'Leaving Tea'); assert.deepStrictEqual(patched[0].Title.title, []); assert.deepStrictEqual(patched[0].Presenter.relation, []); assert.strictEqual(patched[0]['Guest speaker'].rich_text[0].text.content, 'Ada Byron'); assert.ok(mailed[0].startsWith('lena@x | '), mailed[0]); });
 t('talk renamed to a leaving tea that names tea people: nobody goes on tea, the slot is not rewritten later', () => with_leaver(() => { __props = {}; var r = talk_tt(); save_state('ev1', {t: 'x', n: notion_fingerprint(r), d: soon.getTime()}); var e = lev('Leaving tea for Dimitri Meunier TEA: Zoé Martin'); var c = cctx(e); c.settings.live_types.push('Tea Talk', 'Leaving Tea'); sync_row(r, c, start_of_today()); assert.deepStrictEqual(patched[0].Tea.relation, []); assert.ok(mailed[0].startsWith('nikolai@x,lena@x | '), mailed[0]); patched = []; mailed = []; var out = sync_row(r, c, start_of_today()); assert.strictEqual(patched.length, 0); assert.strictEqual(out.finding, undefined); assert.strictEqual(e.title, 'Leaving tea for Dimitri Meunier TEA: Zoé Martin'); }));
 t('leaving tea rename: watched only, first look, past or no state -> nothing changed', () => with_leaver(() => { __props = {}; var r = talk_tt(); save_state('ev1', {t: 'x', n: notion_fingerprint(r), d: soon.getTime()}); var c = cctx(lev('Leaving Tea - Dimitri Meunier')); var out = sync_row(r, c, start_of_today()); assert.strictEqual(out.finding.kind, 'leaving_tea_from_calendar'); assert.strictEqual(patched.length, 0); c = cctx(lev('Leaving Tea - Dimitri Meunier')); c.settings.live_types.push('Tea Talk'); c.baseline = true; out = sync_row(talk_tt(), c, start_of_today()); assert.strictEqual(patched.length, 0); assert.strictEqual(out.finding.kind, 'unrecognised'); __props = {}; c = cctx(lev('Leaving Tea - Dimitri Meunier')); c.settings.live_types.push('Tea Talk'); out = sync_row(talk_tt(), c, start_of_today()); assert.strictEqual(patched.length, 0); assert.strictEqual(out.finding.kind, 'unrecognised'); }));
@@ -340,7 +340,7 @@ t('taken out by the tea tsar: like leaving, also when inactive already; nobody e
     assert.ok(/Jan Bauer took Sam O\\. out of the Gatsby tea system/.test(m[0].text) && /TNJC talk/.test(m[0].text), m[0].text);
   } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; }
 });
-t('leaving without upcoming slots: the tea tsar is told', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai has left the tea system']); });
+t('leaving with your own link and no upcoming slots: nothing for the tea tsar to do, no email; a picked name still tells them', () => { var m = []; var saved = [identity_rows, upcoming_rows_of, send_mail]; identity_rows = () => ({sheet: {getRange: () => ({setValues: () => {}})}, rows: []}); upcoming_rows_of = () => []; send_mail = function(to, subj){ m.push(to + ' | ' + subj); }; try { var c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'own link'); assert.deepStrictEqual(m, []); c = ctx(false); c.me = people.b; c.me_identity = {email: ''}; leave_tea_system(c, 'name picked on the tea page'); } finally { identity_rows = saved[0]; upcoming_rows_of = saved[1]; send_mail = saved[2]; } assert.deepStrictEqual(m, ['tsar@x | Nikolai has left the tea system']); });
 t('rota overview: same rules as scheduling', () => { var saved = notion_query; notion_query = () => []; try { var c = ctx(false); c.me_identity = {email: 'tsar@x'}; c.people = {p: {id: 'p', name: 'Pat Kim', active: true, tnjc: true, csnjc: false, mljc: true, coffee: false, position: 'PhD student', rt_excluded: true, tt_excluded: false, tea_excluded: false, email: 'p@x'}, q: {id: 'q', name: 'Old One', active: false}}; var r = rota_overview(c); assert.deepStrictEqual(r.people[0].on, {tnjc: true, csnjc: false, mljc: true, research: false, teatalk: true, tea: true, coffee: false}); assert.strictEqual(r.inactive, 1); assert.strictEqual(r.people.length, 1); } finally { notion_query = saved; } });
 t('rota overview: an organiser sees only their own rota', () => {
   var saved = notion_query;
@@ -590,7 +590,7 @@ function tsar_cancel(how, tea){
 t('tsar cancels the talk, tea stays (just tea): named by title, reason given, tea said to go ahead; who was emailed comes back', () => {
   var r = tsar_cancel({});
   assert.deepStrictEqual(r.told, {emailed: ['Nikolai Petrov', 'Lena Weber'], no_address: ['Zoé Martin']});
-  assert.strictEqual(r.m.length, 1); assert.strictEqual(r.m[0].to, 'nikolai@x,lena@x'); assert.strictEqual(r.m[0].o.cc, 'tsar@x');
+  assert.strictEqual(r.m.length, 1); assert.strictEqual(r.m[0].to, 'nikolai@x,lena@x'); assert.strictEqual(r.m[0].o.cc, undefined); assert.ok(!r.m[0].text.includes('Organiser:'), r.m[0].text);
   assert.ok(/^🎤 Cancelled: Tea Talk on .* \\(just tea now\\)$/.test(r.m[0].subj), r.m[0].subj);
   assert.ok(r.m[0].text.includes('The Tea Tsar has cancelled the talk. Tea still goes ahead: it is just tea this time.') && r.m[0].text.includes('Nikolai cannot make it') && r.m[0].text.includes('(still on)'), r.m[0].text);
   assert.deepStrictEqual([r.patch.Presenter.relation, r.patch.Tea], [[], undefined]);
@@ -610,7 +610,7 @@ t('tsar cancels talk and tea: both come off (keeping their turn), calendar witho
 t('tsar chooses who is emailed: only them; nobody: the organiser alone, or no email when the organiser cancelled it', () => {
   var r = tsar_cancel({email: ['b']});
   assert.deepStrictEqual(r.told, {emailed: ['Nikolai Petrov'], no_address: []});
-  assert.deepStrictEqual([r.m.length, r.m[0].to, r.m[0].o.cc], [1, 'nikolai@x', 'tsar@x']);
+  assert.deepStrictEqual([r.m.length, r.m[0].to, r.m[0].o.cc], [1, 'nikolai@x', undefined]);
   r = tsar_cancel({email: []});
   assert.deepStrictEqual(r.told, {emailed: [], no_address: []});
   assert.deepStrictEqual([r.m.length, r.m[0].to], [1, 'tsar@x']);
@@ -1333,13 +1333,12 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   W.run('2026-11-20');   // Friday, first run: plans 30 Nov - 3 Jan (28 Dec closed)
   assert.deepStrictEqual(['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21'].map(d => W.on(d).presenter_ids[0]), ['an', 'bo', 'cy', 'di']);
   assert.strictEqual(W.on('2026-12-28'), undefined);
-  assert.deepStrictEqual(W.mails.map(m => m.to).sort(), ['an@x', 'bo@x', 'cy@x', 'di@x', 'org@x']);
+  assert.deepStrictEqual(W.mails.map(m => m.to).sort(), ['an@x', 'bo@x', 'cy@x', 'di@x'], 'a plan that worked: the organiser is not emailed');
   var an = W.to('an@x')[0], cy = W.to('cy@x')[0];
   assert.strictEqual(an.subject, '🤖 You are presenting at MLJC on Mon 30 Nov 2026');
   assert.ok(an.text.indexOf('hand it over with Swap') >= 0 && an.text.indexOf('Press Can') < 0, an.text);
   assert.ok(cy.text.indexOf("make it on your tea page by Wed 2 Dec 2026") >= 0, cy.text);
   assert.ok(cy.text.indexOf('It goes on the calendar on Mon 23 Nov 2026.') >= 0 && cy.text.indexOf('https://page/?t=cy') >= 0);
-  assert.strictEqual(W.to('org@x')[0].subject, 'MLJC: next slots planned, on the calendar on Mon 23 Nov 2026');
 
   W.run('2026-11-21');   // Saturday: nothing to do
   assert.deepStrictEqual(W.mails, []); assert.deepStrictEqual(W.fin, []);
@@ -1350,7 +1349,7 @@ ap_t('autopilot, a week of it: pencilled in on Friday, an away date hands a slot
   assert.strictEqual(W.to('di@x')[0].subject, '🤖 Handed on: presenting at MLJC on Mon 21 Dec 2026');
   var take = W.to('an@x')[0];
   assert.ok(take.text.indexOf('You take over from Di,') >= 0 && take.text.indexOf('your tea page by Wed 9 Dec 2026') >= 0, take.text);
-  assert.ok(W.mails.some(m => m.to === 'org@x' && m.subject === 'MLJC: slots handed on because of away dates' && m.text.indexOf('Di → An') >= 0));
+  assert.ok(!W.mails.some(m => m.to === 'org@x'), 'handed on fine: nothing for the organiser');
   assert.deepStrictEqual(W.fin, ['2026-11-30', '2026-12-07', '2026-12-14', '2026-12-21']);
   assert.strictEqual(W.to('an@x').length, 1, 'nobody is told twice');
   assert.deepStrictEqual(W.on('2027-01-04').presenter_ids, ['di']);
@@ -1371,7 +1370,7 @@ ap_t('autopilot away check: a slot on the calendar changes hands there too; slot
   assert.strictEqual(W.titles['ev-s9'], 'MLJC: Bo X');
   assert.deepStrictEqual(W.on('2026-12-07').presenter_ids, ['cy'], 'two weeks away: a swap, not the bot');
   assert.ok(W.to('bo@x')[0].text.indexOf('It is on the calendar.') >= 0);
-  assert.strictEqual(W.mails.length, 3);
+  assert.strictEqual(W.mails.length, 2);
 });
 ap_t('autopilot away check: skips people who are away too; hands on again when the new person adds away dates', () => {
   var w = ap_world({today: '2026-11-23', rows: [ap_row('s9', 'MLJC', '2027-01-04T13:30:00Z', ['an'])], away: {an: [['2027-01-04', '2027-01-04']], bo: [['2027-01-02', '2027-01-06']]}}), W = w.W;
@@ -1413,13 +1412,14 @@ ap_t('autopilot away check: cancelled slots and guest speakers are left alone; t
   assert.strictEqual(W.to('an@x').length, 0);
   assert.deepStrictEqual(W.to('di@x').map(m => m.subject).sort(), ['🍵 Handed on: tea duty on Mon 18 Jan 2027', '🍵 Tea duty on Mon 11 Jan 2027']);
 });
-ap_t('autopilot away check: two hand-overs in one morning; the second counts the first (fairness)', () => {
+ap_t('autopilot away check: two hand-overs in one morning; the second counts the first (fairness); the organiser is not emailed', () => {
   var w = ap_world({today: '2026-11-23', rows: [ap_row('s1', 'MLJC', '2027-01-04T13:30:00Z', ['an']), ap_row('s2', 'MLJC', '2027-01-18T13:30:00Z', ['cy'])],
                     away: {an: [['2027-01-01', '2027-01-05']], cy: [['2027-01-18', '2027-01-18']]}}), W = w.W;
   auto_recheck('MLJC', w.c, '2026-11-23', load_auto_state('MLJC'));
   assert.deepStrictEqual([W.on('2027-01-04').presenter_ids, W.on('2027-01-18').presenter_ids], [['bo'], ['an']], 'Bo just got 4 Jan, so An (free on 18 Jan) is next');
-  assert.strictEqual(W.mails.filter(m => m.to === 'org@x').length, 1, 'one summary for the organiser');
+  assert.strictEqual(W.mails.filter(m => m.to === 'org@x').length, 0, 'both handed on: nothing for the organiser');
 });
+t('autopilot plan: the organiser hears only about slots nobody was available for', () => { var saved = send_mail; send_mail = function(to, subject){ mailed.push(to + ' | ' + subject); }; try { var c = ctx(false); c.constants.mljc_admin_email = 'org@x'; c.settings.PAGE_URL = 'https://page'; auto_plan_mail('MLJC', {created: ['a'], holidays: []}, {filled: ['Mon 30 Nov: Lena'], unfilled: []}, c, '2026-11-23'); assert.deepStrictEqual(mailed, []); auto_plan_mail('MLJC', {created: ['a', 'b'], holidays: []}, {filled: ['Mon 30 Nov: Lena'], unfilled: ['Mon 7 Dec 2026 · MLJC']}, c, '2026-11-23'); assert.deepStrictEqual(mailed, ['org@x | MLJC: nobody available for 1 planned slot']); } finally { send_mail = saved; } });
 ap_t('autopilot away check: a guest speaker slot belongs to the guest, whoever else is on it', () => {
   var w = ap_world({today: '2026-11-23', rows: [ap_row('s1', 'MLJC', '2027-01-04T13:30:00Z', ['an'], [], {guest: 'Prof Guest'})], away: {an: [['2027-01-01', '2027-01-05']]}}), W = w.W;
   assert.deepStrictEqual(auto_recheck('MLJC', w.c, '2026-11-23', load_auto_state('MLJC')), []);
@@ -1495,19 +1495,19 @@ ap_t('can\\'t make it, undone straight away: the slot goes back and the person m
   assert.deepStrictEqual(find('s').presenter_ids, ['cy'], 'a pencilled-in slot can be undone too');
   assert.deepStrictEqual(passed_ids('s', 'presenter'), []);
 });
-t('cancelling tea duty: off the slot, nobody in their place, one email with the organiser in cc', () => {
+t('cancelling tea duty: off the slot, nobody in their place, one email (the organiser not in cc)', () => {
   var c = ctx(false); c.cal = {getEventById: () => null}; var got = []; var saved = send_mail;
   send_mail = function(to, subject, blocks, k, o){ got.push([to, subject, (o || {}).cc]); };
   try { cancel_tea_duty(row({type: 'Research Talk', start: soon, tea_ids: ['a']}), 'a', c, 'ill that week'); } finally { send_mail = saved; }
   assert.deepStrictEqual(patched[0].Tea.relation, []);
-  assert.deepStrictEqual(got, [['lena@x', '🍵 Cancelled: tea duty on ' + fmt_day(soon), 'tsar@x']]);
+  assert.deepStrictEqual(got, [['lena@x', '🍵 Cancelled: tea duty on ' + fmt_day(soon), undefined]]);
 });
 function ann_ctx(){ var c = ctx(false); c.constants = {admin_email: 'tsar@x', tnjc_admin_email: 'tnjc@x', unit_wide_email: 'unit@x', tnjc_email: 'tnjclist@x', csnjc_email: 'csnjclist@x', mljc_email: 'mljclist@x', mljc_admin_email: 'mljc@x'};
   c.settings.auto_rotas = ['talks']; c.cal = {getEventById: () => ({getDateCreated: () => new Date('2026-10-21T12:00:00Z')})}; __props = {'auto:talks': JSON.stringify({since: '2026-10-20'})}; return c; }
 t('cancellation announced: to the group, with the reason, what they could have done and how they knew', () => {
   var c = ann_ctx(), r = row({type: 'Research Talk', presenter_ids: ['b'], tea_ids: ['a'], start: new Date(Date.now() + 5 * 864e5)});
   var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'reason', 'my experiment ran over');
-  assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['nikolai@x', 'lena@x', 'tsar@x']]);
+  assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['nikolai@x', 'lena@x']]);
   assert.ok(a.subject.startsWith('🧪 Research talk on ') && a.subject.endsWith(' cancelled by Nikolai'), a.subject);
   var text = blocks_to_text(a.blocks);
   ['Nikolai has cancelled the research talk', 'Their reason: "my experiment ran over"', 'Tea still happens', 'what Nikolai could have done instead',
@@ -1518,7 +1518,7 @@ t('cancellation announced: to the group, with the reason, what they could have d
   var signed = blocks_to_text(cancel_announcement(r, 'presenter', c, {id: 'b', signed: 'Tea Tsar'}, 'reason', 'x').blocks);
   assert.ok(signed.trim().endsWith('Signed off by the Tea Tsar.'), signed);
 });
-t('cancellation announced, private reason: a neutral note, the name stays; the organiser gets the reason alone', () => {
+t('cancellation announced, private reason: a neutral note, the name stays; no separate email to the organiser (they saw the reason when signing off)', () => {
   var c = ann_ctx(), r = row({type: 'Tea Talk', presenter_ids: ['b'], tea_ids: [], start: new Date(Date.now() + 20 * 864e5)});
   var a = cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter');
   var text = blocks_to_text(a.blocks);
@@ -1527,14 +1527,13 @@ t('cancellation announced, private reason: a neutral note, the name stays; the o
   assert.ok(tsarNote.indexOf('is cancelled (the Tea Tsar)') >= 0 && tsarNote.indexOf('could have') < 0, tsarNote);
   var got = [], saved = send_mail; send_mail = function(to, subject, blocks, k, o){ got.push([to, subject, (o || {}).cc, blocks_to_text(blocks)]); };
   try { send_cancel_announcement(r, 'presenter', c, {id: 'b'}, 'neutral', 'family matter'); } finally { send_mail = saved; }
-  assert.strictEqual(got.length, 2);
+  assert.strictEqual(got.length, 1);
   assert.ok(got[0][0] === 'unit@x' && got[0][3].indexOf('family matter') < 0);
-  assert.ok(got[1][0] === 'tsar@x' && /^The reason \\(private\\)/.test(got[1][1]) && got[1][3].indexOf('family matter') >= 0);
 });
 t('cancellation announced: tea duty goes to the list of the talk too, the presenter in cc; CSNJC to its list; a tsar signs with their title and gets no record', () => {
   var c = ann_ctx();
   var a = cancel_announcement(row({type: 'Research Talk', presenter_ids: ['b'], tea_ids: ['a'], start: soon}), 'tea', c, {id: 'a'}, 'reason', 'ill that week');
-  assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['lena@x', 'nikolai@x', 'tsar@x']]);
+  assert.deepStrictEqual([a.to, a.cc], [['unit@x'], ['lena@x', 'nikolai@x']]);
   assert.ok(a.subject.startsWith('🍵 Tea duty on '), a.subject);
   assert.ok(blocks_to_text(a.blocks).indexOf('nobody is bringing tea') >= 0);
   assert.deepStrictEqual(cancel_announcement(row({csnjc: true, start: soon}), 'presenter', c, {id: 'b'}, 'reason', 'x').to, ['csnjclist@x']);

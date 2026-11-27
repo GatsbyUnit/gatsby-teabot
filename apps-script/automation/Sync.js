@@ -54,13 +54,7 @@ function maybe_go_live(ctx){
   set_setting('DRY_RUN', 'FALSE');
   set_setting('GO_LIVE_ON', '');
   ctx.settings = get_settings();
-  log_row(ctx, 'sync', '', null, 'went live', 'scheduled by GO_LIVE_ON');
-  send_mail(ctx.constants['tnjc_admin_email'], 'The tea bot is now live for ' + ctx.settings.LIVE_TYPES, [
-    'As scheduled, the dry run has ended. From now on the bot keeps the calendar and the site in sync for ' + ctx.settings.LIVE_TYPES + '.',
-    'To pause it, set DRY_RUN to TRUE in the Automation tab of the constants sheet.',
-    {link: 'Constants sheet', url: SpreadsheetApp.openById(CONST_SHEET_ID).getUrl()},
-    {link: 'Log', url: ctx.log.getUrl()}
-  ], ctx.constants, {as: 'TNJC'});
+  log_row(ctx, 'sync', '', null, 'went live', 'scheduled by GO_LIVE_ON');   // no email: nothing to do
 }
 
 function make_context(constants, settings){
@@ -391,8 +385,8 @@ function sync_cancelled_row(row, ctx, today){
 // People list is kept as typed (Guest speaker field). Nobody is on tea duty for a leaving tea (everyone brings
 // something), so the tea people come off too. The times follow the event, and the talk's title and description on
 // the site are cleared (they were the talk's); text typed into the event stays. The presenter and the tea people keep
-// their turn and get one email with the organiser in cc; the person leaving does not (it may be a surprise). Names
-// the bot can't place go to the tea tsar.
+// their turn and get one email (the organiser only if none of them could be told); the person leaving does not (it
+// may be a surprise). Names the bot can't place go to the tea tsar.
 function sync_to_leaving_tea(row, event, actual, ctx){
   var out = {};
   var where = 'The calendar event of this ' + row.type + ' has been renamed to "' + actual + '"';
@@ -461,7 +455,9 @@ function notify_leaving_tea(row, was, actual, notes, ctx){
   if (notes.length) blocks.push(notes.join(' '));
   blocks.push('If this is wrong, just reply to this email.');
   var subject = with_emoji(row, 'presenter', 'The ' + talk + ' on ' + fmt_day(row.start) + ' is a leaving tea now');
-  send_mail(to.length ? to.join(',') : admin, subject, blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : was.type});
+  if (!ids.length) return;   // nobody was on it
+  if (!to.length) blocks.push('None of them has a registered email, so they were not told.');
+  send_mail(to.length ? to.join(',') : admin, subject, blocks, ctx.constants, {reply_to: admin, as: to.length ? undefined : was.type});
 }
 
 // What people typed into an event's description besides the bot's own lines (Title / Zoom Link / Description
@@ -489,7 +485,10 @@ function notify_reinstated(row, actual, notes, ctx){
   if (notes.length) blocks.push(notes.join(' '));
   if (row.description) blocks.push('Text typed into the calendar event is now the slot\'s description on the site.');
   blocks.push('If this is wrong, just reply to this email.');
-  send_mail(to.length ? to.join(',') : admin, row.type + ' back on for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : row.type});
+  var ids = just_tea ? row.tea_ids : row.presenter_ids;
+  if (!ids.length) return;   // a guest speaker: whoever renamed the event knows
+  if (!to.length) blocks.push('They have no registered email, so they were not told.');
+  send_mail(to.length ? to.join(',') : admin, row.type + ' back on for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, as: to.length ? undefined : row.type});
 }
 
 // runs fn if the bot may write for this rota (and this is not a rota's first look); logs either way
@@ -566,18 +565,21 @@ function notify_swap_from_calendar(row, old_ids, plan, notes, ctx){
   ];
   if (notes.length) blocks.push(notes.join(' '));
   blocks.push('If this is wrong, just reply to this email.');
-  send_mail(to.length ? to.join(',') : admin, row.type + ' updated for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : row.type});
+  if (!to.length) blocks.push('Nobody involved has a registered email, so they were not told.');
+  send_mail(to.length ? to.join(',') : admin, row.type + ' updated for ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, as: to.length ? undefined : row.type});
 }
 
 function notify_guest_from_calendar(row, bumped_ids, ctx){
   var admin = admin_email_for_type(row.type, ctx.constants);
+  if (!bumped_ids.length) return;   // nobody was presenting: whoever put the guest in the calendar knows
   var to = emails_of(bumped_ids, ctx.people);
   var blocks = [
     row.guest + ' is presenting in this slot as a guest speaker. You are no longer recorded as presenting here, so you keep your turn and will be scheduled again fairly.',
     {table: [['Slot', fmt_day(row.start) + ', ' + row.type], ['Guest', row.guest]]},
     'If this is wrong, just reply to this email.'
   ];
-  send_mail(to.length ? to.join(',') : admin, 'Guest speaker in your ' + row.type + ' slot on ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, cc: admin, as: to.length ? undefined : row.type});
+  if (!to.length) blocks.push('They have no registered email, so they were not told.');
+  send_mail(to.length ? to.join(',') : admin, 'Guest speaker in your ' + row.type + ' slot on ' + fmt_day(row.start), blocks, ctx.constants, {reply_to: admin, as: to.length ? undefined : row.type});
 }
 
 // Emails the tea tsar about a failed run (the TNJC organiser when there is none). Hourly jobs pass a threshold so that a one-off network

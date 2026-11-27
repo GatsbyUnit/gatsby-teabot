@@ -140,10 +140,9 @@ function add_new_people_to_rota(admin_email, constants) {
     }
   }
 
-  /*
-      email notification
-  */
-  send_tsar_email(admin_email, 'Weekly New People Addition to Rota Success', 'Total number of people to be added: ' + count + '\nTotal number of successful additions: ' + success_count + '\nTotal number of failed additions: ' + fail_count, constants);
+  // no summary email: each failed addition already emails the tea tsar (send_http_request_anptr), and success needs
+  // nothing from them
+  Logger.log('New people added to the rota: ' + success_count + ' of ' + count + ', ' + fail_count + ' failed');
 
 }
 

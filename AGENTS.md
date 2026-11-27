@@ -1,5 +1,16 @@
 # Notes for coding agents
 
+## Keep the email load low
+
+The unit gets a lot of email; the bot should add as little as it can. Before adding an email (or a recipient, or a
+cc), ask whether the person has to do something because of it, or would be caught out not knowing.
+
+- Tsars and organisers get email only when they need to act: a decision (a sign-off), something to fix (a name the
+  bot can't place, a slot nobody is free for, a job that keeps failing), or people who could not be told (no
+  registered address). No FYI copies, no "done" or "success" summaries: the log sheet records what the bot did.
+- People on duty: one email per change that affects them; fold news into an email they get anyway where you can.
+- Mailing lists (unit-wide, TNJC, MLJC, coffee): check back with the maintainer first.
+
 ## Pushing and deploying
 
 You may push to `main` and deploy without checking back with the maintainer whenever that is sensible, for

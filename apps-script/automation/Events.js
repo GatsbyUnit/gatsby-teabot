@@ -157,8 +157,9 @@ function swap_done_blocks(row, what, from_name, to_name, undo, turns, taken){
 // (how.keep_tea false, from a tsar: the tea people come off too and keep their turn). A just tea loses its tea
 // people, who keep their turn. how.source is 'page' (the presenter on their tea page), 'site' (a tsar on the
 // Rotas site; both with how.by and how.reason), 'deleted' or 'renamed' (by hand in the calendar). One email to
-// the people on the slot (how.email: only these ids), with the organiser in cc; nobody chosen: the organiser
-// alone, unless they cancelled it themselves (how.by_organiser). Returns {emailed: [names], no_address: [names]}.
+// the people on the slot (how.email: only these ids); the organiser is not in cc (tsars only get email when they need
+// to act). Nobody chosen or reachable: the organiser alone, unless they cancelled it themselves (how.by_organiser).
+// Returns {emailed: [names], no_address: [names]}.
 // how.announce {mode: 'reason' | 'neutral', by: {id} or {title}}: a confirmed slot's cancellation is announced to
 // the group instead (Announce.js).
 function cancel_slot(row, ctx, how){
@@ -220,9 +221,9 @@ function cancel_slot(row, ctx, how){
   var blocks = [opening, {table: table}];
   if (bumped.length) blocks.push((drop_tea ? 'The presenter and the tea person are' : 'The ' + role + ' is') + ' no longer recorded for this slot, so they keep their turn and will be scheduled again soon.');
   if (row.tea_ids.length) blocks.push('Tea duty stays as it is unless the organiser changes it.');
-  blocks.push('Organiser: the calendar shows the ' + thing + ' as cancelled; please let the group know if needed. To undo, put the ' + (drop_tea ? 'presenter and tea person' : role) + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
+  if (!to.length) blocks.push('Nobody on the slot was emailed. The calendar shows the ' + thing + ' as cancelled; please let the people on it (and the group, if needed) know. To undo, put the ' + (drop_tea ? 'presenter and tea person' : role) + ' back on the site, remove "' + CANCELLED_TITLE + '" from the slot\'s title and rename the calendar event.');
   var subject = with_emoji(row, just_tea ? 'tea' : 'presenter', '') + 'Cancelled: ' + row.type + (drop_tea ? ' and tea' : '') + ' on ' + fmt_day(row.start) + (!just_tea && row.tea_ids.length ? ' (just tea now)' : '');
-  if (to.length) send_mail(to.join(','), subject, blocks, ctx.constants, {reply_to: organiser, cc: organiser});
+  if (to.length) send_mail(to.join(','), subject, blocks, ctx.constants, {reply_to: organiser});
   else if (!how.by_organiser) send_mail(organiser, subject, blocks, ctx.constants, {as: row.type});
   return {emailed: names_of(chosen.filter(has_address), ctx.people),
           no_address: names_of(chosen.filter(function(id){ return !has_address(id); }), ctx.people)};

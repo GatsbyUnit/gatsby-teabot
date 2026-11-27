@@ -666,7 +666,7 @@
         } catch (x) { $('.error', fm).textContent = x.message; b.disabled = false; }
       });
       // cancelling: what to cancel (a talk with tea: only the talk, i.e. just tea, or talk and tea), who gets an
-      // email (everyone on the slot by default; the organiser is in cc) and the reason, which goes into the email
+      // email (everyone on the slot by default) and the reason, which goes into the email
       $('[data-slot-cancel]', fm)?.addEventListener('click', (e) => {
         e.currentTarget.disabled = true;
         const justTea = s.type === 'Just Tea';
@@ -686,7 +686,7 @@
             <option value="neutral">To the group, neutral (the reason only to the organiser)</option>
             <option value="none">No announcement, only email the people below</option></select></label>
           <div class="cancel-email-box" hidden>
-          <p class="muted">Email (the organiser is in cc):</p>
+          <p class="muted">Email:</p>
           ${onSlot.length ? onSlot.map(([id, role]) => `<label class="check"><input type="checkbox" name="cancel_email" value="${id}" checked> ${name(id)} (${role})</label>`).join('')
     : '<p class="muted">Nobody on the rotas is on this slot; only the organiser is told.</p>'}
           </div>
@@ -721,7 +721,7 @@
             putItem('schedule', done.slot);
             const list = (xs) => xs.join(', ');
             if (done.announced) { toast('Cancelled and announced to ' + done.announced + '.'); return; }
-            toast('Cancelled.' + (done.emailed.length ? ' Emailed ' + list(done.emailed) + ', the organiser in cc.' : ' Nobody on the slot was emailed.') +
+            toast('Cancelled.' + (done.emailed.length ? ' Emailed ' + list(done.emailed) + '.' : ' Nobody on the slot was emailed.') +
               (done.no_address.length ? ' No address registered for ' + list(done.no_address) + ': please tell them.' : ''), !!done.no_address.length);
           } catch (x) {
             err.textContent = x.message;

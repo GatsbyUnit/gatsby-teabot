@@ -57,10 +57,8 @@ function purgeolddates(admin_email, constants) {
   }
   
 
-  /*
-      email notification
-  */
-  send_tsar_email(admin_email, 'Weekly Away Date Purge Success', 'Total number of people checked: ' + count + '\n', constants);
+  // no email on success: the tea tsar only gets email when there is something to do (errors still email)
+  Logger.log('Weekly away date purge: ' + count + ' people checked');
 
 
 }

@@ -1,8 +1,8 @@
 // Autopilot: the bot schedules the rotas in AUTO_TYPES (Automation tab) by itself, from the daily organiser job
 // (run_daily_reminders, 8:00). Each morning, per rota:
 //  1. Away check: whoever is on duty in a slot still at least AUTO_HANDOVER_DAYS away and has away dates covering
-//     it is replaced by the next free person in line (same fairness rules as planning). Both are told, and the
-//     organiser gets a summary. If nobody is free, nothing changes and the organiser is told once.
+//     it is replaced by the next free person in line (same fairness rules as planning). Both are told (the
+//     organiser isn't: nothing to do). If nobody is free, nothing changes and the organiser is told once.
 //  2. Slots it planned AUTO_REVIEW_DAYS ago go on the calendar.
 //  3. Mondays (and on its first run for a rota): it creates the rota's missing slots from AUTO_FIRST_DAYS ahead to
 //     the end of the week AUTO_WEEKS ahead, fills them fairly (fill_slots), tells everyone it pencilled in
@@ -262,43 +262,35 @@ function released_mail(row, role, from, to, ctx){
   ], ctx.constants, organiser ? {reply_to: organiser} : {});
 }
 
+// only when someone is away and nobody is free (slots handed on fine need nothing from the organiser: both people
+// were told)
 function handover_mail(rota, handed, stuck, ctx){
   var to = auto_organiser(rota, ctx);
-  if (!to) return;
+  if (!to || !stuck.length) return;
   var label = ROTAS[rota].label;
   var line = function(row, role){ return fmt_day(row.start) + ' · ' + row.type + (role === 'tea' ? ' (tea)' : ''); };
-  var blocks = [];
-  if (handed.length){
-    blocks.push('These people added away dates covering their slot, so the autopilot handed it to the next free person (both were told):');
-    blocks.push({items: handed.map(function(h){ return line(h.row, h.role) + ': ' + mail_name(h.from, ctx.people) + ' → ' + mail_name(h.to, ctx.people); })});
-  }
-  if (stuck.length){
-    blocks.push('These people are away during their slot, but nobody else is free then, so nothing was changed. Please sort it out on the Gatsby Rotas site (another person, a guest, or remove the slot):');
-    blocks.push({items: stuck.map(function(c){ return line(c.row, c.role) + ': ' + mail_name(c.id, ctx.people); })});
-  }
-  blocks.push({link: 'Gatsby Rotas site', url: site_url(ctx.settings)});
-  send_mail(to, label + ': ' + (handed.length ? 'slots handed on because of away dates' : 'nobody free for a slot'), blocks, ctx.constants, {as: rota});
+  send_mail(to, label + ': nobody free for a slot', [
+    'These people are away during their slot, but nobody else is free then, so nothing was changed. Please sort it out on the Gatsby Rotas site (another person, a guest, or remove the slot):',
+    {items: stuck.map(function(c){ return line(c.row, c.role) + ': ' + mail_name(c.id, ctx.people); })},
+    {link: 'Gatsby Rotas site', url: site_url(ctx.settings)}
+  ], ctx.constants, {as: rota});
 }
 
+// only when the organiser needs to act: some planned slots have nobody available (a plan that worked needs nothing
+// from them; everyone on it was told, and the site shows the tentative slots)
 function auto_plan_mail(rota, res, fill, ctx, today){
   var to = auto_organiser(rota, ctx);
-  if (!to) return;
+  if (!to || !fill.unfilled.length) return;
   var label = ROTAS[rota].label;
   var live = fmt_day(parse_iso_date(sched_add_days(today, AUTO_REVIEW_DAYS)));
   var go = on_calendar(SLOT_PLANS[rota][0].type) ? 'go on the calendar' : 'are confirmed';
-  var lines = fill.filled.concat(fill.unfilled);
-  var blocks = [
-    'The autopilot planned the next ' + label + ' slots and filled them fairly, around everyone\'s away dates:',
-    {items: lines.length ? lines : res.created},
-    '**They ' + go + ' on ' + live + '.** Everyone on them has been told they are pencilled in; until three weeks before, adding away dates hands their slot to the next free person by itself. Until ' + live + ', change anyone or remove a slot you don\'t need (closures, retreat, deadlines) on the Gatsby Rotas site. A slot you remove is not planned again.'
-  ];
-  if (fill.unfilled.length) blocks.push('Nobody was available for some of them: put someone on them on the site, or remove them.');
-  if (res.holidays.length) blocks.push('Skipped (bank holidays, closures): ' + res.holidays.join(', ') + '.');
-  blocks.push('To keep a date free before it is planned, add a slot titled "Cancelled: <reason>" on the site. A guest speaker goes in the slot\'s guest field.');
-  blocks.push('Every Monday the autopilot keeps ' + label + ' planned ' + ctx.settings.auto_weeks + ' weeks ahead. To switch it off, take ' + rota + ' out of AUTO_TYPES in the Automation tab of the constants sheet (or ask the tea tsar).');
-  blocks.push({link: 'Gatsby Rotas site', url: site_url(ctx.settings)});
-  if (ctx.settings.HANDBOOK_URL) blocks.push({link: 'Organiser handbook', url: ctx.settings.HANDBOOK_URL});
-  send_mail(to, label + ': next slots planned, ' + (go === 'are confirmed' ? 'confirmed' : 'on the calendar') + ' on ' + live, blocks, ctx.constants, {as: rota});
+  var n = fill.unfilled.length;
+  send_mail(to, label + ': nobody available for ' + n + ' planned slot' + (n === 1 ? '' : 's'), [
+    'The autopilot planned the next ' + label + ' slots, but nobody was available for ' + (n === 1 ? 'this one' : 'these') + ':',
+    {items: fill.unfilled},
+    'Put someone (or a guest speaker) on ' + (n === 1 ? 'it' : 'them') + ' on the Gatsby Rotas site, or remove ' + (n === 1 ? 'it' : 'them') + '. The planned slots ' + go + ' on ' + live + '.',
+    {link: 'Gatsby Rotas site', url: site_url(ctx.settings)}
+  ], ctx.constants, {as: rota});
 }
 
 function auto_empty_mail(rota, rows, ctx){

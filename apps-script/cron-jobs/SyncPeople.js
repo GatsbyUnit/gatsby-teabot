@@ -195,9 +195,8 @@ function sync_identity_sheet(people, admin_email, constants){
     }
   }
 
-  // email
-  send_tsar_email(admin_email, 'Synced People with the identity sheet', 'Sync successful. ' + new_people_count.toString() + ' people added. '
-  + deleted_count.toString() + ' people deleted.', constants );
+  // no email on success (the tea tsar only gets email when there is something to do)
+  Logger.log('Synced people with the identity sheet: ' + new_people_count + ' added, ' + deleted_count + ' deleted');
 }
 
 function get_notion_person_title(person) {
@@ -417,9 +416,8 @@ function sync_away_date_sheets(swc_cluster_bot_email, people, admin_email, notio
     }
   }
 
-  // email
-  send_tsar_email(admin_email, 'Synced People with Away Date Sheets', 'Sync successful. ' + new_people_count.toString() + ' people added. '
-  + deleted_count.toString() + ' people deleted.', constants );
+  // no email on success (the tea tsar only gets email when there is something to do)
+  Logger.log('Synced people with away date sheets: ' + new_people_count + ' added, ' + deleted_count + ' deleted');
 }
 
 
@@ -566,7 +564,7 @@ function fill_in_name_files(people, admin_email, names_file, rt_file, tt_file, t
   tt_file.setContent(tt_str);
   t_file.setContent(t_str);
 
-  send_tsar_email(admin_email, 'Saved People to Old Format Success', 'Saved people to old format successful.', constants);
+  Logger.log('Saved people to old format');   // no email on success
 }
 
 function form_people_str(forewords, fac, postdoc, student_dict, staff, visitor){

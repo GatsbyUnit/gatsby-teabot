@@ -104,26 +104,19 @@ function cancel_announcement(row, role, ctx, by, mode, reason, opts){
   var cc = [];
   if (by.id) cc = cc.concat(emails_of([by.id], ctx.people));
   cc = cc.concat(emails_of(talk ? row.tea_ids : row.presenter_ids, ctx.people));   // the others on the slot
-  if (organiser) cc.push(organiser);
   cc = cc.filter(function(e, i, a){ return e && a.indexOf(e) === i && aud.to.indexOf(e) < 0; });
   var to = aud.to.length ? aud.to : (organiser ? [organiser] : []);
   cc = cc.filter(function(e){ return to.indexOf(e) < 0; });
   return {to: to, cc: cc, subject: subject, blocks: blocks, label: aud.label, list: !!aud.list};
 }
 
-// sends it; the organiser gets the reason separately when it was kept private
+// sends it. The organiser is not in cc (tsars only get email when they need to act): a private reason they saw when
+// signing off, or typed themselves.
 function send_cancel_announcement(row, role, ctx, by, mode, reason, opts){
   var a = cancel_announcement(row, role, ctx, by, mode, reason, opts);
   if (!a.to.length) return a;
   var organiser = admin_email_for_type(row.type, ctx.constants);
   send_mail(a.to.join(','), a.subject, a.blocks, ctx.constants, {cc: a.cc.join(','), reply_to: organiser || undefined, no_leave: a.list});
-  if (mode === 'neutral' && organiser){
-    send_mail(organiser, 'The reason (private): ' + a.subject, [
-      'The announcement went out without the reason, as asked. For you only:',
-      {table: [['Slot', fmt_day(row.start) + (row.type === 'Coffee Cleaning' ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type], ['Reason', reason]]},
-      'To undo: put the people back on the Gatsby Rotas site and remove "Cancelled" from the title.'
-    ], ctx.constants, {as: row.type});
-  }
   log_row(ctx, 'page', row.type, row.start, 'cancellation announced', (mode === 'neutral' ? 'neutral, ' : 'with reason, ') + 'to ' + a.label);
   return a;
 }

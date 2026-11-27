@@ -28,7 +28,7 @@ function send_examples(){
 
     // 1. a swap through the tea page (sent to both people)
     send_mail(me, 'Swap done: ' + fmt_day(row.start) + ' TNJC', swap_done_blocks(row, 'presenter', other.name, person.name), constants);
-    // 2. a calendar event was edited by hand, so the rota data was updated (sent to both people, organiser in cc)
+    // 2. a calendar event was edited by hand, so the rota data was updated (sent to both people)
     notify_swap_from_calendar(row, {Presenter: [other.id], Tea: []}, {Presenter: [person.id]}, ['"' + person.name.replace(/e/, '') + '" was read as ' + person.name + '.'], ctx);
     // 3. the bot could not tell who a name means (sent to the tea tsar, organiser in cc)
     var f = finding(row, 'uncertain_match', 'The calendar says "TNJC: Sam", but the site says "TNJC: ' + person.name + '". I could not tell for sure who is meant: "Sam" could be Sam Smith or Sam Jones. Nothing was changed. Please record the right person on the site.', false);

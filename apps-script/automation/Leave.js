@@ -1,7 +1,8 @@
 // Leaving the tea system: the "Leave the tea system (no longer a member of the Unit)" link at the end of every
 // bot email. It only concerns the tea system: the person is marked inactive (no more scheduling),
 // their registered email and tea-page code are cleared (no more emails from the bot or the Cron Jobs), their
-// open swap requests are dropped, and the tea tsar gets an email (organisers of slots they still hold in cc).
+// open swap requests are dropped, and the tea tsar gets an email when there is something to do: slots they still hold
+// (their organisers in cc), or a name picked on the tea page (anyone could have done that).
 // Gatsby's mailing lists are not touched. To come back, the tea tsar ticks Active on their page on the site
 // and fills in their email again.
 //
@@ -107,7 +108,7 @@ function leave_tea_system(ctx, how, by){
   identity_token_cache = null;
   log_row(ctx, how === 'tsar' ? 'site' : 'page', '', null, how === 'tsar' ? 'taken out of the tea system by ' + by : 'left the tea system', me.name + (rows.length ? ', ' + rows.length + ' upcoming slots to reassign' : ''));
 
-  if (how === 'tsar' && !rows.length) return rows;
+  if (!rows.length && how !== 'name picked on the tea page') return rows;   // nothing for the tea tsar to do
   // one email to the tea tsar; the organisers of slots they still hold in cc
   var cc = rows.map(function(r){ return admin_email_for_type(r.type, ctx.constants); })
     .filter(function(o, i, a){ return o && o !== tsar && a.indexOf(o) === i; });

@@ -119,7 +119,8 @@ function can_cancel(row, ctx, role){
 }
 
 // someone takes themselves off the tea or coffee duty of a slot, nobody in their place (a just tea: the whole
-// just tea is cancelled, as cancel_slot does). They keep their turn. One email to them, the organiser in cc.
+// just tea is cancelled, as cancel_slot does). They keep their turn. One email to them (the organiser only when they
+// have no address: then nobody was told).
 // mode 'reason' | 'neutral': a confirmed slot's cancellation is announced (Announce.js) instead of the email below
 // extra: {by (with .signed), rank} from a signed-off request
 function cancel_tea_duty(row, id, ctx, reason, mode, extra){
@@ -136,11 +137,10 @@ function cancel_tea_duty(row, id, ctx, reason, mode, extra){
   var blocks = [
     name + ' has cancelled their ' + what + (coffee ? ' for the week of ' + fmt_day(row.start) : ' for this ' + row.type) + '. ' + (row.tea_ids.length ? 'The others on it stay.' : 'Nobody is on it now.'),
     {table: [['Slot', fmt_day(row.start) + (coffee ? '' : ', ' + fmt_time(row.start)) + ', ' + row.type], ['Reason', reason]]},
-    name + ' is no longer recorded for it, so they keep their turn and will be scheduled again soon.',
-    'Organiser: if someone should do it after all, put them on it on the Gatsby Rotas site.'
+    name + ' is no longer recorded for it, so they keep their turn and will be scheduled again soon.'
   ];
   var to = emails_of([id], ctx.people);
   var subject = with_emoji(row, 'tea', 'Cancelled: ' + what) + ' ' + (coffee ? 'in the week of ' : 'on ') + fmt_day(row.start);
-  if (to.length) send_mail(to[0], subject, blocks, ctx.constants, {reply_to: organiser, cc: organiser});
-  else send_mail(organiser, subject, blocks, ctx.constants, {as: row.type});
+  if (to.length) send_mail(to[0], subject, blocks, ctx.constants, {reply_to: organiser});
+  else send_mail(organiser, subject, blocks.concat(['They have no registered email, so they were not told.']), ctx.constants, {as: row.type});
 }
